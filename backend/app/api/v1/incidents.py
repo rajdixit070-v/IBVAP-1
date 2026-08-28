@@ -146,6 +146,25 @@ def create_incident(body: IncidentCreate):
     inc = incident_service.create_incident(data=body, operator_username="operator")
     return serialize_incident(inc)
 
+@router.post("/from-alert/{alert_id}", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
+def create_incident_from_alert(alert_id: str):
+    """Create an incident from an existing Alert ID."""
+    try:
+        inc = incident_service.create_incident_from_alert(alert_id=alert_id, operator_username="operator")
+        return serialize_incident(inc)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/from-event/{event_id}", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
+def create_incident_from_event(event_id: str, db: Session = Depends(get_db)):
+    """Create an incident from an existing SecurityEvent ID."""
+    from app.models.security_event import SecurityEvent
+    event = db.query(SecurityEvent).filter(SecurityEvent.event_id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail=f"Event '{event_id}' not found.")
+    inc = incident_service.create_incident_from_event(event=event, operator_username="operator")
+    return serialize_incident(inc)
+
 # Static sub-endpoints MUST precede parameterized /{incident_id} endpoints
 @router.get("/analytics/summary", response_model=IncidentAnalyticsSummary)
 def get_incident_analytics():

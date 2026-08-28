@@ -90,6 +90,24 @@ class CameraZoneStateTracker:
                     timeline_message=f"Group movement detected: {len(group)} subjects moving in coordination (Tracks: {group})"
                 )
 
+        # 1b. Crowd Gathering Evaluation
+        person_tracks_in_cam = [t for t in tracks if t.category == "person" and t.frame_count >= 2]
+        if len(person_tracks_in_cam) >= 4:
+            sample_track = person_tracks_in_cam[0]
+            security_event_manager.dispatch_security_event(
+                camera_id=self.camera_id,
+                track_id=sample_track.track_id,
+                object_type="person",
+                event_type="CROWD_GATHERING",
+                is_night=is_night,
+                is_group=True,
+                confidence=sample_track.confidence,
+                bbox=sample_track.bbox,
+                direction=sample_track.direction,
+                speed=sample_track.speed,
+                timeline_message=f"Crowd gathering detected: {len(person_tracks_in_cam)} persons detected concurrently on {self.camera_id}"
+            )
+
         # 2. Per-Track Per-Zone Analysis
         for track in tracks:
             # Calculate ground plane normalized bottom-center point

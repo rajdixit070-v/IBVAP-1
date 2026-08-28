@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ibvap-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV_MODE=production
+      - DEMO_MODE=false
+      - LOG_LEVEL=INFO
+      - SECRET_KEY=${SECRET_KEY:-ibvap-secure-production-border-secret-key-2026-xyz}
+      - CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_ENCRYPTION_KEY:-b3B2YaaAYm9yZGVyLWVuY3J5cHVpaW9uLWkuLTI0MjY=}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/ibvap.db}
+      - STORAGE_PATH=/app/storage
+      - EVIDENCE_STORAGE_PATH=/app/storage/evidence
+      - TEMP_STORAGE_PATH=/app/storage/temp
+      - CORS_ORIGINS=http://localhost,http://localhost:80,http://localhost:5173,http://localhost:3000
+    volumes:
+      - ibvap-data:/app/data
+      - ibvap-storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ibvap-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  ibvap-data:
+  ibvap-storage:

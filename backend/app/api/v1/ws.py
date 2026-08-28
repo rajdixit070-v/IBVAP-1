@@ -5,6 +5,7 @@ from app.services.stream_manager import stream_manager
 from app.services.health_monitor import health_monitor
 from app.services.ai.pipeline import ai_pipeline_manager
 from app.services.intelligence.event_manager import security_event_manager
+from app.services.alert.alert_engine import alert_engine
 
 logger = logging.getLogger("ibvap.ws")
 router = APIRouter(prefix="/ws", tags=["WebSockets"])
@@ -144,3 +145,37 @@ async def camera_health_ws(websocket: WebSocket):
     except Exception as e:
         health_monitor.unregister_ws_client(websocket)
         logger.error(f"Error on health telemetry WebSocket: {e}")
+
+@router.websocket("/alerts")
+async def live_alerts_ws(websocket: WebSocket):
+    """
+    Real-time Live Alert & Notification broadcaster.
+    Streams new alerts, acknowledgements, escalations, and resolutions.
+    """
+    await websocket.accept()
+    logger.info("WebSocket client connected to live alerts feed.")
+
+    queue = asyncio.Queue(maxsize=25)
+    loop = asyncio.get_running_loop()
+
+    def sync_send_alert(payload: dict):
+        try:
+            loop.call_soon_threadsafe(
+                lambda: queue.put_nowait(payload) if not queue.full() else None
+            )
+        except Exception:
+            pass
+
+    alert_engine.register_ws_client(sync_send_alert)
+
+    try:
+        while True:
+            payload = await queue.get()
+            await websocket.send_json(payload)
+    except WebSocketDisconnect:
+        alert_engine.unregister_ws_client(sync_send_alert)
+        logger.info("Alerts WebSocket client disconnected.")
+    except Exception as e:
+        alert_engine.unregister_ws_client(sync_send_alert)
+        logger.error(f"Error on alerts WebSocket: {e}")
+

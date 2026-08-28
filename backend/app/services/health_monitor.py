@@ -1,4 +1,5 @@
 import time
+import uuid
 import asyncio
 import logging
 from datetime import datetime
@@ -90,7 +91,7 @@ class HealthMonitor:
                         if camera_id not in self._interruption_tracker:
                             self._interruption_tracker[camera_id] = now
                             event = HealthEvent(
-                                event_id=f"HLT-{now.strftime('%Y%m%d')}-{camera_id}-OFF",
+                                event_id=f"HLT-{now.strftime('%Y%m%d%H%M%S')}-{camera_id[:8]}-OFF-{uuid.uuid4().hex[:4].upper()}",
                                 event_type="STREAM_INTERRUPTION" if new_status == "DEGRADED" else "CAMERA_OFFLINE",
                                 source_type="CAMERA",
                                 source_id=camera_id,
@@ -107,22 +108,30 @@ class HealthMonitor:
                             started = self._interruption_tracker.pop(camera_id)
                             downtime = (now - started).total_seconds()
                             event = HealthEvent(
-                                event_id=f"HLT-{now.strftime('%Y%m%d')}-{camera_id}-REC",
+                                event_id=f"HLT-{now.strftime('%Y%m%d%H%M%S')}-{camera_id[:8]}-REC-{uuid.uuid4().hex[:4].upper()}",
                                 event_type="CAMERA_RECOVERED",
                                 source_type="CAMERA",
                                 source_id=camera_id,
                                 severity="LOW",
                                 status="RECOVERED",
                                 title=f"Stream Recovered: {camera_id}",
-                                description=f"Camera {camera_id} restored signal after {int(downtime)}s downtime.",
+                                description=f"Camera {camera_id} returned to service after {downtime:.1f}s interruption.",
                                 started_at=started,
-                                detected_at=now,
+                                detected_at=started,
                                 recovered_at=now,
                                 downtime_seconds=downtime
                             )
                             db.add(event)
 
                     db.commit()
+
+                    # Trigger system-health alert
+                    if event:
+                        try:
+                            from app.services.alert.alert_engine import alert_engine
+                            alert_engine.process_health_event(event)
+                        except Exception as aerr:
+                            logger.warning(f"Health alert generation notice: {aerr}")
             finally:
                 db.close()
         except Exception as e:

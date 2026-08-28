@@ -194,16 +194,5 @@ class YOLOObjectDetector:
                 logger.error(f"Inference error on camera {camera_id}: {e}")
                 return []
 
-        # Fallback simulated detection for test streams if model is offline
-        return self._fallback_simulated_detection(frame, camera_id, orig_w, orig_h, timestamp)
-
-    def _fallback_simulated_detection(
-        self,
-        frame: np.ndarray,
-        camera_id: str,
-        width: int,
-        height: int,
-        timestamp: datetime
-    ) -> List[Dict[str, Any]]:
-        """Provides simulated detections for synthetic test feeds when running without downloaded weights."""
+        # Return empty list cleanly if model is not loaded or frame cannot be processed
         return []

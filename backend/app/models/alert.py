@@ -22,6 +22,9 @@ class Alert(Base):
     assigned_to = Column(String(100), nullable=True, index=True)
     acknowledged_at = Column(DateTime, nullable=True)
     acknowledged_by = Column(String(100), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(100), nullable=True)
+    resolution_notes = Column(String(500), nullable=True)
     
     # Server-driven SLA Escalation Deadline
     escalation_deadline = Column(DateTime, nullable=True, index=True)

@@ -20,10 +20,17 @@ class AlertAcknowledgeRequest(BaseModel):
 class AlertEscalateRequest(BaseModel):
     reason: Optional[str] = "Manual operator escalation"
 
+class AlertResolveRequest(BaseModel):
+    resolved_by: Optional[str] = "operator"
+    notes: Optional[str] = "Incident resolved and cleared"
+
 class AlertResponse(AlertBase):
     id: int
     acknowledged_at: Optional[datetime] = None
     acknowledged_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+    resolution_notes: Optional[str] = None
     escalation_deadline: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

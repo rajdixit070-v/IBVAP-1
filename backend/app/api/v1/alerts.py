@@ -8,6 +8,7 @@ from app.schemas.alert import (
     AlertResponse,
     AlertAcknowledgeRequest,
     AlertEscalateRequest,
+    AlertResolveRequest,
     AlertSummary
 )
 from app.services.alert.alert_engine import alert_engine
@@ -16,7 +17,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[AlertResponse])
 def get_alerts(
-    status: Optional[str] = Query(None, description="Filter by status (NEW, ACKNOWLEDGED, ESCALATED)"),
+    status: Optional[str] = Query(None, description="Filter by status (NEW, ACKNOWLEDGED, ESCALATED, RESOLVED)"),
     priority: Optional[str] = Query(None, description="Filter by priority (CRITICAL, HIGH, MEDIUM, LOW)"),
     camera_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
@@ -56,6 +57,16 @@ def get_alert_summary(db: Session = Depends(get_db)):
         recent_alerts=recent
     )
 
+@router.get("/{alert_id}", response_model=AlertResponse)
+def get_alert_by_id(alert_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve single alert details by unique Alert ID.
+    """
+    alert = db.query(Alert).filter(Alert.alert_id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found.")
+    return alert
+
 @router.post("/{alert_id}/acknowledge", response_model=AlertResponse)
 def acknowledge_alert(
     alert_id: str,
@@ -82,6 +93,25 @@ def escalate_alert(
     """
     try:
         updated = alert_engine.escalate_alert(alert_id, reason=body.reason or "Manual escalation")
+        return updated
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/{alert_id}/resolve", response_model=AlertResponse)
+def resolve_alert(
+    alert_id: str,
+    body: AlertResolveRequest = AlertResolveRequest(),
+    db: Session = Depends(get_db)
+):
+    """
+    Resolve an active or acknowledged alert.
+    """
+    try:
+        updated = alert_engine.resolve_alert(
+            alert_id,
+            operator_username=body.resolved_by or "operator",
+            notes=body.notes or "Incident resolved"
+        )
         return updated
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

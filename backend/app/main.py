@@ -212,6 +212,18 @@ def init_db_defaults():
                     conn.execute(text("ALTER TABLE incidents ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
                 if "bop_id" not in inc_cols:
                     conn.execute(text("ALTER TABLE incidents ADD COLUMN bop_id VARCHAR(50)"))
+
+            # Alerts auto-migrations
+            cursor = conn.execute(text("PRAGMA table_info(alerts)"))
+            alert_cols = [row[1] for row in cursor.fetchall()]
+            if alert_cols:
+                if "resolved_at" not in alert_cols:
+                    conn.execute(text("ALTER TABLE alerts ADD COLUMN resolved_at DATETIME"))
+                if "resolved_by" not in alert_cols:
+                    conn.execute(text("ALTER TABLE alerts ADD COLUMN resolved_by VARCHAR(100)"))
+                if "resolution_notes" not in alert_cols:
+                    conn.execute(text("ALTER TABLE alerts ADD COLUMN resolution_notes VARCHAR(500)"))
+
             conn.commit()
     except Exception as e:
         logger.warning(f"Schema auto-migration notice: {e}")

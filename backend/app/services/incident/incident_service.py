@@ -121,6 +121,173 @@ class IncidentService:
         finally:
             db.close()
 
+    def create_incident_from_event(self, event: Any, operator_username: str = "system") -> Incident:
+        """
+        Idempotent incident creation from a real high/critical security event.
+        Attaches snapshot evidence from stream manager if available.
+        """
+        db: Session = SessionLocal()
+        try:
+            # Check for existing active incident for this event to avoid duplicate rows
+            existing = db.query(Incident).filter(
+                Incident.source_event_id == getattr(event, 'event_id', None),
+                Incident.status.notin_(["CLOSED", "DISMISSED", "FALSE_ALARM"])
+            ).first()
+            if existing:
+                return existing
+
+            now = datetime.utcnow()
+            inc_id = f"INC-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+
+            evidence_ids = []
+            try:
+                from app.services.stream_manager import stream_manager
+                from app.services.evidence.evidence_manager import evidence_manager
+                camera_id = getattr(event, 'camera_id', 'CAM-001')
+                jpeg_bytes = stream_manager.get_latest_jpeg(camera_id)
+                if jpeg_bytes:
+                    file_path = f"/evidence/{camera_id}/{getattr(event, 'event_id', 'evt')}_{now.strftime('%H%M%S')}.jpg"
+                    evd = evidence_manager.register_evidence(
+                        camera_id=camera_id,
+                        evidence_type="SNAPSHOT",
+                        file_path=file_path,
+                        source_event_id=getattr(event, 'event_id', None),
+                        incident_id=inc_id,
+                        data_bytes=jpeg_bytes,
+                        mime_type="image/jpeg"
+                    )
+                    evidence_ids.append(evd.evidence_id)
+            except Exception as evd_err:
+                logger.warning(f"Evidence capture bypass for incident {inc_id}: {evd_err}")
+
+            ev_type = getattr(event, 'event_type', 'SECURITY_INCIDENT') or 'SECURITY_INCIDENT'
+            playbook_id, checklist = playbook_service.instantiate_checklist_for_event(ev_type)
+
+            title = f"{getattr(event, 'severity', 'HIGH')} Incident: {ev_type.replace('_', ' ').title()} on {getattr(event, 'camera_id', 'CAM-001')}"
+            description = f"Automated incident created for {getattr(event, 'object_type', 'target')} in {getattr(event, 'zone_name', 'Border Zone')} with risk score {getattr(event, 'risk_score', 50)}/100."
+
+            initial_timeline = [
+                {
+                    "timestamp": now.isoformat(),
+                    "action": "INCIDENT_AUTO_CREATED",
+                    "actor": operator_username,
+                    "notes": f"Incident generated automatically from Event {getattr(event, 'event_id', 'N/A')}."
+                }
+            ]
+
+            incident = Incident(
+                incident_id=inc_id,
+                title=title,
+                description=description,
+                incident_type="SECURITY",
+                priority=getattr(event, 'severity', 'HIGH') or "HIGH",
+                status="NEW",
+                escalation_level=1,
+                source_event_id=getattr(event, 'event_id', None),
+                camera_id=getattr(event, 'camera_id', 'CAM-001'),
+                bop_site="BOP Alpha",
+                zone_name=getattr(event, 'zone_name', None),
+                track_id=getattr(event, 'track_id', 0) or 0,
+                risk_score=getattr(event, 'risk_score', 50) or 50,
+                related_cameras_json=json.dumps([getattr(event, 'camera_id', 'CAM-001')]),
+                playbook_id=playbook_id,
+                checklist_json=json.dumps(checklist),
+                evidence_ids_json=json.dumps(evidence_ids),
+                timeline_json=json.dumps(initial_timeline),
+                version=1,
+                created_by=operator_username,
+                created_at=now,
+                updated_at=now
+            )
+            db.add(incident)
+
+            audit = SecurityAuditLog(
+                username=operator_username,
+                action="INCIDENT_AUTO_CREATED",
+                resource_type="INCIDENT",
+                resource_id=inc_id,
+                details=f'{{"event_id": "{getattr(event, "event_id", "")}", "priority": "{incident.priority}"}}'
+            )
+            db.add(audit)
+            db.commit()
+            db.refresh(incident)
+            logger.info(f"Auto-created Incident {inc_id} from Event {getattr(event, 'event_id', '')}")
+            return incident
+        finally:
+            db.close()
+
+    def create_incident_from_alert(self, alert_id: str, operator_username: str = "operator") -> Incident:
+        """
+        Creates a managed incident from an existing Alert ID.
+        """
+        from app.models.alert import Alert
+        db: Session = SessionLocal()
+        try:
+            alert = db.query(Alert).filter(Alert.alert_id == alert_id).first()
+            if not alert:
+                raise ValueError(f"Alert '{alert_id}' not found.")
+
+            # Check existing incident
+            existing = db.query(Incident).filter(
+                Incident.source_event_id == alert.event_id,
+                Incident.status.notin_(["CLOSED", "DISMISSED", "FALSE_ALARM"])
+            ).first()
+            if existing:
+                return existing
+
+            now = datetime.utcnow()
+            inc_id = f"INC-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+
+            playbook_id, checklist = playbook_service.instantiate_checklist_for_event("SECURITY_INCIDENT")
+
+            initial_timeline = [
+                {
+                    "timestamp": now.isoformat(),
+                    "action": "INCIDENT_ESCALATED_FROM_ALERT",
+                    "actor": operator_username,
+                    "notes": f"Incident created from Alert {alert.alert_id} ({alert.priority})."
+                }
+            ]
+
+            incident = Incident(
+                incident_id=inc_id,
+                title=f"Incident from Alert {alert.alert_id}: {alert.title}",
+                description=f"Escalated from alert {alert.alert_id} on {alert.camera_id}. Risk Score: {alert.risk_score}/100.",
+                incident_type="SECURITY",
+                priority=alert.priority,
+                status="NEW",
+                escalation_level=1,
+                source_event_id=alert.event_id,
+                camera_id=alert.camera_id,
+                bop_site=alert.bop_site or "BOP Alpha",
+                risk_score=alert.risk_score,
+                related_cameras_json=json.dumps([alert.camera_id]),
+                playbook_id=playbook_id,
+                checklist_json=json.dumps(checklist),
+                evidence_ids_json="[]",
+                timeline_json=json.dumps(initial_timeline),
+                version=1,
+                created_by=operator_username,
+                created_at=now,
+                updated_at=now
+            )
+            db.add(incident)
+
+            audit = SecurityAuditLog(
+                username=operator_username,
+                action="INCIDENT_CREATED_FROM_ALERT",
+                resource_type="INCIDENT",
+                resource_id=inc_id,
+                details=f'{{"alert_id": "{alert.alert_id}", "priority": "{incident.priority}"}}'
+            )
+            db.add(audit)
+            db.commit()
+            db.refresh(incident)
+            logger.info(f"Created Incident {inc_id} from Alert {alert.alert_id}")
+            return incident
+        finally:
+            db.close()
+
     def _validate_and_transition(
         self,
         incident: Incident,

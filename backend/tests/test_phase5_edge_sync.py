@@ -77,7 +77,7 @@ def test_edge_heartbeat_telemetry_and_audit(db_session):
 
 def test_durable_offline_store_and_forward_buffer(db_session):
     """Test buffering events in durable local storage on edge node."""
-    node_id = "EDGE-BOP-001"
+    node_id = f"EDGE-BUFFER-{uuid.uuid4().hex[:6].upper()}"
     event_id = f"EVT-OFFLINE-{uuid.uuid4().hex[:8].upper()}"
 
     buf = edge_sync_engine.buffer_local_event(
