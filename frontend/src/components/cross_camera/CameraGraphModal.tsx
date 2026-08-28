@@ -1,0 +1,245 @@
+import React, { useState, useEffect } from 'react';
+import { Modal } from '../common/Modal';
+import { CameraTransition, CameraTransitionCreate } from '../../types/crossCamera';
+import { crossCameraService } from '../../services/crossCameraService';
+import { useCameras } from '../../context/CameraContext';
+import { Camera } from '../../types/camera';
+import { Plus, Save } from 'lucide-react';
+
+interface CameraGraphModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onUpdated: () => void;
+}
+
+export const CameraGraphModal: React.FC<CameraGraphModalProps> = ({
+  isOpen,
+  onClose,
+  onUpdated
+}) => {
+  const { cameras } = useCameras();
+  const [transitions, setTransitions] = useState<CameraTransition[]>([]);
+
+  // New Edge Form
+  const [fromCam, setFromCam] = useState('CAM-001');
+  const [toCam, setToCam] = useState('CAM-002');
+  const [minTime, setMinTime] = useState(15);
+  const [expectedTime, setExpectedTime] = useState(45);
+  const [maxTime, setMaxTime] = useState(300);
+  const [direction, setDirection] = useState('EAST');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadGraph();
+    }
+  }, [isOpen]);
+
+  const loadGraph = async () => {
+    try {
+      const data = await crossCameraService.getCameraGraph();
+      setTransitions(data);
+    } catch (e) {
+      console.error('Failed to load camera graph', e);
+    }
+  };
+
+  const handleAddTransition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (fromCam === toCam) {
+      setError('Cannot create transition between the same camera.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: CameraTransitionCreate = {
+        from_camera_id: fromCam,
+        to_camera_id: toCam,
+        min_travel_time_sec: minTime,
+        expected_travel_time_sec: expectedTime,
+        max_travel_time_sec: maxTime,
+        direction,
+        transition_confidence: 0.90,
+        is_enabled: true
+      };
+
+      await crossCameraService.createTransition(payload);
+      await loadGraph();
+      onUpdated();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to add transition edge.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Camera Network Topology & Transition Graph"
+      subtitle="Configure logical edges, expected travel times, and direction constraints between cameras"
+      maxWidth="3xl"
+    >
+      <div className="space-y-6">
+        {error && (
+          <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-lg text-rose-300 text-xs font-mono">
+            {error}
+          </div>
+        )}
+
+        {/* Existing Transition Edges Table */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono font-bold text-slate-300 uppercase">
+            <span>Active Camera Graph Edges ({transitions.length})</span>
+          </div>
+
+          <div className="bg-[#090d16] border border-[#1e293b] rounded-xl overflow-hidden shadow-md">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="bg-[#111a2e] text-slate-400 uppercase text-[11px] border-b border-[#1e293b]">
+                <tr>
+                  <th className="px-4 py-2.5">FROM CAMERA</th>
+                  <th className="px-4 py-2.5">TO CAMERA</th>
+                  <th className="px-4 py-2.5">TRAVEL TIME LIMITS</th>
+                  <th className="px-4 py-2.5">DIRECTION</th>
+                  <th className="px-4 py-2.5">STATUS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                {transitions.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                      No configured transition edges found.
+                    </td>
+                  </tr>
+                ) : (
+                  transitions.map((t) => (
+                    <tr key={t.id} className="hover:bg-slate-800/30">
+                      <td className="px-4 py-2.5 font-bold text-sky-400">{t.from_camera_id}</td>
+                      <td className="px-4 py-2.5 font-bold text-sky-400">{t.to_camera_id}</td>
+                      <td className="px-4 py-2.5 text-slate-300">
+                        {t.min_travel_time_sec}s - {t.max_travel_time_sec}s (avg {t.expected_travel_time_sec}s)
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-400">{t.direction}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                          ENABLED
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Add New Edge Form */}
+        <form onSubmit={handleAddTransition} className="p-4 bg-[#111a2e] border border-sky-500/30 rounded-xl space-y-4">
+          <div className="text-xs font-mono font-bold text-sky-400 uppercase flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Add Directed Transition Edge
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">From Camera</label>
+              <select
+                value={fromCam}
+                onChange={(e) => setFromCam(e.target.value)}
+                className="w-full px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
+              >
+                {cameras.map((c: Camera) => (
+                  <option key={c.camera_id} value={c.camera_id}>
+                    {c.camera_id} ({c.camera_name})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">To Camera</label>
+              <select
+                value={toCam}
+                onChange={(e) => setToCam(e.target.value)}
+                className="w-full px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
+              >
+                {cameras.map((c: Camera) => (
+                  <option key={c.camera_id} value={c.camera_id}>
+                    {c.camera_id} ({c.camera_name})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">Min Time (sec)</label>
+              <input
+                type="number"
+                min={1}
+                value={minTime}
+                onChange={(e) => setMinTime(Number(e.target.value))}
+                className="w-full px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-xs text-white font-mono focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">Expected Time (sec)</label>
+              <input
+                type="number"
+                min={1}
+                value={expectedTime}
+                onChange={(e) => setExpectedTime(Number(e.target.value))}
+                className="w-full px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-xs text-white font-mono focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">Max Time (sec)</label>
+              <input
+                type="number"
+                min={1}
+                value={maxTime}
+                onChange={(e) => setMaxTime(Number(e.target.value))}
+                className="w-full px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-xs text-white font-mono focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">Direction</label>
+              <select
+                value={direction}
+                onChange={(e) => setDirection(e.target.value)}
+                className="w-full px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
+              >
+                <option value="EAST">EAST</option>
+                <option value="WEST">WEST</option>
+                <option value="NORTH">NORTH</option>
+                <option value="SOUTH">SOUTH</option>
+                <option value="SOUTH-EAST">SOUTH-EAST</option>
+                <option value="SOUTH-WEST">SOUTH-WEST</option>
+                <option value="ANY">ANY</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-mono font-bold transition disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'ADDING...' : 'ADD GRAPH EDGE'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+};

@@ -1,0 +1,48 @@
+import api from './api';
+import {
+  EdgeNode,
+  EdgeNodeCreate,
+  EdgeNodeUpdate,
+  EdgeRemoteConfig,
+  EdgeSyncStats
+} from '../types/edge';
+
+export const edgeService = {
+  // Edge Nodes CRUD
+  async getNodes(params?: { status?: string; bop_site?: string }): Promise<EdgeNode[]> {
+    const response = await api.get<EdgeNode[]>('/edge/nodes', { params });
+    return response.data;
+  },
+
+  async getNode(nodeId: string): Promise<EdgeNode> {
+    const response = await api.get<EdgeNode>(`/edge/nodes/${nodeId}`);
+    return response.data;
+  },
+
+  async createNode(data: EdgeNodeCreate): Promise<EdgeNode> {
+    const response = await api.post<EdgeNode>('/edge/nodes', data);
+    return response.data;
+  },
+
+  async updateNode(nodeId: string, data: EdgeNodeUpdate): Promise<EdgeNode> {
+    const response = await api.put<EdgeNode>(`/edge/nodes/${nodeId}`, data);
+    return response.data;
+  },
+
+  async deleteNode(nodeId: string): Promise<{ status: string; node_id: string }> {
+    const response = await api.delete<{ status: string; node_id: string }>(`/edge/nodes/${nodeId}`);
+    return response.data;
+  },
+
+  // Remote Configuration
+  async updateRemoteConfig(nodeId: string, config: EdgeRemoteConfig): Promise<EdgeNode> {
+    const response = await api.put<EdgeNode>(`/edge/nodes/${nodeId}/config`, config);
+    return response.data;
+  },
+
+  // Sync Telemetry
+  async getSyncStats(): Promise<EdgeSyncStats> {
+    const response = await api.get<EdgeSyncStats>('/edge/sync/stats');
+    return response.data;
+  }
+};

@@ -1,0 +1,145 @@
+import time
+import logging
+import asyncio
+from typing import Dict, Optional, List, Callable
+import numpy as np
+
+from app.services.rtsp_streamer import RTSPStreamer
+
+logger = logging.getLogger("ibvap.stream_manager")
+
+class StreamManager:
+    """
+    Global coordinator for all active camera video ingestion streamers.
+    Provides thread-safe access to latest video frames, MJPEG generation,
+    and real-time status dispatching.
+    """
+    _instance: Optional['StreamManager'] = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(StreamManager, cls).__new__(cls)
+            cls._instance._streamers: Dict[str, RTSPStreamer] = {}
+            cls._instance._status_listeners: List[Callable[[str, str, dict], None]] = []
+        return cls._instance
+
+    def register_status_listener(self, callback: Callable[[str, str, dict], None]):
+        """Registers a callback for camera health/status transitions."""
+        if callback not in self._status_listeners:
+            self._status_listeners.append(callback)
+
+    def _on_camera_status_change(self, camera_id: str, new_status: str, meta: dict):
+        """Dispatches status updates to all registered listeners."""
+        for listener in self._status_listeners:
+            try:
+                listener(camera_id, new_status, meta)
+            except Exception as e:
+                logger.error(f"Listener execution error: {e}")
+
+    def start_camera(
+        self,
+        camera_id: str,
+        camera_name: str,
+        bop_site: str,
+        rtsp_url: str,
+        username: Optional[str] = None,
+        password: Optional[str] = None
+    ) -> RTSPStreamer:
+        """Starts video ingestion for a given camera."""
+        if camera_id in self._streamers:
+            streamer = self._streamers[camera_id]
+            # Check if URL/credentials changed
+            if (streamer.base_rtsp_url != rtsp_url or 
+                streamer.username != username or 
+                streamer.password != password):
+                logger.info(f"[{camera_id}] Updating stream configuration...")
+                streamer.stop()
+            else:
+                if not streamer._running:
+                    streamer.start()
+                return streamer
+
+        streamer = RTSPStreamer(
+            camera_id=camera_id,
+            camera_name=camera_name,
+            bop_site=bop_site,
+            rtsp_url=rtsp_url,
+            username=username,
+            password=password,
+            on_status_change=self._on_camera_status_change
+        )
+        self._streamers[camera_id] = streamer
+        streamer.start()
+        return streamer
+
+    def stop_camera(self, camera_id: str):
+        """Stops and removes an active streamer."""
+        if camera_id in self._streamers:
+            streamer = self._streamers.pop(camera_id)
+            streamer.stop()
+
+    def get_streamer(self, camera_id: str) -> Optional[RTSPStreamer]:
+        """Retrieves active streamer instance for a camera."""
+        return self._streamers.get(camera_id)
+
+    def get_latest_frame(self, camera_id: str) -> Optional[np.ndarray]:
+        """Retrieves raw BGR frame from buffer."""
+        streamer = self._streamers.get(camera_id)
+        if streamer:
+            return streamer.get_latest_frame()
+        return None
+
+    def get_latest_jpeg(self, camera_id: str) -> Optional[bytes]:
+        """Retrieves pre-encoded JPEG bytes from buffer."""
+        streamer = self._streamers.get(camera_id)
+        if streamer:
+            return streamer.get_latest_jpeg()
+        return None
+
+    def get_status(self, camera_id: str) -> Optional[dict]:
+        """Returns health & stream metrics for a specific camera."""
+        streamer = self._streamers.get(camera_id)
+        if streamer:
+            return streamer.get_status_info()
+        return None
+
+    def get_all_statuses(self) -> Dict[str, dict]:
+        """Returns status dictionary for all active cameras."""
+        return {cam_id: s.get_status_info() for cam_id, s in self._streamers.items()}
+
+    async def generate_mjpeg_stream(self, camera_id: str, fps_limit: float = 25.0):
+        """
+        Asynchronous generator emitting multipart MJPEG frame chunks.
+        Used for native browser <img> or <video> live preview.
+        """
+        frame_interval = 1.0 / max(1.0, fps_limit)
+        streamer = self._streamers.get(camera_id)
+        
+        while True:
+            if not streamer or not streamer._running:
+                # Stream not running or offline
+                await asyncio.sleep(0.5)
+                streamer = self._streamers.get(camera_id)
+                continue
+
+            jpeg_bytes = streamer.get_latest_jpeg()
+            if jpeg_bytes:
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(jpeg_bytes)).encode('utf-8') + b"\r\n\r\n" +
+                    jpeg_bytes + b"\r\n"
+                )
+            await asyncio.sleep(frame_interval)
+
+    def shutdown_all(self):
+        """Gracefully shuts down all camera streamers on application exit."""
+        logger.info(f"Shutting down {len(self._streamers)} active camera streamers...")
+        for camera_id, streamer in list(self._streamers.items()):
+            try:
+                streamer.stop()
+            except Exception as e:
+                logger.error(f"Error stopping streamer {camera_id}: {e}")
+        self._streamers.clear()
+
+stream_manager = StreamManager()

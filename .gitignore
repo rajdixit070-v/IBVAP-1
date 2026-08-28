@@ -1,0 +1,126 @@
+# ==============================================================================
+# IBVAP — Git Ignore Configuration
+# ==============================================================================
+
+# --- Python & Bytecode ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# --- Databases & Local SQLite ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+ibvap.db
+
+# --- Logs & Runtime ---
+*.log
+logs/
+*.pid
+*.seed
+*.lock
+
+# --- Storage, Temp & Evidence Media ---
+storage/temp/
+storage/evidence/
+storage/clips/
+storage/snapshots/
+storage/cache/
+!storage/
+!storage/.gitkeep
+
+# --- AI Models, Weights & Ultralytics Cache ---
+*.pt
+*.pth
+*.onnx
+*.engine
+*.bin
+weights/
+.cache/
+ultralytics/
+
+# --- Node.js & Frontend ---
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+dist/
+
+# --- Package Manager Logs ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Environment & Secret Files ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.cert
+*.crt
+
+# --- OS & Editor Specific ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
