@@ -838,8 +838,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down IBVAP Platform gracefully...")
     await health_monitor.stop()
-    for cam_id in list(ai_pipeline_manager.workers.keys()):
-        ai_pipeline_manager.unregister_camera(cam_id)
+    ai_pipeline_manager.unregister_all()
     stream_manager.shutdown_all()
     logger.info("Shutdown complete.")
 
@@ -853,13 +852,13 @@ app = FastAPI(
 # Zero-Trust Security Headers Middleware
 app.add_middleware(SecurityHeadersMiddleware)
 
-# CORS configuration
+# CORS configuration with explicit origins, methods, and headers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
 # Mount API Routers

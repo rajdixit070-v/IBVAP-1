@@ -139,12 +139,12 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     }
   };
 
-  const handleSnapshot = () => {
-    const url = cameraService.getSnapshotUrl(camera.camera_id);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${camera.camera_id}_snapshot_${Date.now()}.jpg`;
-    link.click();
+  const handleSnapshot = async () => {
+    try {
+      await cameraService.downloadSnapshot(camera.camera_id);
+    } catch (err) {
+      console.warn('Snapshot download failed:', err);
+    }
   };
 
   return (

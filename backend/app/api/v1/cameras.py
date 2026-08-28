@@ -155,7 +155,8 @@ def test_existing_camera_connection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Tests connectivity of an existing saved camera using its stored credentials."""
+    """Tests connectivity of an existing saved camera using its stored credentials with IDOR check."""
+    verify_camera_access(camera_id, current_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(
@@ -176,7 +177,8 @@ def start_camera_stream(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
-    """Manually starts ingestion streamer for a camera."""
+    """Manually starts ingestion streamer for a camera with IDOR check."""
+    verify_camera_access(camera_id, admin_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
@@ -201,7 +203,8 @@ def stop_camera_stream(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
-    """Manually stops ingestion streamer for a camera."""
+    """Manually stops ingestion streamer for a camera with IDOR check."""
+    verify_camera_access(camera_id, admin_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
@@ -219,7 +222,8 @@ def get_live_camera_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieves live streaming metrics (FPS, resolution, reconnect attempts) for a camera."""
+    """Retrieves live streaming metrics (FPS, resolution, reconnect attempts) for a camera with IDOR check."""
+    verify_camera_access(camera_id, current_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
@@ -241,12 +245,14 @@ def get_live_camera_status(
 def get_live_video_stream(
     camera_id: str,
     fps: Optional[float] = Query(25.0, ge=1.0, le=60.0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
-    HTTP MJPEG streaming endpoint for low-latency live camera preview.
-    Can be used directly as an <img> src in HTML/React.
+    Authenticated HTTP MJPEG streaming endpoint for low-latency live camera preview.
+    Protected by JWT authentication and camera-level authorization.
     """
+    verify_camera_access(camera_id, current_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
@@ -259,9 +265,11 @@ def get_live_video_stream(
 @router.get("/{camera_id}/snapshot")
 def get_camera_snapshot(
     camera_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """Returns single current JPEG snapshot frame."""
+    """Returns single current JPEG snapshot frame with authentication and authorization check."""
+    verify_camera_access(camera_id, current_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
@@ -279,7 +287,8 @@ def get_camera_diagnostic_logs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Fetches historical diagnostic and connection events for troubleshooting."""
+    """Fetches historical diagnostic and connection events for troubleshooting with IDOR check."""
+    verify_camera_access(camera_id, current_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")

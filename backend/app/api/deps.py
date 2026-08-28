@@ -26,10 +26,6 @@ def get_current_user(
     )
     
     if not token:
-        # Fallback to default admin for local dev convenience if unauthenticated
-        admin_user = db.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
-        if admin_user:
-            return admin_user
         raise credentials_exception
 
     # 1. Check if token identifier is blacklisted
@@ -51,19 +47,11 @@ def get_current_user(
             raise credentials_exception
         token_data = TokenData(username=username, role=role)
     except JWTError:
-        if settings.ENV_MODE == "development" or settings.DEMO_MODE:
-            admin_user = db.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
-            if admin_user:
-                return admin_user
         raise credentials_exception
 
     # 3. Retrieve user & check status
     user = db.query(User).filter(User.username == token_data.username).first()
     if user is None:
-        if token_data.username == settings.DEFAULT_ADMIN_USERNAME:
-            admin_user = db.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
-            if admin_user:
-                return admin_user
         raise credentials_exception
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user account.")

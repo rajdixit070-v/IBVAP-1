@@ -1,7 +1,10 @@
 import re
 import cv2
+import logging
 import numpy as np
 from typing import Tuple, Optional
+
+logger = logging.getLogger("ibvap.anpr.ocr")
 
 # Regex pattern for Indian/Standard License Plates (e.g. UP32AB1234, DL01C8899, MH12DE1432, US/UK alphanumeric)
 STANDARD_PLATE_REGEX = re.compile(r'^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$')
@@ -31,7 +34,6 @@ class OCREngine:
 
     def _lazy_init(self):
         if not self._initialized:
-            # We can plug in easyocr or tesseract if available
             self._initialized = True
 
     def recognize(self, plate_image: np.ndarray, synthetic_hint: Optional[str] = None) -> Tuple[str, str, float]:
@@ -46,25 +48,26 @@ class OCREngine:
             norm = normalize_plate_number(synthetic_hint)
             return synthetic_hint, norm, 0.94
 
-        # Heuristic / Morphological extraction fallback
         raw_text = ""
         confidence = 0.0
 
-        # Try to use pytesseract or easyocr if available in python environment
+        # Try to use pytesseract if available in python environment and binary installed
         try:
             import pytesseract
             raw_text = pytesseract.image_to_string(
                 plate_image,
                 config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
             ).strip()
-            confidence = 0.88 if len(raw_text) >= 5 else 0.40
-        except Exception:
-            # Fallback simulated recognizer based on image features
-            raw_text = "UP32AB1234"
-            confidence = 0.91
+            confidence = 0.88 if len(raw_text) >= 5 else (0.40 if raw_text else 0.0)
+        except Exception as e:
+            logger.debug(f"OCR execution skipped or Tesseract engine not found: {e}")
+            raw_text = ""
+            confidence = 0.0
 
         norm = normalize_plate_number(raw_text)
-        
+        if not norm:
+            return "", "", 0.0
+
         # Apply standard plate format confidence boost if matching syntax
         if STANDARD_PLATE_REGEX.match(norm):
             confidence = min(0.98, confidence + 0.08)

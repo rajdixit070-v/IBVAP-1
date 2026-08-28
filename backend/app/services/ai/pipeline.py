@@ -239,8 +239,22 @@ class AIPipelineManager:
         """Unregisters and stops an AI camera worker."""
         with self._lock:
             worker = self.workers.pop(camera_id, None)
-            if worker:
+        if worker:
+            worker.stop()
+
+    def unregister_all(self):
+        """Stops and unregisters all AI camera workers gracefully."""
+        with self._lock:
+            workers = list(self.workers.values())
+            self.workers.clear()
+            self.ws_subscribers.clear()
+
+        logger.info(f"Stopping {len(workers)} active AI camera workers...")
+        for worker in workers:
+            try:
                 worker.stop()
+            except Exception as e:
+                logger.error(f"Error stopping AI worker {worker.camera_id}: {e}")
 
     def enable_camera(self, camera_id: str) -> bool:
         """Enables AI processing for a camera."""
@@ -307,7 +321,9 @@ class AIPipelineManager:
 
     def _broadcast_telemetry(self, camera_id: str, payload: Dict[str, Any]):
         """Pushes telemetry payload to all active WebSocket listeners for this camera."""
-        subscribers = self.ws_subscribers.get(camera_id, [])
+        with self._lock:
+            subscribers = list(self.ws_subscribers.get(camera_id, []))
+
         dead_subscribers = []
         for send_fn in subscribers:
             try:
@@ -319,7 +335,8 @@ class AIPipelineManager:
             with self._lock:
                 for dead in dead_subscribers:
                     try:
-                        self.ws_subscribers[camera_id].remove(dead)
+                        if dead in self.ws_subscribers.get(camera_id, []):
+                            self.ws_subscribers[camera_id].remove(dead)
                     except (ValueError, KeyError):
                         pass
 

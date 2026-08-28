@@ -21,7 +21,7 @@ class SecurityEventManager:
     and broadcasts events in real time to connected WebSocket dashboards.
     """
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         # Cooldown map: (camera_id, zone_id, track_id, event_type) -> (event_id, timestamp)
         self._active_incident_map: Dict[str, Dict[str, Any]] = {}
         self.ws_subscribers: List[Callable] = []
@@ -197,8 +197,11 @@ class SecurityEventManager:
             }
         }
 
+        with self._lock:
+            subscribers = list(self.ws_subscribers)
+
         dead_subscribers = []
-        for send_fn in self.ws_subscribers:
+        for send_fn in subscribers:
             try:
                 send_fn(payload)
             except Exception:
@@ -208,14 +211,18 @@ class SecurityEventManager:
             with self._lock:
                 for dead in dead_subscribers:
                     try:
-                        self.ws_subscribers.remove(dead)
+                        if dead in self.ws_subscribers:
+                            self.ws_subscribers.remove(dead)
                     except ValueError:
                         pass
 
     def broadcast_sync_event(self, payload: dict):
         """Broadcasts external/sync event payload directly to WebSockets."""
+        with self._lock:
+            subscribers = list(self.ws_subscribers)
+
         dead_subscribers = []
-        for send_fn in self.ws_subscribers:
+        for send_fn in subscribers:
             try:
                 send_fn(payload)
             except Exception:
@@ -225,7 +232,8 @@ class SecurityEventManager:
             with self._lock:
                 for dead in dead_subscribers:
                     try:
-                        self.ws_subscribers.remove(dead)
+                        if dead in self.ws_subscribers:
+                            self.ws_subscribers.remove(dead)
                     except ValueError:
                         pass
 

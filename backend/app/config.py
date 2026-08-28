@@ -54,13 +54,21 @@ class Settings(BaseSettings):
     DEFAULT_ADMIN_EMAIL: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@ibvap.mil")
     
     # CORS
-    ALLOWED_CORS_ORIGINS: List[str] = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "https://ibvap.mil"
-    ]
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
+
+    @property
+    def ALLOWED_CORS_ORIGINS(self) -> List[str]:
+        if self.CORS_ORIGINS:
+            return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        return [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "https://ibvap.mil"
+        ]
 
     class Config:
         case_sensitive = True

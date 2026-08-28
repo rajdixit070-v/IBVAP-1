@@ -12,7 +12,20 @@ from app.core.security import get_password_hash
 from app.services.federation.federation_service import FederationService
 from app.services.federation.scope_service import ScopeService
 
+from app.config import settings
+
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def setup_auth():
+    login_resp = client.post(
+        f"{settings.API_V1_STR}/auth/login-json",
+        json={"username": settings.DEFAULT_ADMIN_USERNAME, "password": settings.DEFAULT_ADMIN_PASSWORD}
+    )
+    token = login_resp.json()["access_token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+    yield
+    client.headers.pop("Authorization", None)
 
 @pytest.fixture
 def db():

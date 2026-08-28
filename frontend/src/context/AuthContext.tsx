@@ -21,15 +21,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = authService.getStoredUser();
-    const token = authService.getToken();
-    if (stored && token) {
-      setUser(stored);
-    } else {
-      // Default to dev admin session if available
-      setUser({ username: 'admin', role: 'admin' });
-    }
-    setLoading(false);
+    const initAuth = async () => {
+      const token = authService.getToken();
+      if (token) {
+        try {
+          const currentUser = await authService.getCurrentUser();
+          setUser({ username: currentUser.username, role: currentUser.role });
+        } catch {
+          // If token is invalid or expired, clear session
+          authService.logout();
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -43,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user && !!authService.getToken(), login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

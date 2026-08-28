@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin } from 'lucide-react';
+import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenMap }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { summary, refreshCameras, loading } = useCameras();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -116,7 +116,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap }) => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-sky-400' : ''}`} />
           </button>
 
-          {/* User Badge */}
+          {/* User Badge & Logout */}
           <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
             <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
               <UserIcon className="w-4 h-4" />
@@ -125,6 +125,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap }) => {
               <div className="text-xs font-semibold text-white uppercase tracking-wider">{user?.username || 'ADMIN'}</div>
               <div className="text-[10px] text-sky-400 font-mono uppercase">{user?.role || 'COMMANDER'}</div>
             </div>
+            <button
+              onClick={logout}
+              className="p-1.5 ml-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg border border-transparent hover:border-rose-800/50 transition flex items-center gap-1 text-xs font-mono"
+              title="Sign Out Session"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden xl:inline text-[11px]">Logout</span>
+            </button>
           </div>
         </div>
       </header>

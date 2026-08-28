@@ -18,7 +18,7 @@ class AlertEngine:
     Central Alert Engine: Deduplication, SLA Deadlines, Escalations, and Notifications.
     """
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         # Active track cooldown: (camera_id, track_id, event_type) -> alert_id
         self._active_alert_map: Dict[str, str] = {}
 

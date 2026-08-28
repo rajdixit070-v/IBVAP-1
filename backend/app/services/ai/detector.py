@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import threading
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Any
 import numpy as np
@@ -58,6 +59,7 @@ class YOLOObjectDetector:
         self.model = None
         self.is_loaded = False
         self.device_used = "CPU"
+        self._inference_lock = threading.Lock()
         
         # Default configurable thresholds
         self.thresholds = {
@@ -91,13 +93,27 @@ class YOLOObjectDetector:
                 self.device_used = "CUDA" if torch.cuda.is_available() else "CPU"
 
             model_filename = f"{self.model_name}.pt" if not self.model_name.endswith((".pt", ".onnx", ".engine")) else self.model_name
+            
+            # Resolve relative model paths robustly across launch locations
+            if not os.path.isabs(model_filename) and not os.path.exists(model_filename):
+                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+                possible_paths = [
+                    os.path.join(base_dir, model_filename),
+                    os.path.join(base_dir, "models", model_filename),
+                    os.path.join(base_dir, "weights", model_filename),
+                ]
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        model_filename = p
+                        break
+
             logger.info(f"Loading YOLO detector '{model_filename}' on {self.device_used}...")
             
             self.model = YOLO(model_filename)
             self.is_loaded = True
             logger.info(f"YOLO detector '{model_filename}' successfully initialized on {self.device_used}.")
         except Exception as e:
-            logger.error(f"Failed to load YOLO model '{self.model_name}': {e}. Initializing lightweight fallback detector.")
+            logger.error(f"Failed to load YOLO model '{self.model_name}': {e}.")
             self.is_loaded = False
             self.device_used = "CPU (Fallback)"
 
@@ -120,14 +136,15 @@ class YOLOObjectDetector:
 
         if self.is_loaded and self.model is not None:
             try:
-                # Run YOLO inference
-                results = self.model(
-                    frame,
-                    imgsz=input_size,
-                    device=0 if self.device_used == "CUDA" else "cpu",
-                    verbose=False,
-                    conf=0.25 # Base threshold, filtered individually below
-                )
+                # Run YOLO inference with thread safety
+                with self._inference_lock:
+                    results = self.model(
+                        frame,
+                        imgsz=input_size,
+                        device=0 if self.device_used == "CUDA" else "cpu",
+                        verbose=False,
+                        conf=0.25 # Base threshold, filtered individually below
+                    )
 
                 if results and len(results) > 0:
                     r = results[0]

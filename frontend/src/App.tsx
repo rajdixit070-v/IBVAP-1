@@ -117,14 +117,40 @@ const MainLayout: React.FC = () => {
   );
 };
 
+import { LoginPage } from './pages/LoginPage';
+import { useAuth } from './context/AuthContext';
+
+const AuthenticatedApp: React.FC = () => {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#070b12] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-xs font-mono text-slate-400 tracking-wider">VALIDATING SECURE IDENTITY MATRIX...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return <LoginPage onSuccess={() => {}} />;
+  }
+
+  return (
+    <CameraProvider>
+      <MainLayout />
+      <DemoModeBanner />
+    </CameraProvider>
+  );
+};
+
 export function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <CameraProvider>
-          <MainLayout />
-          <DemoModeBanner />
-        </CameraProvider>
+        <AuthenticatedApp />
       </AuthProvider>
     </ErrorBoundary>
   );

@@ -1,6 +1,7 @@
 import time
 import logging
 import asyncio
+import threading
 from typing import Dict, Optional, List, Callable
 import numpy as np
 
@@ -21,16 +22,20 @@ class StreamManager:
             cls._instance = super(StreamManager, cls).__new__(cls)
             cls._instance._streamers: Dict[str, RTSPStreamer] = {}
             cls._instance._status_listeners: List[Callable[[str, str, dict], None]] = []
+            cls._instance._lock = threading.Lock()
         return cls._instance
 
     def register_status_listener(self, callback: Callable[[str, str, dict], None]):
         """Registers a callback for camera health/status transitions."""
-        if callback not in self._status_listeners:
-            self._status_listeners.append(callback)
+        with self._lock:
+            if callback not in self._status_listeners:
+                self._status_listeners.append(callback)
 
     def _on_camera_status_change(self, camera_id: str, new_status: str, meta: dict):
         """Dispatches status updates to all registered listeners."""
-        for listener in self._status_listeners:
+        with self._lock:
+            listeners = list(self._status_listeners)
+        for listener in listeners:
             try:
                 listener(camera_id, new_status, meta)
             except Exception as e:
@@ -45,42 +50,45 @@ class StreamManager:
         username: Optional[str] = None,
         password: Optional[str] = None
     ) -> RTSPStreamer:
-        """Starts video ingestion for a given camera."""
-        if camera_id in self._streamers:
-            streamer = self._streamers[camera_id]
-            # Check if URL/credentials changed
-            if (streamer.base_rtsp_url != rtsp_url or 
-                streamer.username != username or 
-                streamer.password != password):
-                logger.info(f"[{camera_id}] Updating stream configuration...")
-                streamer.stop()
-            else:
-                if not streamer._running:
-                    streamer.start()
-                return streamer
+        """Starts video ingestion for a given camera with thread-safe duplicate protection."""
+        with self._lock:
+            if camera_id in self._streamers:
+                streamer = self._streamers[camera_id]
+                # Check if URL/credentials changed
+                if (streamer.base_rtsp_url != rtsp_url or 
+                    streamer.username != username or 
+                    streamer.password != password):
+                    logger.info(f"[{camera_id}] Updating stream configuration...")
+                    streamer.stop()
+                else:
+                    if not streamer._running:
+                        streamer.start()
+                    return streamer
 
-        streamer = RTSPStreamer(
-            camera_id=camera_id,
-            camera_name=camera_name,
-            bop_site=bop_site,
-            rtsp_url=rtsp_url,
-            username=username,
-            password=password,
-            on_status_change=self._on_camera_status_change
-        )
-        self._streamers[camera_id] = streamer
-        streamer.start()
-        return streamer
+            streamer = RTSPStreamer(
+                camera_id=camera_id,
+                camera_name=camera_name,
+                bop_site=bop_site,
+                rtsp_url=rtsp_url,
+                username=username,
+                password=password,
+                on_status_change=self._on_camera_status_change
+            )
+            self._streamers[camera_id] = streamer
+            streamer.start()
+            return streamer
 
     def stop_camera(self, camera_id: str):
         """Stops and removes an active streamer."""
-        if camera_id in self._streamers:
-            streamer = self._streamers.pop(camera_id)
+        with self._lock:
+            streamer = self._streamers.pop(camera_id, None)
+        if streamer:
             streamer.stop()
 
     def get_streamer(self, camera_id: str) -> Optional[RTSPStreamer]:
         """Retrieves active streamer instance for a camera."""
-        return self._streamers.get(camera_id)
+        with self._lock:
+            return self._streamers.get(camera_id)
 
     def get_latest_frame(self, camera_id: str) -> Optional[np.ndarray]:
         """Retrieves raw BGR frame from buffer."""
@@ -105,7 +113,9 @@ class StreamManager:
 
     def get_all_statuses(self) -> Dict[str, dict]:
         """Returns status dictionary for all active cameras."""
-        return {cam_id: s.get_status_info() for cam_id, s in self._streamers.items()}
+        with self._lock:
+            streamers_snapshot = list(self._streamers.items())
+        return {cam_id: s.get_status_info() for cam_id, s in streamers_snapshot}
 
     async def generate_mjpeg_stream(self, camera_id: str, fps_limit: float = 25.0):
         """
@@ -113,13 +123,13 @@ class StreamManager:
         Used for native browser <img> or <video> live preview.
         """
         frame_interval = 1.0 / max(1.0, fps_limit)
-        streamer = self._streamers.get(camera_id)
+        streamer = self.get_streamer(camera_id)
         
         while True:
-            if not streamer or not streamer._running:
+            if not streamer or not getattr(streamer, "_running", False):
                 # Stream not running or offline
                 await asyncio.sleep(0.5)
-                streamer = self._streamers.get(camera_id)
+                streamer = self.get_streamer(camera_id)
                 continue
 
             jpeg_bytes = streamer.get_latest_jpeg()
@@ -134,12 +144,15 @@ class StreamManager:
 
     def shutdown_all(self):
         """Gracefully shuts down all camera streamers on application exit."""
-        logger.info(f"Shutting down {len(self._streamers)} active camera streamers...")
-        for camera_id, streamer in list(self._streamers.items()):
+        with self._lock:
+            streamers = list(self._streamers.values())
+            self._streamers.clear()
+        
+        logger.info(f"Shutting down {len(streamers)} active camera streamers...")
+        for streamer in streamers:
             try:
                 streamer.stop()
             except Exception as e:
-                logger.error(f"Error stopping streamer {camera_id}: {e}")
-        self._streamers.clear()
+                logger.error(f"Error stopping streamer {streamer.camera_id}: {e}")
 
 stream_manager = StreamManager()

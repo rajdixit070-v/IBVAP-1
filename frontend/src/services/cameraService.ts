@@ -83,5 +83,20 @@ export const cameraService = {
 
   getSnapshotUrl(cameraId: string): string {
     return `/api/v1/cameras/${cameraId}/snapshot?t=${Date.now()}`;
+  },
+
+  async getSnapshotBlob(cameraId: string): Promise<Blob> {
+    const response = await api.get(`/cameras/${cameraId}/snapshot`, { responseType: 'blob' });
+    return response.data;
+  },
+
+  async downloadSnapshot(cameraId: string): Promise<void> {
+    const blob = await this.getSnapshotBlob(cameraId);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${cameraId}_snapshot_${Date.now()}.jpg`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 };
