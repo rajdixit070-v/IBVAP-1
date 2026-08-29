@@ -164,25 +164,25 @@ def test_early_warning_creation_and_deduplication(db_session):
     assert ew2.warning_level == "HIGH"
     assert ew2.forecast_risk_score == 85
 
-def test_early_warning_acknowledgement_and_dismissal(db_session):
+def test_early_warning_acknowledgement_and_dismissal(db_session, auth_headers):
     """Test state transitions for early warnings."""
-    res = client.get("/api/v1/predictive/warnings?limit=1")
+    res = client.get("/api/v1/predictive/warnings?limit=1", headers=auth_headers)
     assert res.status_code == 200
     warnings = res.json()
     assert len(warnings) >= 1
     w_id = warnings[0]["warning_id"]
 
     # Acknowledge
-    ack_res = client.post(f"/api/v1/predictive/warnings/{w_id}/acknowledge", json={"actor_username": "commander_1"})
+    ack_res = client.post(f"/api/v1/predictive/warnings/{w_id}/acknowledge", json={"actor_username": "commander_1"}, headers=auth_headers)
     assert ack_res.status_code == 200
     assert ack_res.json()["lifecycle_status"] == "ACKNOWLEDGED"
 
     # Dismiss
-    dism_res = client.post(f"/api/v1/predictive/warnings/{w_id}/dismiss", json={"actor_username": "commander_1", "notes": "Sector clear."})
+    dism_res = client.post(f"/api/v1/predictive/warnings/{w_id}/dismiss", json={"actor_username": "commander_1", "notes": "Sector clear."}, headers=auth_headers)
     assert dism_res.status_code == 200
     assert dism_res.json()["lifecycle_status"] == "DISMISSED"
 
-def test_baseline_shift_detection_and_approval(db_session):
+def test_baseline_shift_detection_and_approval(db_session, auth_headers):
     """Test baseline shift detection and admin approval."""
     cam_id = f"CAM-SHIFT-{uuid.uuid4().hex[:4].upper()}"
     # Seed baseline
@@ -210,7 +210,7 @@ def test_baseline_shift_detection_and_approval(db_session):
     res = client.post(f"/api/v1/predictive/baseline-shifts/{shift.shift_id}/approve", json={
         "approve": True,
         "notes": "Approved new routine shift change baseline."
-    })
+    }, headers=auth_headers)
     assert res.status_code == 200
     assert res.json()["status"] == "APPROVED"
 
@@ -219,9 +219,9 @@ def test_baseline_shift_detection_and_approval(db_session):
     assert baseline.expected_person_count == 26.0
     assert baseline.version == 2
 
-def test_spatial_hotspot_analysis():
+def test_spatial_hotspot_analysis(auth_headers):
     """Test spatial security hotspot calculation across zones."""
-    res = client.get("/api/v1/predictive/hotspots")
+    res = client.get("/api/v1/predictive/hotspots", headers=auth_headers)
     assert res.status_code == 200
     hotspots = res.json()
     assert len(hotspots) >= 1
@@ -230,9 +230,9 @@ def test_spatial_hotspot_analysis():
     assert "latitude" in hotspots[0]
     assert "longitude" in hotspots[0]
 
-def test_predictive_camera_prioritization():
+def test_predictive_camera_prioritization(auth_headers):
     """Test smart monitoring recommendations for prioritized cameras."""
-    res = client.get("/api/v1/predictive/recommended-attention")
+    res = client.get("/api/v1/predictive/recommended-attention", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert "recommendations" in data
@@ -240,9 +240,9 @@ def test_predictive_camera_prioritization():
     assert "priority" in data["recommendations"][0]
     assert "reason" in data["recommendations"][0]
 
-def test_prediction_feedback_and_model_health_endpoint(db_session):
+def test_prediction_feedback_and_model_health_endpoint(db_session, auth_headers):
     """Test model health telemetry and prediction feedback recording."""
-    health_res = client.get("/api/v1/predictive/model-health")
+    health_res = client.get("/api/v1/predictive/model-health", headers=auth_headers)
     assert health_res.status_code == 200
     health = health_res.json()
     assert health["status"] == "HEALTHY"
@@ -255,6 +255,6 @@ def test_prediction_feedback_and_model_health_endpoint(db_session):
         "feedback_type": "USEFUL_FORECAST",
         "notes": "Enabled early patrol deployment",
         "operator_username": "operator"
-    })
+    }, headers=auth_headers)
     assert fb_res.status_code == 201
     assert fb_res.json()["feedback_type"] == "USEFUL_FORECAST"

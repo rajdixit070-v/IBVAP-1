@@ -22,9 +22,9 @@ def db():
     yield session
     session.close()
 
-def test_explainable_health_score_calculation(db):
+def test_explainable_health_score_calculation(db, auth_headers):
     """Test that system health summary returns an explainable 0-100 score with 5 factor contributors."""
-    res = client.get("/api/v1/health/system")
+    res = client.get("/api/v1/health/system", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
 
@@ -46,7 +46,7 @@ def test_explainable_health_score_calculation(db):
     total_weight = sum(c["weight"] for c in contributors)
     assert pytest.approx(total_weight, 0.01) == 1.0
 
-def test_camera_health_list_and_fps_degradation(db):
+def test_camera_health_list_and_fps_degradation(db, auth_headers):
     """Test camera health reporting with FPS metrics and degradation detection."""
     # Ensure test camera exists with degraded FPS
     cam = db.query(Camera).filter(Camera.camera_id == "CAM-001").first()
@@ -70,7 +70,7 @@ def test_camera_health_list_and_fps_degradation(db):
         cam.fps = 8.0
     db.commit()
 
-    res = client.get("/api/v1/health/cameras")
+    res = client.get("/api/v1/health/cameras", headers=auth_headers)
     assert res.status_code == 200
     cameras = res.json()
     assert len(cameras) >= 1
@@ -112,7 +112,7 @@ def test_camera_tampering_detection():
     assert metrics["tampering_detected"] is True
     assert "Potential camera obstruction" in metrics["tampering_reason"]
 
-def test_edge_node_unresponsive_detection(db):
+def test_edge_node_unresponsive_detection(db, auth_headers):
     """Test that edge nodes with stale heartbeats are marked unresponsive with affected cameras."""
     node = db.query(EdgeNode).filter(EdgeNode.node_id == "EDGE-BOP-001").first()
     if not node:
@@ -127,7 +127,7 @@ def test_edge_node_unresponsive_detection(db):
     node.last_heartbeat = datetime.utcnow() - timedelta(seconds=120)
     db.commit()
 
-    res = client.get("/api/v1/health/edges")
+    res = client.get("/api/v1/health/edges", headers=auth_headers)
     assert res.status_code == 200
     nodes = res.json()
     n1 = next((n for n in nodes if n["node_id"] == "EDGE-BOP-001"), None)
@@ -170,7 +170,7 @@ def test_infrastructure_incident_creation(db):
     assert inc.incident_type == "INFRASTRUCTURE"
     assert inc.playbook_id == "PB-INFRASTRUCTURE-OUTAGE"
 
-def test_maintenance_mode_and_alert_suppression(db):
+def test_maintenance_mode_and_alert_suppression(db, auth_headers):
     """Test placing a camera in maintenance mode and verifying alert suppression."""
     res = client.post("/api/v1/health/maintenance", json={
         "target_type": "CAMERA",
@@ -178,7 +178,7 @@ def test_maintenance_mode_and_alert_suppression(db):
         "reason": "Optical lens replacement and realignment",
         "duration_minutes": 120,
         "authorized_by": "supervisor"
-    })
+    }, headers=auth_headers)
     assert res.status_code == 201
     data = res.json()
     assert data["target_id"] == "CAM-001"
@@ -190,18 +190,18 @@ def test_maintenance_mode_and_alert_suppression(db):
     assert cam.status == "MAINTENANCE"
 
     # Verify camera listing reflects maintenance
-    c_res = client.get("/api/v1/health/cameras/CAM-001")
+    c_res = client.get("/api/v1/health/cameras/CAM-001", headers=auth_headers)
     assert c_res.status_code == 200
     assert c_res.json()["is_maintenance"] is True
     assert c_res.json()["status"] == "MAINTENANCE"
 
-def test_camera_priority_configuration_and_audit(db):
+def test_camera_priority_configuration_and_audit(db, auth_headers):
     """Test changing camera operational priority with audit trail."""
     res = client.post("/api/v1/health/cameras/CAM-001/priority", json={
         "priority": "CRITICAL",
         "reason": "Active intrusion investigation",
-        "authorized_by": "commander"
-    })
+        "authorized_by": "admin"
+    }, headers=auth_headers)
     assert res.status_code == 200
     assert res.json()["priority"] == "CRITICAL"
 
@@ -211,14 +211,14 @@ def test_camera_priority_configuration_and_audit(db):
     audit = db.query(SecurityAuditLog).filter(
         SecurityAuditLog.action == "CAMERA_PRIORITY_CHANGED",
         SecurityAuditLog.resource_id == "CAM-001"
-    ).first()
+    ).order_by(SecurityAuditLog.timestamp.desc()).first()
     assert audit is not None
-    assert audit.username == "commander"
+    assert audit.username == "admin"
 
-def test_storage_and_network_telemetry_endpoints():
+def test_storage_and_network_telemetry_endpoints(auth_headers):
     """Test storage, network, queues, and service dependency endpoints."""
     # Storage
-    s_res = client.get("/api/v1/health/storage")
+    s_res = client.get("/api/v1/health/storage", headers=auth_headers)
     assert s_res.status_code == 200
     s_data = s_res.json()
     assert "total_gb" in s_data
@@ -227,39 +227,39 @@ def test_storage_and_network_telemetry_endpoints():
     assert s_data["retention_days"] == 30
 
     # Network
-    n_res = client.get("/api/v1/health/network")
+    n_res = client.get("/api/v1/health/network", headers=auth_headers)
     assert n_res.status_code == 200
     n_data = n_res.json()
     assert n_data["status"] in ["GOOD", "DEGRADED", "POOR", "OFFLINE"]
 
     # Queues
-    q_res = client.get("/api/v1/health/queues")
+    q_res = client.get("/api/v1/health/queues", headers=auth_headers)
     assert q_res.status_code == 200
     assert len(q_res.json()) >= 1
 
     # Services
-    srv_res = client.get("/api/v1/health/services")
+    srv_res = client.get("/api/v1/health/services", headers=auth_headers)
     assert srv_res.status_code == 200
     assert len(srv_res.json()) >= 4
 
-def test_health_config_versioning_and_audit(db):
+def test_health_config_versioning_and_audit(db, auth_headers):
     """Test updating health thresholds and verifying version increment and audit log."""
-    cfg_get = client.get("/api/v1/health/config")
+    cfg_get = client.get("/api/v1/health/config", headers=auth_headers)
     assert cfg_get.status_code == 200
 
     update_res = client.put("/api/v1/health/config", json={
         "heartbeat_timeout_seconds": 75,
         "storage_warning_percent": 82.0,
         "notes": "Adjusting SLA thresholds for high-winds storm",
-        "changed_by": "sysadmin"
-    })
+        "changed_by": "admin"
+    }, headers=auth_headers)
     assert update_res.status_code == 200
     assert update_res.json()["heartbeat_timeout_seconds"] == 75
     assert update_res.json()["storage_warning_percent"] == 82.0
 
     record = db.query(HealthConfigRecord).order_by(HealthConfigRecord.version.desc()).first()
     assert record is not None
-    assert record.changed_by == "sysadmin"
+    assert record.changed_by == "admin"
 
     audit = db.query(SecurityAuditLog).filter(SecurityAuditLog.action == "HEALTH_CONFIG_UPDATED").first()
     assert audit is not None

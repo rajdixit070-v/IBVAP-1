@@ -143,11 +143,12 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
     db.refresh(db_camera)
 
     # Manage streamer state
+    stream_running = db_camera.camera_id in stream_manager._streamers
     if not db_camera.enabled:
         stream_manager.stop_camera(db_camera.camera_id)
         db_camera.status = "OFFLINE"
         db.commit()
-    elif reconnect_needed or db_camera.enabled:
+    elif reconnect_needed or not stream_running:
         decrypted_pw = decrypt_credential(db_camera.encrypted_password)
         stream_manager.start_camera(
             camera_id=db_camera.camera_id,

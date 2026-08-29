@@ -104,7 +104,10 @@ class CameraAIWorker:
                     conf_mult = q_res.get("confidence_multiplier", 1.0)
                     if conf_mult < 0.99:
                         for d in detections:
-                            d.confidence = round(d.confidence * conf_mult, 3)
+                            if hasattr(d, 'confidence'):
+                                d.confidence = round(d.confidence * conf_mult, 3)
+                            elif isinstance(d, dict) and 'confidence' in d:
+                                d['confidence'] = round(d['confidence'] * conf_mult, 3)
                 except Exception as qe:
                     logger.debug(f"Quality modulation bypass on {self.camera_id}: {qe}")
                 

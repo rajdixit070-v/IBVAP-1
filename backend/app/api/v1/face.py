@@ -4,6 +4,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.models.face_event import FaceEvent
 from app.models.audit_log import SecurityAuditLog
 from app.schemas.face import FaceEventResponse, FaceVerificationUpdate, FaceAnalyticsSummary
@@ -16,7 +18,8 @@ def list_face_events(
     match_status: Optional[str] = Query(None),
     verification_status: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List recorded facial recognition events with multi-criteria filtering.
@@ -32,7 +35,10 @@ def list_face_events(
     return query.order_by(FaceEvent.timestamp.desc()).limit(limit).all()
 
 @router.get("/summary", response_model=FaceAnalyticsSummary)
-def get_face_summary(db: Session = Depends(get_db)):
+def get_face_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Returns aggregated facial analytics metrics.
     """
@@ -51,7 +57,12 @@ def get_face_summary(db: Session = Depends(get_db)):
     )
 
 @router.put("/events/{event_id}/verify", response_model=FaceEventResponse)
-def verify_face_match(event_id: str, data: FaceVerificationUpdate, db: Session = Depends(get_db)):
+def verify_face_match(
+    event_id: str,
+    data: FaceVerificationUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Operator action to verify or dismiss a potential facial watchlist match.
     """
@@ -63,7 +74,7 @@ def verify_face_match(event_id: str, data: FaceVerificationUpdate, db: Session =
     event.verification_notes = data.verification_notes
 
     audit = SecurityAuditLog(
-        username="operator",
+        username=current_user.username,
         action=f"FACE_MATCH_{data.verification_status}",
         resource_type="FACE_EVENT",
         resource_id=event_id,

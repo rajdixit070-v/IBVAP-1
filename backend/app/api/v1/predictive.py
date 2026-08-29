@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.api.deps import get_current_user, require_admin
+from app.models.user import User
 from app.models.early_warning import EarlyWarning
 from app.models.baseline_shift import BaselineShift
 from app.models.model_health import ModelHealth
@@ -37,7 +39,8 @@ def get_activity_time_series(
     target_type: str = Query("camera", description="camera, zone, site"),
     target_id: str = Query("CAM-001"),
     window_minutes: int = Query(15, ge=5, le=1440),
-    history_points: int = Query(12, ge=4, le=48)
+    history_points: int = Query(12, ge=4, le=48),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Returns aggregated activity time-series data with expected baseline and confidence bands.
@@ -63,7 +66,8 @@ def get_activity_time_series(
 def get_activity_forecast(
     target_type: str = Query("camera", description="camera, zone, site"),
     target_id: str = Query("CAM-001"),
-    horizon_minutes: int = Query(60, ge=15, le=360)
+    horizon_minutes: int = Query(60, ge=15, le=360),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Generates short-term predictive forecast with confidence, range uncertainty, and explainable drivers.
@@ -83,7 +87,8 @@ def list_early_warnings(
     lifecycle_status: Optional[str] = Query(None),
     camera_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List early warnings with status and severity filters.
@@ -133,11 +138,15 @@ def list_early_warnings(
     return results
 
 @router.post("/warnings/{warning_id}/acknowledge", response_model=EarlyWarningResponse)
-def acknowledge_early_warning(warning_id: str, body: EarlyWarningUpdate):
+def acknowledge_early_warning(
+    warning_id: str,
+    body: EarlyWarningUpdate,
+    current_user: User = Depends(get_current_user)
+):
     """
     Acknowledge an active early warning.
     """
-    ew = early_warning_service.acknowledge_warning(warning_id, username=body.actor_username or "operator")
+    ew = early_warning_service.acknowledge_warning(warning_id, username=current_user.username)
     if not ew:
         raise HTTPException(status_code=404, detail="Early warning not found.")
 
@@ -170,13 +179,17 @@ def acknowledge_early_warning(warning_id: str, body: EarlyWarningUpdate):
     )
 
 @router.post("/warnings/{warning_id}/dismiss", response_model=EarlyWarningResponse)
-def dismiss_early_warning(warning_id: str, body: EarlyWarningUpdate):
+def dismiss_early_warning(
+    warning_id: str,
+    body: EarlyWarningUpdate,
+    current_user: User = Depends(get_current_user)
+):
     """
     Dismiss an early warning with operator notes.
     """
     ew = early_warning_service.dismiss_warning(
         warning_id,
-        username=body.actor_username or "operator",
+        username=current_user.username,
         notes=body.notes or ""
     )
     if not ew:
@@ -213,7 +226,7 @@ def dismiss_early_warning(warning_id: str, body: EarlyWarningUpdate):
 # --- Hotspot Analysis ---
 
 @router.get("/hotspots", response_model=List[HotspotZoneResponse])
-def get_security_hotspots():
+def get_security_hotspots(current_user: User = Depends(get_current_user)):
     """
     Returns spatial security and activity hotspots across registered sectors and zones.
     """
@@ -222,7 +235,7 @@ def get_security_hotspots():
 # --- Predictive Camera Prioritization ---
 
 @router.get("/recommended-attention", response_model=RecommendedAttentionResponse)
-def get_recommended_camera_attention():
+def get_recommended_camera_attention(current_user: User = Depends(get_current_user)):
     """
     Returns prioritized camera recommendations based on active incidents and anomaly trends.
     """
@@ -235,7 +248,11 @@ def get_recommended_camera_attention():
 # --- Baseline Shift Review ---
 
 @router.get("/baseline-shifts", response_model=List[BaselineShiftResponse])
-def list_baseline_shifts(status: Optional[str] = Query(None), db: Session = Depends(get_db)):
+def list_baseline_shifts(
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     List detected baseline shifts requiring administrative review.
     """
@@ -245,14 +262,18 @@ def list_baseline_shifts(status: Optional[str] = Query(None), db: Session = Depe
     return query.order_by(BaselineShift.detected_at.desc()).all()
 
 @router.post("/baseline-shifts/{shift_id}/approve", response_model=BaselineShiftResponse)
-def approve_or_reject_baseline_shift(shift_id: str, body: BaselineShiftApprove):
+def approve_or_reject_baseline_shift(
+    shift_id: str,
+    body: BaselineShiftApprove,
+    current_user: User = Depends(require_admin)
+):
     """
-    Admin approval or rejection of detected baseline shift.
+    Admin approval or rejection of detected baseline shift (Admin only).
     """
     shift = early_warning_service.approve_baseline_shift(
         shift_id=shift_id,
         approve=body.approve,
-        reviewed_by=body.reviewed_by or "admin",
+        reviewed_by=current_user.username,
         notes=body.notes
     )
     if not shift:
@@ -262,14 +283,18 @@ def approve_or_reject_baseline_shift(shift_id: str, body: BaselineShiftApprove):
 # --- Model Health & Feedback ---
 
 @router.get("/model-health", response_model=ModelHealthResponse)
-def get_model_health():
+def get_model_health(current_user: User = Depends(get_current_user)):
     """
     Returns predictive model status, error metrics (MAE/RMSE), and data quality telemetry.
     """
     return predictive_service.get_or_create_model_health()
 
 @router.post("/feedback", response_model=PredictionFeedbackResponse, status_code=201)
-def submit_prediction_feedback(body: PredictionFeedbackCreate, db: Session = Depends(get_db)):
+def submit_prediction_feedback(
+    body: PredictionFeedbackCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Submit operator feedback on early warnings and forecasts.
     """
@@ -277,7 +302,7 @@ def submit_prediction_feedback(body: PredictionFeedbackCreate, db: Session = Dep
         feedback_id=f"PFB-{uuid.uuid4().hex[:6].upper()}",
         warning_id=body.warning_id,
         feedback_type=body.feedback_type,
-        operator_username=body.operator_username or "operator",
+        operator_username=current_user.username,
         notes=body.notes,
         created_at=datetime.utcnow()
     )

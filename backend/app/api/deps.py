@@ -1,5 +1,6 @@
+from typing import Optional
 from datetime import datetime
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
@@ -16,9 +17,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login
 
 def get_current_user(
     db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
+    header_token: Optional[str] = Depends(oauth2_scheme),
+    query_token: Optional[str] = Query(None, alias="token")
 ) -> User:
-    """Validates JWT access token, checks revocation blacklist, and returns active user."""
+    """Validates JWT access token from Authorization header or query param, checks revocation, and returns active user."""
+    token = header_token or query_token
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -67,15 +70,17 @@ def get_current_user(
 
 def get_current_user_optional(
     db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
-) -> User:
+    header_token: Optional[str] = Depends(oauth2_scheme),
+    query_token: Optional[str] = Query(None, alias="token")
+) -> Optional[User]:
+    """Returns authenticated User if valid token is provided; otherwise returns None (never admin)."""
+    token = header_token or query_token
+    if not token:
+        return None
     try:
-        if token:
-            return get_current_user(db, token)
+        return get_current_user(db, header_token=header_token, query_token=query_token)
     except Exception:
-        pass
-    admin_user = db.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
-    return admin_user or User(username=settings.DEFAULT_ADMIN_USERNAME, role="admin", is_active=True)
+        return None
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Ensures caller has administrator privileges."""

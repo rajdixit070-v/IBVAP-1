@@ -125,7 +125,7 @@ def test_risk_engine_watchlist_escalation():
     assert "NIGHT_MOVEMENT" in factor_names
 
 # 7. Vehicle Watchlist REST API CRUD
-def test_vehicle_watchlist_api_crud():
+def test_vehicle_watchlist_api_crud(auth_headers):
     # 1. Create
     resp = client.post("/api/v1/vehicles/", json={
         "plate_number": "KA 05 MN 9988",
@@ -134,7 +134,7 @@ def test_vehicle_watchlist_api_crud():
         "status": "WATCHLIST",
         "watchlist_category": "SUSPICIOUS_MOVEMENT",
         "notes": "Automated test record."
-    })
+    }, headers=auth_headers)
     assert resp.status_code == 201
     data = resp.json()
     assert data["normalized_plate_number"] == "KA05MN9988"
@@ -144,57 +144,58 @@ def test_vehicle_watchlist_api_crud():
     resp_dup = client.post("/api/v1/vehicles/", json={
         "plate_number": "KA-05-MN-9988",
         "vehicle_type": "truck"
-    })
+    }, headers=auth_headers)
     assert resp_dup.status_code == 400
 
     # 3. List
-    resp_list = client.get("/api/v1/vehicles/?search=KA05MN9988")
+    resp_list = client.get("/api/v1/vehicles/?search=KA05MN9988", headers=auth_headers)
     assert resp_list.status_code == 200
     assert len(resp_list.json()) >= 1
 
     # 4. Update
-    resp_up = client.put(f"/api/v1/vehicles/{vid}", json={"status": "AUTHORIZED"})
+    resp_up = client.put(f"/api/v1/vehicles/{vid}", json={"status": "AUTHORIZED"}, headers=auth_headers)
     assert resp_up.status_code == 200
     assert resp_up.json()["status"] == "AUTHORIZED"
 
     # 5. Delete
-    resp_del = client.delete(f"/api/v1/vehicles/{vid}")
+    resp_del = client.delete(f"/api/v1/vehicles/{vid}", headers=auth_headers)
     assert resp_del.status_code == 200
 
 # 8. Person Watchlist REST API CRUD
-def test_person_watchlist_api_crud():
+def test_person_watchlist_api_crud(auth_headers):
     # 1. Create
     resp = client.post("/api/v1/watchlist/persons/", json={
         "person_id": "PID-TEST-999",
         "display_name": "Test Subject 999",
         "category": "WATCHLIST",
         "status": "ACTIVE",
-        "notes": "Testing face identity registry"
-    })
+        "notes": "Testing face identity registry",
+        "embedding": [0.0] * 128
+    }, headers=auth_headers)
     assert resp.status_code == 201
     data = resp.json()
     assert data["person_id"] == "PID-TEST-999"
     pid = data["id"]
 
     # 2. List
-    resp_list = client.get("/api/v1/watchlist/persons/?search=PID-TEST-999")
+    resp_list = client.get("/api/v1/watchlist/persons/?search=PID-TEST-999", headers=auth_headers)
     assert resp_list.status_code == 200
     assert len(resp_list.json()) == 1
 
     # 3. Delete
-    resp_del = client.delete(f"/api/v1/watchlist/persons/{pid}")
+    resp_del = client.delete(f"/api/v1/watchlist/persons/{pid}", headers=auth_headers)
     assert resp_del.status_code == 200
 
 # 9. ANPR and Face Events Endpoints
-def test_anpr_and_face_events_summary():
+def test_anpr_and_face_events_summary(auth_headers):
     # Summary ANPR
-    resp_anpr = client.get("/api/v1/anpr/summary")
+    resp_anpr = client.get("/api/v1/anpr/summary", headers=auth_headers)
     assert resp_anpr.status_code == 200
     data_anpr = resp_anpr.json()
     assert "total_reads" in data_anpr
 
     # Summary Face
-    resp_face = client.get("/api/v1/face/summary")
+    resp_face = client.get("/api/v1/face/summary", headers=auth_headers)
     assert resp_face.status_code == 200
     data_face = resp_face.json()
     assert "total_faces" in data_face

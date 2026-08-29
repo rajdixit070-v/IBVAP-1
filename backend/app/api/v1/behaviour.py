@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.api.deps import get_current_user, require_admin
+from app.models.user import User
 from app.models.behaviour_event import BehaviourEvent
 from app.models.behaviour_rule import BehaviourRule
 from app.models.activity_baseline import ActivityBaseline
@@ -39,7 +41,8 @@ def list_behaviour_events(
     search: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     skip: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Search and list behaviour anomalies and risk events with backend pagination.
@@ -94,7 +97,11 @@ def list_behaviour_events(
     return result
 
 @router.get("/events/{event_id}", response_model=BehaviourEventResponse)
-def get_behaviour_event(event_id: str, db: Session = Depends(get_db)):
+def get_behaviour_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Get full behaviour anomaly record with explainable factors and counter-signals.
     """
@@ -140,7 +147,8 @@ def get_track_risk_assessment(
     is_density_anomaly: bool = Query(False),
     is_authorized: bool = Query(False),
     is_suspect: bool = Query(False),
-    elapsed_sec: float = Query(0.0)
+    elapsed_sec: float = Query(0.0),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Computes transparent explainable threat & risk breakdown for a live track.
@@ -174,31 +182,53 @@ def get_track_risk_assessment(
 # --- Behaviour Rules Configuration ---
 
 @router.get("/rules", response_model=List[BehaviourRuleResponse])
-def list_behaviour_rules(db: Session = Depends(get_db)):
+def list_behaviour_rules(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     List all configured behaviour detection rules.
     """
     return db.query(BehaviourRule).all()
 
 @router.post("/rules", response_model=BehaviourRuleResponse, status_code=201)
-def create_behaviour_rule(rule_data: BehaviourRuleCreate, db: Session = Depends(get_db)):
+def create_behaviour_rule(
+    rule_data: BehaviourRuleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    Create a new configurable behaviour detection rule.
+    Create a new configurable behaviour detection rule (Admin only).
     """
     existing = db.query(BehaviourRule).filter(BehaviourRule.rule_id == rule_data.rule_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Rule ID already exists.")
 
     rule = BehaviourRule(**rule_data.dict())
+    rule.changed_by = current_user.username
     db.add(rule)
+
+    audit = SecurityAuditLog(
+        username=current_user.username,
+        action="CREATE_BEHAVIOUR_RULE",
+        resource_type="BEHAVIOUR_RULE",
+        resource_id=rule_data.rule_id,
+        details=json.dumps({"rule_name": rule_data.name, "rule_id": rule_data.rule_id})
+    )
+    db.add(audit)
     db.commit()
     db.refresh(rule)
     return rule
 
 @router.put("/rules/{rule_id}", response_model=BehaviourRuleResponse)
-def update_behaviour_rule(rule_id: str, rule_update: BehaviourRuleUpdate, db: Session = Depends(get_db)):
+def update_behaviour_rule(
+    rule_id: str,
+    rule_update: BehaviourRuleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    Update behaviour detection rule with version increment and audit logging.
+    Update behaviour detection rule with version increment and audit logging (Admin only).
     """
     rule = db.query(BehaviourRule).filter(BehaviourRule.rule_id == rule_id).first()
     if not rule:
@@ -209,10 +239,10 @@ def update_behaviour_rule(rule_id: str, rule_update: BehaviourRuleUpdate, db: Se
         setattr(rule, field, val)
 
     rule.rule_version = old_version + 1
-    rule.changed_by = rule_update.changed_by or "admin"
+    rule.changed_by = current_user.username
 
     audit = SecurityAuditLog(
-        username=rule.changed_by,
+        username=current_user.username,
         action="UPDATE_BEHAVIOUR_RULE",
         resource_type="BEHAVIOUR_RULE",
         resource_id=rule_id,
@@ -226,7 +256,11 @@ def update_behaviour_rule(rule_id: str, rule_update: BehaviourRuleUpdate, db: Se
 # --- Activity Baselines ---
 
 @router.get("/baselines", response_model=List[ActivityBaselineResponse])
-def list_activity_baselines(camera_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+def list_activity_baselines(
+    camera_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     List hourly activity baselines for statistical deviation detection.
     """
@@ -238,7 +272,10 @@ def list_activity_baselines(camera_id: Optional[str] = Query(None), db: Session 
 # --- Operator Feedback ---
 
 @router.post("/feedback", response_model=BehaviourFeedbackResponse)
-def submit_operator_feedback(body: BehaviourFeedbackCreate):
+def submit_operator_feedback(
+    body: BehaviourFeedbackCreate,
+    current_user: User = Depends(get_current_user)
+):
     """
     Submit operator feedback (CORRECT_DETECTION, FALSE_POSITIVE, NEEDS_REVIEW) with audit log.
     """
@@ -246,14 +283,17 @@ def submit_operator_feedback(body: BehaviourFeedbackCreate):
         event_id=body.event_id,
         feedback_type=body.feedback_type,
         notes=body.notes,
-        operator_username=body.operator_username or "operator"
+        operator_username=current_user.username
     )
     return fb
 
 # --- Analytics Summary ---
 
 @router.get("/analytics/summary", response_model=BehaviourAnalyticsSummary)
-def get_behaviour_analytics_summary(db: Session = Depends(get_db)):
+def get_behaviour_analytics_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Calculates operational metrics including false positive rate percentage.
     """

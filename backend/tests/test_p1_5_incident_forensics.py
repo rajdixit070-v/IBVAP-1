@@ -97,7 +97,7 @@ def test_p1_5_2_alert_to_incident_escalation():
     finally:
         db.close()
 
-def test_p1_5_3_evidence_registration_and_integrity_checksum():
+def test_p1_5_3_evidence_registration_and_integrity_checksum(auth_headers):
     """Test 3: Evidence registration computes verifiable SHA-256 checksum and logs access audit."""
     dummy_jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00test_image_bytes"
     expected_sha256 = hashlib.sha256(dummy_jpeg_bytes).hexdigest()
@@ -117,7 +117,7 @@ def test_p1_5_3_evidence_registration_and_integrity_checksum():
     assert evd.file_size_bytes == len(dummy_jpeg_bytes)
 
     # Retrieve via API and verify audit
-    res = client.get(f"/api/v1/evidence/{evd.evidence_id}")
+    res = client.get(f"/api/v1/evidence/{evd.evidence_id}", headers=auth_headers)
     assert res.status_code == 200
     evd_data = res.json()
     assert evd_data["checksum_sha256"] == expected_sha256

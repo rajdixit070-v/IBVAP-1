@@ -4,6 +4,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
+from app.api.deps import get_current_user, require_admin
+from app.models.user import User
 from app.models.edge_node import EdgeNode
 from app.models.edge_event_buffer import EdgeEventBuffer
 from app.models.audit_log import SecurityAuditLog
@@ -26,7 +28,8 @@ router = APIRouter()
 def list_edge_nodes(
     status: Optional[str] = Query(None),
     bop_site: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List registered Edge Node appliances and their live hardware/AI telemetry.
@@ -41,9 +44,13 @@ def list_edge_nodes(
     return query.order_by(EdgeNode.node_id.asc()).all()
 
 @router.post("/nodes", response_model=EdgeNodeResponse, status_code=201)
-def register_edge_node(data: EdgeNodeCreate, db: Session = Depends(get_db)):
+def register_edge_node(
+    data: EdgeNodeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    Register a new edge computing appliance.
+    Register a new edge computing appliance (Admin only).
     """
     nid = data.node_id.strip().upper()
     existing = db.query(EdgeNode).filter(EdgeNode.node_id == nid).first()
@@ -64,7 +71,7 @@ def register_edge_node(data: EdgeNodeCreate, db: Session = Depends(get_db)):
     db.add(node)
 
     audit = SecurityAuditLog(
-        username="operator",
+        username=current_user.username,
         action="EDGE_NODE_REGISTERED",
         resource_type="EDGE_NODE",
         resource_id=nid,
@@ -77,7 +84,11 @@ def register_edge_node(data: EdgeNodeCreate, db: Session = Depends(get_db)):
     return node
 
 @router.get("/nodes/{node_id}", response_model=EdgeNodeResponse)
-def get_edge_node(node_id: str, db: Session = Depends(get_db)):
+def get_edge_node(
+    node_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Retrieve single edge node details and health status.
     """
@@ -87,9 +98,14 @@ def get_edge_node(node_id: str, db: Session = Depends(get_db)):
     return node
 
 @router.put("/nodes/{node_id}", response_model=EdgeNodeResponse)
-def update_edge_node(node_id: str, data: EdgeNodeUpdate, db: Session = Depends(get_db)):
+def update_edge_node(
+    node_id: str,
+    data: EdgeNodeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    Update edge node metadata.
+    Update edge node metadata (Admin only).
     """
     node = db.query(EdgeNode).filter(EdgeNode.node_id == node_id).first()
     if not node:
@@ -117,9 +133,14 @@ def update_edge_node(node_id: str, data: EdgeNodeUpdate, db: Session = Depends(g
     return node
 
 @router.put("/nodes/{node_id}/config", response_model=EdgeNodeResponse)
-def update_node_remote_config(node_id: str, config: EdgeRemoteConfig, db: Session = Depends(get_db)):
+def update_node_remote_config(
+    node_id: str,
+    config: EdgeRemoteConfig,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    Pushes remote configuration update to edge node and increments config_version.
+    Pushes remote configuration update to edge node and increments config_version (Admin only).
     """
     try:
         updated_node = edge_node_manager.update_remote_config(node_id, config)
@@ -128,9 +149,13 @@ def update_node_remote_config(node_id: str, config: EdgeRemoteConfig, db: Sessio
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.delete("/nodes/{node_id}")
-def delete_edge_node(node_id: str, db: Session = Depends(get_db)):
+def delete_edge_node(
+    node_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    De-register edge node appliance.
+    De-register edge node appliance (Admin only).
     """
     node = db.query(EdgeNode).filter(EdgeNode.node_id == node_id).first()
     if not node:
@@ -138,7 +163,7 @@ def delete_edge_node(node_id: str, db: Session = Depends(get_db)):
 
     db.delete(node)
     audit = SecurityAuditLog(
-        username="operator",
+        username=current_user.username,
         action="EDGE_NODE_DELETED",
         resource_type="EDGE_NODE",
         resource_id=node_id,
@@ -150,7 +175,10 @@ def delete_edge_node(node_id: str, db: Session = Depends(get_db)):
     return {"status": "DELETED", "node_id": node_id}
 
 @router.post("/heartbeat")
-def edge_heartbeat(hb: EdgeHeartbeatRequest):
+def edge_heartbeat(
+    hb: EdgeHeartbeatRequest,
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """
     Ingests live telemetry heartbeat from an edge node.
     """
@@ -158,7 +186,10 @@ def edge_heartbeat(hb: EdgeHeartbeatRequest):
     return ack
 
 @router.post("/sync", response_model=EdgeSyncBatchResponse)
-def sync_edge_events(batch: EdgeSyncBatchRequest):
+def sync_edge_events(
+    batch: EdgeSyncBatchRequest,
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """
     Store-and-forward batch event ingestion from edge appliances.
     Supports idempotent processing (ignores duplicate event_ids safely).
@@ -167,7 +198,10 @@ def sync_edge_events(batch: EdgeSyncBatchRequest):
     return response
 
 @router.get("/sync/stats", response_model=EdgeSyncStatsResponse)
-def get_sync_stats(db: Session = Depends(get_db)):
+def get_sync_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Get aggregated store-and-forward synchronization metrics.
     """

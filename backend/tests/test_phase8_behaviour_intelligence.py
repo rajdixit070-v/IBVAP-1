@@ -148,9 +148,9 @@ def test_risk_score_decay():
     assert decayed_300 < score_active
     assert decayed_300 > 0
 
-def test_behaviour_events_api_and_pagination(db_session):
+def test_behaviour_events_api_and_pagination(db_session, auth_headers):
     """Test behaviour events listing, search, and pagination endpoints."""
-    res = client.get("/api/v1/behaviour/events?limit=10")
+    res = client.get("/api/v1/behaviour/events?limit=10", headers=auth_headers)
     assert res.status_code == 200
     events = res.json()
     assert len(events) >= 1
@@ -158,11 +158,11 @@ def test_behaviour_events_api_and_pagination(db_session):
     assert "counter_factors" in events[0]
 
     evt_id = events[0]["event_id"]
-    detail_res = client.get(f"/api/v1/behaviour/events/{evt_id}")
+    detail_res = client.get(f"/api/v1/behaviour/events/{evt_id}", headers=auth_headers)
     assert detail_res.status_code == 200
     assert detail_res.json()["event_id"] == evt_id
 
-def test_behaviour_rules_crud_and_versioning(db_session):
+def test_behaviour_rules_crud_and_versioning(db_session, auth_headers):
     """Test rule creation and update with automatic version increment and audit logging."""
     rule_id = f"RULE-TEST-{uuid.uuid4().hex[:4].upper()}"
     create_payload = {
@@ -176,7 +176,7 @@ def test_behaviour_rules_crud_and_versioning(db_session):
         "max_risk_cap": 35,
         "cooldown_sec": 60
     }
-    res = client.post("/api/v1/behaviour/rules", json=create_payload)
+    res = client.post("/api/v1/behaviour/rules", json=create_payload, headers=auth_headers)
     assert res.status_code == 201
     created_rule = res.json()
     assert created_rule["rule_version"] == 1
@@ -185,11 +185,11 @@ def test_behaviour_rules_crud_and_versioning(db_session):
     update_res = client.put(f"/api/v1/behaviour/rules/{rule_id}", json={
         "dwell_threshold_sec": 60.0,
         "changed_by": "supervisor_1"
-    })
+    }, headers=auth_headers)
     assert update_res.status_code == 200
     updated_rule = update_res.json()
     assert updated_rule["rule_version"] == 2
-    assert updated_rule["changed_by"] == "supervisor_1"
+    assert updated_rule["changed_by"] == "admin"
 
     # Verify audit log
     audit = db_session.query(SecurityAuditLog).filter(
@@ -198,10 +198,10 @@ def test_behaviour_rules_crud_and_versioning(db_session):
     ).first()
     assert audit is not None
 
-def test_operator_feedback_and_false_positive_metrics(db_session):
+def test_operator_feedback_and_false_positive_metrics(db_session, auth_headers):
     """Test operator feedback submission and analytics summary calculation."""
     # Find or emit an event
-    res = client.get("/api/v1/behaviour/events?limit=1")
+    res = client.get("/api/v1/behaviour/events?limit=1", headers=auth_headers)
     events = res.json()
     assert len(events) >= 1
     evt_id = events[0]["event_id"]
@@ -212,22 +212,25 @@ def test_operator_feedback_and_false_positive_metrics(db_session):
         "notes": "Verified as authorized maintenance activity",
         "operator_username": "commander_alpha"
     }
-    fb_res = client.post("/api/v1/behaviour/feedback", json=fb_payload)
+    fb_res = client.post("/api/v1/behaviour/feedback", json=fb_payload, headers=auth_headers)
     assert fb_res.status_code == 200
     fb_data = fb_res.json()
     assert fb_data["feedback_type"] == "FALSE_POSITIVE"
 
     # Verify Analytics Summary
-    summary_res = client.get("/api/v1/behaviour/analytics/summary")
+    summary_res = client.get("/api/v1/behaviour/analytics/summary", headers=auth_headers)
     assert summary_res.status_code == 200
     summary = summary_res.json()
     assert "total_behaviour_events" in summary
     assert "false_positive_rate_percent" in summary
     assert summary["false_positive_rate_percent"] >= 0.0
 
-def test_track_risk_assessment_endpoint():
+def test_track_risk_assessment_endpoint(auth_headers):
     """Test real-time explainable assessment endpoint for a live track."""
-    res = client.get("/api/v1/behaviour/assessments/TRK-TEST-99?zone_type=RESTRICTED&is_repeated_approach=true&is_night=true")
+    res = client.get(
+        "/api/v1/behaviour/assessments/TRK-TEST-99?zone_type=RESTRICTED&is_repeated_approach=true&is_night=true",
+        headers=auth_headers
+    )
     assert res.status_code == 200
     data = res.json()
     assert data["risk_score"] >= 40

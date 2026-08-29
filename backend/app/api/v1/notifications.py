@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.models.notification import Notification
 from app.schemas.notification import NotificationResponse
 
@@ -12,7 +14,8 @@ router = APIRouter()
 def list_notifications(
     unread_only: bool = Query(False),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List SOC in-app notifications.
@@ -23,7 +26,11 @@ def list_notifications(
     return query.order_by(Notification.created_at.desc()).limit(limit).all()
 
 @router.put("/{notification_id}/read", response_model=NotificationResponse)
-def mark_notification_read(notification_id: int, db: Session = Depends(get_db)):
+def mark_notification_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Mark a notification as read.
     """
@@ -35,7 +42,10 @@ def mark_notification_read(notification_id: int, db: Session = Depends(get_db)):
     return n
 
 @router.put("/read-all")
-def mark_all_notifications_read(db: Session = Depends(get_db)):
+def mark_all_notifications_read(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Mark all unread notifications as read.
     """

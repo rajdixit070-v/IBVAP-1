@@ -21,6 +21,9 @@ def test_list_cameras(client, auth_header):
     assert len(cameras) >= 1
 
 def test_create_and_delete_camera(client, auth_header):
+    # Pre-clean
+    client.delete("/api/v1/cameras/TEST-CAM-999", headers=auth_header)
+
     camera_payload = {
         "camera_id": "TEST-CAM-999",
         "camera_name": "Test Border Post 999",

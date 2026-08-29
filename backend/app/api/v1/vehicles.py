@@ -4,6 +4,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.models.vehicle_watchlist import VehicleWatchlist
 from app.models.audit_log import SecurityAuditLog
 from app.schemas.anpr import VehicleWatchlistCreate, VehicleWatchlistUpdate, VehicleWatchlistResponse
@@ -16,7 +18,8 @@ def list_vehicles(
     status: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List registered vehicles in the vehicle database / watchlist.
@@ -37,7 +40,11 @@ def list_vehicles(
     return query.order_by(VehicleWatchlist.updated_at.desc()).all()
 
 @router.post("/", response_model=VehicleWatchlistResponse, status_code=201)
-def create_vehicle_entry(data: VehicleWatchlistCreate, db: Session = Depends(get_db)):
+def create_vehicle_entry(
+    data: VehicleWatchlistCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Register a new vehicle to the Authorized / Watchlist / Monitor database.
     """
@@ -60,13 +67,13 @@ def create_vehicle_entry(data: VehicleWatchlistCreate, db: Session = Depends(get
         status=data.status,
         watchlist_category=data.watchlist_category,
         notes=data.notes,
-        created_by="operator"
+        created_by=current_user.username
     )
     db.add(vehicle)
 
     # Audit Log
     audit = SecurityAuditLog(
-        username="operator",
+        username=current_user.username,
         action="VEHICLE_WATCHLIST_CREATED",
         resource_type="VEHICLE",
         resource_id=norm,
@@ -79,7 +86,11 @@ def create_vehicle_entry(data: VehicleWatchlistCreate, db: Session = Depends(get
     return vehicle
 
 @router.get("/{vehicle_id}", response_model=VehicleWatchlistResponse)
-def get_vehicle_entry(vehicle_id: int, db: Session = Depends(get_db)):
+def get_vehicle_entry(
+    vehicle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Get vehicle details.
     """
@@ -89,7 +100,12 @@ def get_vehicle_entry(vehicle_id: int, db: Session = Depends(get_db)):
     return vehicle
 
 @router.put("/{vehicle_id}", response_model=VehicleWatchlistResponse)
-def update_vehicle_entry(vehicle_id: int, data: VehicleWatchlistUpdate, db: Session = Depends(get_db)):
+def update_vehicle_entry(
+    vehicle_id: int,
+    data: VehicleWatchlistUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Update vehicle status, category, or notes.
     """
@@ -116,7 +132,7 @@ def update_vehicle_entry(vehicle_id: int, data: VehicleWatchlistUpdate, db: Sess
 
     # Audit Log
     audit = SecurityAuditLog(
-        username="operator",
+        username=current_user.username,
         action="VEHICLE_WATCHLIST_UPDATED",
         resource_type="VEHICLE",
         resource_id=vehicle.normalized_plate_number,
@@ -129,7 +145,11 @@ def update_vehicle_entry(vehicle_id: int, data: VehicleWatchlistUpdate, db: Sess
     return vehicle
 
 @router.delete("/{vehicle_id}")
-def delete_vehicle_entry(vehicle_id: int, db: Session = Depends(get_db)):
+def delete_vehicle_entry(
+    vehicle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Remove vehicle from database registry.
     """
@@ -141,7 +161,7 @@ def delete_vehicle_entry(vehicle_id: int, db: Session = Depends(get_db)):
     db.delete(vehicle)
 
     audit = SecurityAuditLog(
-        username="operator",
+        username=current_user.username,
         action="VEHICLE_WATCHLIST_DELETED",
         resource_type="VEHICLE",
         resource_id=plate,

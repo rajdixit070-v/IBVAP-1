@@ -242,6 +242,7 @@ def get_live_camera_status(
     return status_info
 
 @router.get("/{camera_id}/live")
+@router.get("/{camera_id}/preview")
 def get_live_video_stream(
     camera_id: str,
     fps: Optional[float] = Query(25.0, ge=1.0, le=60.0),

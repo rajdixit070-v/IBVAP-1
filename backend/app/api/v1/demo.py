@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.api.deps import get_current_user_optional
+from app.api.deps import get_current_user
 from app.services.demo.demo_service import DemoService
 
 logger = logging.getLogger("ibvap.api.demo")
@@ -57,9 +58,15 @@ def list_available_scenarios():
 def run_demo_scenario(
     req: RunScenarioRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Executes a step or entire scenario in the isolated demonstration engine."""
+    if settings.ENV_MODE == "production" and not settings.DEMO_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo scenario execution is disabled in production environment."
+        )
+
     if req.auto_run_all:
         results = []
         max_steps = 16 if req.scenario_id == "HACKATHON_MASTER_FLOW" else 5
@@ -80,7 +87,12 @@ def run_demo_scenario(
 @router.post("/reset")
 def reset_demo_state(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Resets demo mode state and clears ephemeral demonstration artifacts."""
+    if settings.ENV_MODE == "production" and not settings.DEMO_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo reset is disabled in production environment."
+        )
     return DemoService.reset_demo(db)

@@ -8,6 +8,7 @@ from app.models.camera import Camera
 from app.models.incident import Incident
 from app.models.behaviour_event import BehaviourEvent
 from app.models.model_health import ModelHealth
+from app.models.activity_baseline import ActivityBaseline
 from app.services.predictive.time_series_engine import time_series_engine
 from app.services.predictive.forecasting_engine import forecasting_engine
 from app.services.predictive.infrastructure_correlator import infrastructure_correlator
@@ -41,31 +42,49 @@ class PredictiveIntelligenceService:
         )
         history_values = [p["actual_count"] for p in points]
 
-        # Step 2: Check active incidents or behaviour anomalies
+        # Step 2: Check active incidents or behaviour anomalies and compute real risk & baseline from DB
         db: Session = SessionLocal()
         try:
-            has_incidents = db.query(Incident).filter(Incident.camera_id == target_id, Incident.status != "RESOLVED").count() > 0
-            has_probing = db.query(BehaviourEvent).filter(
+            active_incidents = db.query(Incident).filter(Incident.camera_id == target_id, Incident.status != "RESOLVED").all()
+            probing_events = db.query(BehaviourEvent).filter(
                 BehaviourEvent.camera_id == target_id,
                 BehaviourEvent.event_type.in_(["REPEATED_APPROACH", "POTENTIAL_PERIMETER_PROBING_PATTERN"])
-            ).count() > 0
-            current_risk = 65 if (has_incidents or has_probing) else 35
+            ).all()
+
+            if active_incidents:
+                current_risk = max(inc.risk_score for inc in active_incidents)
+            elif probing_events:
+                current_risk = max(ev.risk_score for ev in probing_events)
+            else:
+                current_risk = 15
+
+            hr = datetime.utcnow().hour
+            is_night = hr >= 22 or hr <= 5
+
+            # Read dynamic statistical baseline from ActivityBaseline table if present
+            db_baseline = db.query(ActivityBaseline).filter(
+                ActivityBaseline.camera_id == target_id,
+                ActivityBaseline.hour_of_day == hr
+            ).first()
+            if db_baseline and db_baseline.baseline_count is not None:
+                baseline_expected = float(db_baseline.baseline_count)
+            elif history_values and len(history_values) > 0:
+                baseline_expected = float(sum(history_values) / len(history_values))
+            else:
+                baseline_expected = 10.0 if not is_night else 2.0
         finally:
             db.close()
-
-        hr = datetime.utcnow().hour
-        is_night = hr >= 22 or hr <= 5
 
         # Step 3: Run Forecasting Engine
         forecast = forecasting_engine.predict(
             target_type=target_type,
             target_id=target_id,
             history_values=history_values,
-            baseline_expected=12.0 if not is_night else 2.5,
+            baseline_expected=baseline_expected,
             forecast_horizon_minutes=forecast_horizon_minutes,
             current_risk_score=current_risk,
             has_route_anomalies=False,
-            has_behaviour_probing=has_probing,
+            has_behaviour_probing=bool(probing_events),
             has_watchlist_activity=False,
             is_night=is_night
         )

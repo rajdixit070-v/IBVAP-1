@@ -27,3 +27,11 @@ def admin_token_headers(client):
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture
+def auth_header(admin_token_headers):
+    return admin_token_headers
+
+@pytest.fixture
+def auth_headers(admin_token_headers):
+    return admin_token_headers

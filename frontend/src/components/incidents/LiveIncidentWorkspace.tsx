@@ -326,7 +326,7 @@ export const LiveIncidentWorkspace: React.FC<LiveIncidentWorkspaceProps> = ({
           {/* Main Selected Camera Feed */}
           <div className="flex-1 bg-[#090d16] border border-cyan-500/30 rounded-xl relative overflow-hidden flex items-center justify-center shadow-2xl">
             <img
-              src={`http://localhost:8000/api/v1/cameras/${selectedCam}/preview`}
+              src={`${import.meta.env.VITE_API_URL || '/api/v1'}/cameras/${selectedCam}/preview${localStorage.getItem('token') ? `?token=${encodeURIComponent(localStorage.getItem('token') || '')}` : ''}`}
               alt={selectedCam}
               className="w-full h-full object-cover"
               onError={(e) => {
@@ -357,7 +357,7 @@ export const LiveIncidentWorkspace: React.FC<LiveIncidentWorkspaceProps> = ({
                 }`}
               >
                 <img
-                  src={`http://localhost:8000/api/v1/cameras/${cId}/preview`}
+                  src={`${import.meta.env.VITE_API_URL || '/api/v1'}/cameras/${cId}/preview${localStorage.getItem('token') ? `?token=${encodeURIComponent(localStorage.getItem('token') || '')}` : ''}`}
                   alt={cId}
                   className="w-full h-full object-cover"
                 />

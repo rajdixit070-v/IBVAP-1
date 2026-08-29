@@ -21,7 +21,7 @@ def db_session():
     yield db
     db.close()
 
-def test_edge_node_registration_and_list(db_session):
+def test_edge_node_registration_and_list(db_session, auth_headers):
     """Test registering a new Edge Node and querying it via API."""
     unique_nid = f"EDGE-TEST-{uuid.uuid4().hex[:6].upper()}"
     payload = {
@@ -34,19 +34,19 @@ def test_edge_node_registration_and_list(db_session):
         "low_bandwidth_mode": False
     }
 
-    res = client.post("/api/v1/edge/nodes", json=payload)
+    res = client.post("/api/v1/edge/nodes", json=payload, headers=auth_headers)
     assert res.status_code == 201
     data = res.json()
     assert data["node_id"] == unique_nid
     assert data["status"] == "ONLINE"
 
     # List
-    list_res = client.get("/api/v1/edge/nodes")
+    list_res = client.get("/api/v1/edge/nodes", headers=auth_headers)
     assert list_res.status_code == 200
     nodes = list_res.json()
     assert any(n["node_id"] == unique_nid for n in nodes)
 
-def test_edge_heartbeat_telemetry_and_audit(db_session):
+def test_edge_heartbeat_telemetry_and_audit(db_session, auth_headers):
     """Test sending heartbeat telemetry and offline state detection."""
     hb = EdgeHeartbeatRequest(
         node_id="EDGE-BOP-001",
@@ -63,7 +63,7 @@ def test_edge_heartbeat_telemetry_and_audit(db_session):
         low_bandwidth_mode=False
     )
 
-    res = client.post("/api/v1/edge/heartbeat", json=json.loads(hb.json()))
+    res = client.post("/api/v1/edge/heartbeat", json=hb.model_dump(), headers=auth_headers)
     assert res.status_code == 200
     ack = res.json()
     assert ack["status"] == "ONLINE"
@@ -97,7 +97,7 @@ def test_durable_offline_store_and_forward_buffer(db_session):
     pending = edge_sync_engine.get_pending_sync_batch(node_id)
     assert any(p.event_id == event_id for p in pending)
 
-def test_idempotent_sync_batch_ingestion(db_session):
+def test_idempotent_sync_batch_ingestion(db_session, auth_headers):
     """Test idempotent batch synchronization: resending the same event does not produce duplicates."""
     node_id = "EDGE-BOP-001"
     shared_event_id = f"EVT-IDEM-{uuid.uuid4().hex[:8].upper()}"
@@ -124,14 +124,14 @@ def test_idempotent_sync_batch_ingestion(db_session):
     )
 
     # First sync pass: should ingest cleanly
-    res1 = client.post("/api/v1/edge/sync", json=json.loads(batch_req.json()))
+    res1 = client.post("/api/v1/edge/sync", json=json.loads(batch_req.json()), headers=auth_headers)
     assert res1.status_code == 200
     data1 = res1.json()
     assert shared_event_id in data1["synced_ids"]
     assert len(data1["duplicate_ids"]) == 0
 
     # Second sync pass: resending the identical batch should be treated idempotently as duplicate
-    res2 = client.post("/api/v1/edge/sync", json=json.loads(batch_req.json()))
+    res2 = client.post("/api/v1/edge/sync", json=json.loads(batch_req.json()), headers=auth_headers)
     assert res2.status_code == 200
     data2 = res2.json()
     assert shared_event_id in data2["duplicate_ids"]
@@ -158,7 +158,7 @@ def test_priority_ordered_sync_batch(db_session):
     assert batch[0].event_id == crit_id
     assert batch[1].event_id == low_id
 
-def test_remote_config_versioning_and_low_bandwidth(db_session):
+def test_remote_config_versioning_and_low_bandwidth(db_session, auth_headers):
     """Test updating remote config increments config_version and toggles low_bandwidth_mode."""
     node_id = "EDGE-BOP-001"
     node_before = db_session.query(EdgeNode).filter(EdgeNode.node_id == node_id).first()
@@ -168,15 +168,15 @@ def test_remote_config_versioning_and_low_bandwidth(db_session):
         "low_bandwidth_mode": True,
         "inference_fps": 6.0,
         "sync_batch_size": 15
-    })
+    }, headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["low_bandwidth_mode"] is True
     assert data["config_version"] == v_before + 1
 
-def test_sync_stats_endpoint(db_session):
+def test_sync_stats_endpoint(db_session, auth_headers):
     """Test /api/v1/edge/sync/stats returns aggregated metrics."""
-    res = client.get("/api/v1/edge/sync/stats")
+    res = client.get("/api/v1/edge/sync/stats", headers=auth_headers)
     assert res.status_code == 200
     stats = res.json()
     assert "total_synced" in stats

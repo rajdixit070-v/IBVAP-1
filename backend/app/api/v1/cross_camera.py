@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
+from app.api.deps import get_current_user, require_admin
+from app.models.user import User
 from app.models.camera_transition import CameraTransition
 from app.models.global_track import GlobalTrack
 from app.models.track_observation import TrackObservation
@@ -28,16 +30,23 @@ router = APIRouter()
 # --- Camera Graph Endpoints ---
 
 @router.get("/graph", response_model=List[CameraTransitionResponse])
-def get_camera_graph(db: Session = Depends(get_db)):
+def get_camera_graph(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Returns all configured camera transitions in the topology network.
     """
     return db.query(CameraTransition).all()
 
 @router.post("/graph/transitions", response_model=CameraTransitionResponse, status_code=201)
-def create_camera_transition(data: CameraTransitionCreate, db: Session = Depends(get_db)):
+def create_camera_transition(
+    data: CameraTransitionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    Add a new directed transition edge to the camera graph.
+    Add a new directed transition edge to the camera graph (Admin only).
     """
     existing = db.query(CameraTransition).filter(
         CameraTransition.from_camera_id == data.from_camera_id,
@@ -53,9 +62,14 @@ def create_camera_transition(data: CameraTransitionCreate, db: Session = Depends
     return transition
 
 @router.put("/graph/transitions/{transition_id}", response_model=CameraTransitionResponse)
-def update_camera_transition(transition_id: int, data: CameraTransitionUpdate, db: Session = Depends(get_db)):
+def update_camera_transition(
+    transition_id: int,
+    data: CameraTransitionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
     """
-    Update travel time limits or status of an existing transition edge.
+    Update travel time limits or status of an existing transition edge (Admin only).
     """
     transition = db.query(CameraTransition).filter(CameraTransition.id == transition_id).first()
     if not transition:
@@ -77,7 +91,8 @@ def list_global_tracks(
     search: Optional[str] = Query(None, description="Search by plate or global track ID"),
     limit: int = Query(50, ge=1, le=200),
     skip: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Search and list global continuous tracks with backend pagination.
@@ -96,7 +111,11 @@ def list_global_tracks(
     return query.order_by(GlobalTrack.last_observation_time.desc()).offset(skip).limit(limit).all()
 
 @router.get("/tracks/{global_track_id}", response_model=GlobalTrackDetailResponse)
-def get_global_track_detail(global_track_id: str, db: Session = Depends(get_db)):
+def get_global_track_detail(
+    global_track_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Get full multi-camera journey dossier with chronological observations, associations, and anomalies.
     """
@@ -157,7 +176,8 @@ def get_global_track_detail(global_track_id: str, db: Session = Depends(get_db))
 def review_track_association(
     association_id: str,
     body: TrackAssociationReviewRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Operator human-in-the-loop confirmation or rejection of cross-camera association.
@@ -167,7 +187,7 @@ def review_track_association(
             association_id=association_id,
             action=body.action,
             notes=body.notes,
-            operator_username=body.operator_username or "operator"
+            operator_username=current_user.username
         )
         return updated
     except ValueError as e:
@@ -180,7 +200,8 @@ def list_movement_anomalies(
     anomaly_type: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List cross-camera movement anomalies (impossible transitions, route deviations).
@@ -210,7 +231,10 @@ def list_movement_anomalies(
     ]
 
 @router.get("/analytics/summary", response_model=CrossCameraAnalyticsSummary)
-def get_cross_camera_analytics(db: Session = Depends(get_db)):
+def get_cross_camera_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Summary metrics for multi-camera correlation and movement intelligence.
     """

@@ -183,7 +183,7 @@ def test_incident_false_alarm_workflow(db_session):
     assert data["status"] == "FALSE_ALARM"
     assert data["false_alarm_reason"] == "shadow"
 
-def test_evidence_integrity_sha256_and_audit(db_session):
+def test_evidence_integrity_sha256_and_audit(db_session, auth_headers):
     """Test evidence registration, SHA-256 integrity calculation, and access audit."""
     sample_bytes = b"TACTICAL_EVIDENCE_IMAGE_PAYLOAD_2026"
     evd = evidence_manager.register_evidence(
@@ -197,7 +197,7 @@ def test_evidence_integrity_sha256_and_audit(db_session):
     assert len(evd.checksum_sha256) == 64
 
     # Query via API
-    res = client.get(f"/api/v1/evidence/{evd.evidence_id}")
+    res = client.get(f"/api/v1/evidence/{evd.evidence_id}", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["checksum_sha256"] == evd.checksum_sha256
@@ -219,14 +219,14 @@ def test_incident_analytics_summary_endpoint(db_session):
     assert "avg_mtta_seconds" in data
     assert "avg_mttr_seconds" in data
 
-def test_notification_inbox_and_mark_read(db_session):
+def test_notification_inbox_and_mark_read(db_session, auth_headers):
     """Test notification drawer endpoints."""
-    res = client.get("/api/v1/notifications/")
+    res = client.get("/api/v1/notifications/", headers=auth_headers)
     assert res.status_code == 200
     notifications = res.json()
     assert len(notifications) >= 1
 
     # Mark all read
-    read_res = client.put("/api/v1/notifications/read-all")
+    read_res = client.put("/api/v1/notifications/read-all", headers=auth_headers)
     assert read_res.status_code == 200
     assert read_res.json()["status"] == "SUCCESS"

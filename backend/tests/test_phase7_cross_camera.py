@@ -23,9 +23,9 @@ def db_session():
     yield db
     db.close()
 
-def test_camera_graph_transitions_crud(db_session):
+def test_camera_graph_transitions_crud(db_session, auth_headers):
     """Test camera topology transition graph creation, query, and updates."""
-    res = client.get("/api/v1/cross-camera/graph")
+    res = client.get("/api/v1/cross-camera/graph", headers=auth_headers)
     assert res.status_code == 200
     transitions = res.json()
     assert len(transitions) >= 1
@@ -43,13 +43,13 @@ def test_camera_graph_transitions_crud(db_session):
         "transition_confidence": 0.90,
         "is_enabled": True
     }
-    create_res = client.post("/api/v1/cross-camera/graph/transitions", json=payload)
+    create_res = client.post("/api/v1/cross-camera/graph/transitions", json=payload, headers=auth_headers)
     assert create_res.status_code == 201
     data = create_res.json()
     assert data["from_camera_id"] == from_c
 
     # Update
-    update_res = client.put(f"/api/v1/cross-camera/graph/transitions/{data['id']}", json={"min_travel_time_sec": 30.0})
+    update_res = client.put(f"/api/v1/cross-camera/graph/transitions/{data['id']}", json={"min_travel_time_sec": 30.0}, headers=auth_headers)
     assert update_res.status_code == 200
     assert update_res.json()["min_travel_time_sec"] == 30.0
 
@@ -201,7 +201,7 @@ def test_route_deviation_anomaly_detection(db_session):
 
     assert anomaly is not None
 
-def test_operator_association_review_workflow(db_session):
+def test_operator_association_review_workflow(db_session, auth_headers):
     """Test operator confirm / reject association workflow with audit logging."""
     t0 = datetime.utcnow()
     p1 = int(uuid.uuid4().int % 100000 + 900)
@@ -230,11 +230,11 @@ def test_operator_association_review_workflow(db_session):
         "action": "CONFIRM",
         "notes": "Verified visually by duty officer",
         "operator_username": "commander_1"
-    })
+    }, headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "CONFIRMED"
-    assert data["reviewed_by"] == "commander_1"
+    assert data["reviewed_by"] == "admin"
 
     # Verify audit log
     audit = db_session.query(SecurityAuditLog).filter(
@@ -243,24 +243,24 @@ def test_operator_association_review_workflow(db_session):
     ).first()
     assert audit is not None
 
-def test_global_track_detail_endpoint(db_session):
+def test_global_track_detail_endpoint(db_session, auth_headers):
     """Test full multi-camera journey dossier endpoint."""
-    res = client.get("/api/v1/cross-camera/tracks?limit=1")
+    res = client.get("/api/v1/cross-camera/tracks?limit=1", headers=auth_headers)
     assert res.status_code == 200
     tracks = res.json()
     assert len(tracks) >= 1
 
     gt_id = tracks[0]["global_track_id"]
-    detail_res = client.get(f"/api/v1/cross-camera/tracks/{gt_id}")
+    detail_res = client.get(f"/api/v1/cross-camera/tracks/{gt_id}", headers=auth_headers)
     assert detail_res.status_code == 200
     data = detail_res.json()
     assert "observations" in data
     assert "associations" in data
     assert "anomalies" in data
 
-def test_cross_camera_analytics_summary(db_session):
+def test_cross_camera_analytics_summary(db_session, auth_headers):
     """Test analytics summary endpoint for cross-camera correlation metrics."""
-    res = client.get("/api/v1/cross-camera/analytics/summary")
+    res = client.get("/api/v1/cross-camera/analytics/summary", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert "total_global_tracks" in data

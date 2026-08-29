@@ -4,6 +4,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.models.anpr_event import ANPREvent
 from app.schemas.anpr import ANPREventResponse, ANPRSummary
 
@@ -15,7 +17,8 @@ def get_anpr_events(
     match_status: Optional[str] = Query(None),
     plate: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List recorded ANPR license plate recognition events with multi-criteria filtering.
@@ -32,7 +35,10 @@ def get_anpr_events(
     return events
 
 @router.get("/summary", response_model=ANPRSummary)
-def get_anpr_summary(db: Session = Depends(get_db)):
+def get_anpr_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Returns aggregated ANPR metrics for dashboard operations.
     """
@@ -52,7 +58,11 @@ def get_anpr_summary(db: Session = Depends(get_db)):
     )
 
 @router.get("/events/{event_id}", response_model=ANPREventResponse)
-def get_anpr_event_detail(event_id: str, db: Session = Depends(get_db)):
+def get_anpr_event_detail(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Retrieve single ANPR event details.
     """
