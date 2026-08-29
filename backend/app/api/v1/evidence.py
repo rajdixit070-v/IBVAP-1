@@ -37,3 +37,25 @@ def get_incident_evidence(
     List all evidence records attached to an incident.
     """
     return db.query(Evidence).filter(Evidence.incident_id == incident_id).all()
+
+@router.post("/{evidence_id}/verify")
+def verify_evidence_hash(
+    evidence_id: str,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Cryptographically verifies the integrity of an evidence payload against stored SHA-256 hash.
+    """
+    raw_content = data.get("content", "")
+    data_bytes = raw_content.encode("utf-8") if isinstance(raw_content, str) else raw_content
+    try:
+        is_valid = evidence_manager.verify_evidence_integrity(
+            evidence_id=evidence_id,
+            data_bytes=data_bytes,
+            username=current_user.username
+        )
+        return {"evidence_id": evidence_id, "is_valid": is_valid, "verified_by": current_user.username}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

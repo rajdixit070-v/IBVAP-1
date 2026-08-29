@@ -64,7 +64,7 @@ class EdgeNodeHealthItem(BaseModel):
     memory_percent: float
     gpu_percent: float
     disk_percent: float
-    temperature_celsius: Optional[float] = 42.0
+    temperature_celsius: Optional[float] = None
     active_cameras_count: int
     total_cameras_count: int
     affected_cameras: List[str] = []

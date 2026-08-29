@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.models.alert import Alert
 from app.schemas.alert import (
     AlertResponse,
@@ -21,7 +23,8 @@ def get_alerts(
     priority: Optional[str] = Query(None, description="Filter by priority (CRITICAL, HIGH, MEDIUM, LOW)"),
     camera_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List alerts with SLA status and priority filters.
@@ -38,7 +41,10 @@ def get_alerts(
     return query.order_by(Alert.created_at.desc()).limit(limit).all()
 
 @router.get("/summary", response_model=AlertSummary)
-def get_alert_summary(db: Session = Depends(get_db)):
+def get_alert_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Summary counts of critical, high, and unacknowledged alerts.
     """
@@ -58,7 +64,11 @@ def get_alert_summary(db: Session = Depends(get_db)):
     )
 
 @router.get("/{alert_id}", response_model=AlertResponse)
-def get_alert_by_id(alert_id: str, db: Session = Depends(get_db)):
+def get_alert_by_id(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Retrieve single alert details by unique Alert ID.
     """
@@ -71,13 +81,15 @@ def get_alert_by_id(alert_id: str, db: Session = Depends(get_db)):
 def acknowledge_alert(
     alert_id: str,
     body: AlertAcknowledgeRequest = AlertAcknowledgeRequest(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Acknowledge an alert by authorized operator.
     """
     try:
-        updated = alert_engine.acknowledge_alert(alert_id, operator_username=body.acknowledged_by or "operator")
+        operator = body.acknowledged_by or current_user.username
+        updated = alert_engine.acknowledge_alert(alert_id, operator_username=operator)
         return updated
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -86,13 +98,18 @@ def acknowledge_alert(
 def escalate_alert(
     alert_id: str,
     body: AlertEscalateRequest = AlertEscalateRequest(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Manually escalate an alert.
     """
     try:
-        updated = alert_engine.escalate_alert(alert_id, reason=body.reason or "Manual escalation")
+        updated = alert_engine.escalate_alert(
+            alert_id,
+            operator_username=current_user.username,
+            reason=body.reason or "Manual escalation"
+        )
         return updated
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -101,15 +118,17 @@ def escalate_alert(
 def resolve_alert(
     alert_id: str,
     body: AlertResolveRequest = AlertResolveRequest(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Resolve an active or acknowledged alert.
+    Resolve an alert and remove from active threat map.
     """
     try:
+        operator = body.resolved_by or current_user.username
         updated = alert_engine.resolve_alert(
             alert_id,
-            operator_username=body.resolved_by or "operator",
+            operator_username=operator,
             notes=body.notes or "Incident resolved"
         )
         return updated

@@ -59,6 +59,37 @@ class EvidenceManager:
         finally:
             db.close()
 
+    def verify_evidence_integrity(self, evidence_id: str, data_bytes: bytes, username: str = "system") -> bool:
+        """
+        Recomputes SHA-256 digest on data_bytes and compares with stored checksum.
+        Logs audit record with integrity verification status.
+        """
+        if not data_bytes:
+            return False
+
+        db: Session = SessionLocal()
+        try:
+            evd = db.query(Evidence).filter(Evidence.evidence_id == evidence_id).first()
+            if not evd:
+                raise ValueError(f"Evidence record '{evidence_id}' not found.")
+
+            computed_sha256 = hashlib.sha256(data_bytes).hexdigest()
+            is_valid = (computed_sha256 == evd.checksum_sha256)
+
+            action = "EVIDENCE_VERIFIED_VALID" if is_valid else "EVIDENCE_INTEGRITY_MISMATCH"
+            audit = SecurityAuditLog(
+                username=username,
+                action=action,
+                resource_type="EVIDENCE",
+                resource_id=evidence_id,
+                details=f'{{"evidence_id": "{evidence_id}", "is_valid": {str(is_valid).lower()}, "stored": "{evd.checksum_sha256}", "computed": "{computed_sha256}"}}'
+            )
+            db.add(audit)
+            db.commit()
+            return is_valid
+        finally:
+            db.close()
+
     def audit_evidence_access(self, evidence_id: str, username: str = "operator", action: str = "EVIDENCE_VIEWED"):
         db: Session = SessionLocal()
         try:

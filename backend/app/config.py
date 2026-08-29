@@ -100,8 +100,21 @@ def validate_environment() -> dict:
 
     # Check for insecure defaults in production
     if settings.ENV_MODE == "production":
-        if "xyz" in settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
-            validation_status["warnings"].append("SECRET_KEY uses default or short key in production environment.")
+        if "xyz" in settings.SECRET_KEY or len(settings.SECRET_KEY) < 32 or settings.SECRET_KEY == "ibvap-secure-production-border-secret-key-2026-xyz":
+            raise ValueError(
+                "Insecure or default SECRET_KEY detected in production mode! "
+                "A cryptographically strong secret key of at least 32 characters must be provided via the SECRET_KEY environment variable."
+            )
+        if settings.CREDENTIAL_ENCRYPTION_KEY == "b3B2YaaAYm9yZGVyLWVuY3J5cHVpaW9uLWkuLTI0MjY=":
+            raise ValueError(
+                "Insecure default CREDENTIAL_ENCRYPTION_KEY detected in production mode! "
+                "A unique AES-256 Fernet key must be provided via the CREDENTIAL_ENCRYPTION_KEY environment variable."
+            )
+        if settings.DEFAULT_ADMIN_PASSWORD == "Admin@IBVAP2026":
+            raise ValueError(
+                "Insecure default DEFAULT_ADMIN_PASSWORD detected in production mode! "
+                "Provide secure administrative bootstrap credentials via the DEFAULT_ADMIN_PASSWORD environment variable."
+            )
         if settings.DATABASE_URL.startswith("sqlite"):
             validation_status["warnings"].append("SQLite is used in production. Recommended: PostgreSQL cluster.")
             

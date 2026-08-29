@@ -351,7 +351,7 @@ class SystemHealthService:
                     memory_percent=n.memory_percent,
                     gpu_percent=n.gpu_percent,
                     disk_percent=n.disk_percent,
-                    temperature_celsius=43.5,
+                    temperature_celsius=getattr(n, "temperature_celsius", None),
                     active_cameras_count=n.active_cameras_count,
                     total_cameras_count=len(attached),
                     affected_cameras=attached if unresponsive else [],

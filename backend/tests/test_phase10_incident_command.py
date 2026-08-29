@@ -252,7 +252,7 @@ def test_optimistic_locking_conflict_protection(db_session):
     with pytest.raises(ValueError, match="Concurrent modification detected"):
         incident_service.triage_incident(inc.incident_id, notes="Operator 2 conflicting edit", version=1)
 
-def test_false_alarm_and_dismissed_outcomes(db_session):
+def test_false_alarm_and_dismissed_outcomes(db_session, auth_headers):
     """Test marking incident as false alarm with feedback category."""
     inc_data = IncidentCreate(
         title="False Alarm Classification Test",
@@ -264,7 +264,7 @@ def test_false_alarm_and_dismissed_outcomes(db_session):
     res = client.post(f"/api/v1/incidents/{inc.incident_id}/resolve", json={
         "resolution_category": "False Alarm",
         "resolution_notes": "Identified as domestic cattle grazing."
-    })
+    }, headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "FALSE_ALARM"

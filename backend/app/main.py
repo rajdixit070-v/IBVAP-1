@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Optional, List, Dict, Any
 import numpy as np
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -108,8 +109,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ibvap.main")
 
-def init_db_defaults():
-    """Initializes tables, default admin, security zones, watchlists, edge nodes, alerts, incidents, camera network graph, behaviour rules, and predictive models."""
+def init_db_defaults(seed_demo: Optional[bool] = None):
+    """
+    Initializes tables, default admin, and playbooks.
+    Demo/synthetic cameras, zones, edge nodes, and simulated events are only seeded
+    if seed_demo is explicitly True or settings.DEMO_MODE is True.
+    """
+    if seed_demo is None:
+        seed_demo = settings.DEMO_MODE
+
     Base.metadata.create_all(bind=engine)
     
     # Auto-migrate columns for SQLite if missing
@@ -335,10 +343,11 @@ def init_db_defaults():
             db.commit()
             logger.info("Seeded Phase 12 default Organization, Region, Site, BOPs, and Admin scope.")
 
-        # Seed initial demo Edge Nodes
-        edge_count = db.query(EdgeNode).count()
-        if edge_count == 0:
-            demo_nodes = [
+        if seed_demo:
+            # Seed initial demo Edge Nodes
+            edge_count = db.query(EdgeNode).count()
+            if edge_count == 0:
+                demo_nodes = [
                 EdgeNode(
                     node_id="EDGE-BOP-001",
                     name="BOP Alpha Tactical Gateway",
@@ -380,9 +389,9 @@ def init_db_defaults():
                     latency_ms=35.0
                 )
             ]
-            db.add_all(demo_nodes)
-            db.commit()
-            logger.info("Seeded initial demo edge appliances.")
+                db.add_all(demo_nodes)
+                db.commit()
+                logger.info("Seeded initial demo edge appliances.")
 
         # Seed initial demo border cameras if DB is empty
         camera_count = db.query(Camera).count()
@@ -969,6 +978,10 @@ def get_system_metrics():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+def seed_demo_database():
+    """Explicit utility to populate database with synthetic demo/hackathon records."""
+    init_db_defaults(seed_demo=True)
+
 @app.get("/")
 def root():
     return {
@@ -982,7 +995,7 @@ def root():
             "End-to-End Multimodal Border Video Analytics Matrix",
             "Zero-Trust Multi-Layer Security Architecture (Deny-by-Default)",
             "High-Throughput RTSP Ingestion with Auto-Reconnection & Failover",
-            "YOLOv8 Edge Inference & DeepSORT Multi-Object Tracking",
+            "YOLOv8 Edge Inference & ByteTrack Multi-Object Tracking",
             "Optical ANPR Consensus Voting & Privacy-Preserving Facial Analytics",
             "Virtual Fencing, Spatial Dwell Time & Movement Anomaly Detection",
             "Multi-BOP / Multi-Site Hierarchical Federation Command",

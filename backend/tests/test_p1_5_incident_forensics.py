@@ -64,7 +64,7 @@ def test_p1_5_1_event_creates_incident_and_evidence():
     finally:
         db.close()
 
-def test_p1_5_2_alert_to_incident_escalation():
+def test_p1_5_2_alert_to_incident_escalation(auth_headers):
     """Test 2: Creating an incident from an existing Alert ID via API."""
     db = SessionLocal()
     try:
@@ -87,7 +87,7 @@ def test_p1_5_2_alert_to_incident_escalation():
         db.refresh(alert)
 
         # Call API endpoint
-        res = client.post(f"/api/v1/incidents/from-alert/{alert_id}")
+        res = client.post(f"/api/v1/incidents/from-alert/{alert_id}", headers=auth_headers)
         assert res.status_code == 201
         data = res.json()
         assert data["incident_id"].startswith("INC-")
@@ -123,7 +123,7 @@ def test_p1_5_3_evidence_registration_and_integrity_checksum(auth_headers):
     assert evd_data["checksum_sha256"] == expected_sha256
     assert evd_data["camera_id"] == "CAM-EVD-1"
 
-def test_p1_5_4_incident_lifecycle_state_machine():
+def test_p1_5_4_incident_lifecycle_state_machine(auth_headers):
     """Test 4: Incident progresses through valid state transitions with timeline and optimistic locking."""
     # 1. Create manual incident
     create_res = client.post("/api/v1/incidents/", json={
@@ -134,7 +134,7 @@ def test_p1_5_4_incident_lifecycle_state_machine():
         "camera_id": "CAM-STATE-1",
         "bop_site": "BOP Alpha",
         "zone_name": "Gate 3"
-    })
+    }, headers=auth_headers)
     assert create_res.status_code == 201
     inc = create_res.json()
     inc_id = inc["incident_id"]
@@ -146,7 +146,7 @@ def test_p1_5_4_incident_lifecycle_state_machine():
         "priority": "CRITICAL",
         "notes": "Verified threat on camera feed",
         "version": ver
-    })
+    }, headers=auth_headers)
     assert triage_res.status_code == 200
     t_data = triage_res.json()
     assert t_data["status"] == "TRIAGED"
@@ -159,7 +159,7 @@ def test_p1_5_4_incident_lifecycle_state_machine():
         "assigned_team": "Quick Reaction Team (QRT-1)",
         "notes": "QRT dispatched",
         "version": ver
-    })
+    }, headers=auth_headers)
     assert assign_res.status_code == 200
     a_data = assign_res.json()
     assert a_data["status"] == "ASSIGNED"
@@ -170,7 +170,7 @@ def test_p1_5_4_incident_lifecycle_state_machine():
     resp_res = client.post(f"/api/v1/incidents/{inc_id}/respond", json={
         "notes": "Units arrived on scene",
         "version": ver
-    })
+    }, headers=auth_headers)
     assert resp_res.status_code == 200
     r_data = resp_res.json()
     assert r_data["status"] == "RESPONDING"
@@ -180,7 +180,7 @@ def test_p1_5_4_incident_lifecycle_state_machine():
     cont_res = client.post(f"/api/v1/incidents/{inc_id}/contain", json={
         "notes": "Suspect detained and perimeter secure",
         "version": ver
-    })
+    }, headers=auth_headers)
     assert cont_res.status_code == 200
     c_data = cont_res.json()
     assert c_data["status"] == "CONTAINED"
@@ -191,7 +191,7 @@ def test_p1_5_4_incident_lifecycle_state_machine():
         "resolution_category": "Resolved",
         "resolution_notes": "Suspect handed over to local authorities",
         "version": ver
-    })
+    }, headers=auth_headers)
     assert resolve_res.status_code == 200
     res_data = resolve_res.json()
     assert res_data["status"] == "RESOLVED"
@@ -201,7 +201,7 @@ def test_p1_5_4_incident_lifecycle_state_machine():
     # 7. Close
     close_res = client.post(f"/api/v1/incidents/{inc_id}/close", json={
         "version": ver
-    })
+    }, headers=auth_headers)
     assert close_res.status_code == 200
     cls_data = close_res.json()
     assert cls_data["status"] == "CLOSED"
@@ -209,16 +209,16 @@ def test_p1_5_4_incident_lifecycle_state_machine():
     # Verify timeline length
     assert len(cls_data["timeline"]) >= 7
 
-def test_p1_5_5_incident_filtering_and_pagination():
+def test_p1_5_5_incident_filtering_and_pagination(auth_headers):
     """Test 5: Incidents list endpoint supports filtering by status, priority, camera, and search."""
-    res = client.get("/api/v1/incidents/?limit=10")
+    res = client.get("/api/v1/incidents/?limit=10", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list)
     assert len(data) <= 10
 
     # Analytics summary endpoint
-    analytics_res = client.get("/api/v1/incidents/analytics/summary")
+    analytics_res = client.get("/api/v1/incidents/analytics/summary", headers=auth_headers)
     assert analytics_res.status_code == 200
     ana = analytics_res.json()
     assert "total_incidents" in ana

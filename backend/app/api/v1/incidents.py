@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.database import get_db, SessionLocal
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.models.incident import Incident
 from app.models.playbook import IncidentPlaybook
 from app.models.incident_review import IncidentReview
@@ -112,7 +114,8 @@ def list_incidents(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     skip: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """List operational incidents with situational filtering."""
     query = db.query(Incident)
@@ -141,38 +144,52 @@ def list_incidents(
 
 @router.post("", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
-def create_incident(body: IncidentCreate):
+def create_incident(
+    body: IncidentCreate,
+    current_user: User = Depends(get_current_user)
+):
     """Manually create or ingest a security/infrastructure incident."""
-    inc = incident_service.create_incident(data=body, operator_username="operator")
+    inc = incident_service.create_incident(data=body, operator_username=current_user.username)
     return serialize_incident(inc)
 
 @router.post("/from-alert/{alert_id}", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
-def create_incident_from_alert(alert_id: str):
+def create_incident_from_alert(
+    alert_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """Create an incident from an existing Alert ID."""
     try:
-        inc = incident_service.create_incident_from_alert(alert_id=alert_id, operator_username="operator")
+        inc = incident_service.create_incident_from_alert(alert_id=alert_id, operator_username=current_user.username)
         return serialize_incident(inc)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/from-event/{event_id}", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
-def create_incident_from_event(event_id: str, db: Session = Depends(get_db)):
+def create_incident_from_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Create an incident from an existing SecurityEvent ID."""
     from app.models.security_event import SecurityEvent
     event = db.query(SecurityEvent).filter(SecurityEvent.event_id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event '{event_id}' not found.")
-    inc = incident_service.create_incident_from_event(event=event, operator_username="operator")
+    inc = incident_service.create_incident_from_event(event=event, operator_username=current_user.username)
     return serialize_incident(inc)
 
 # Static sub-endpoints MUST precede parameterized /{incident_id} endpoints
 @router.get("/analytics/summary", response_model=IncidentAnalyticsSummary)
-def get_incident_analytics():
+def get_incident_analytics(
+    current_user: User = Depends(get_current_user)
+):
     """Retrieve operational response metrics."""
     return incident_service.get_analytics_summary()
 
 @router.get("/playbooks", response_model=List[IncidentPlaybookResponse])
-def list_response_playbooks():
+def list_response_playbooks(
+    current_user: User = Depends(get_current_user)
+):
     """Retrieve available standard operating response playbooks."""
     pbs = playbook_service.list_playbooks()
     return [
@@ -190,20 +207,25 @@ def list_response_playbooks():
     ]
 
 @router.post("/evaluate-escalations")
-def trigger_escalation_evaluation():
+def trigger_escalation_evaluation(
+    current_user: User = Depends(get_current_user)
+):
     """Manually or cron-triggered SLA escalation evaluation."""
     res = escalation_engine.evaluate_and_escalate_active_incidents()
     return {"status": "SUCCESS", "escalated_count": len(res), "escalated": res}
 
 @router.post("/relationships", response_model=IncidentRelationshipResponse)
-def link_incidents(body: IncidentRelationshipCreate):
+def link_incidents(
+    body: IncidentRelationshipCreate,
+    current_user: User = Depends(get_current_user)
+):
     """Link incidents hierarchically (Parent/Child or Cluster)."""
     try:
         rel = incident_service.link_incidents(
             parent_id=body.parent_id,
             child_id=body.child_id,
             relationship_type=body.relationship_type,
-            actor="operator"
+            actor=current_user.username
         )
         return rel
     except Exception as e:
@@ -211,7 +233,11 @@ def link_incidents(body: IncidentRelationshipCreate):
 
 # Parameterized incident endpoints
 @router.get("/{incident_id}", response_model=IncidentResponse)
-def get_incident_detail(incident_id: str, db: Session = Depends(get_db)):
+def get_incident_detail(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get full incident details."""
     inc = db.query(Incident).filter(Incident.incident_id == incident_id).first()
     if not inc:
@@ -219,23 +245,31 @@ def get_incident_detail(incident_id: str, db: Session = Depends(get_db)):
     return serialize_incident(inc)
 
 @router.get("/{incident_id}/report", response_model=Dict[str, Any])
-def export_incident_dossier(incident_id: str):
+def export_incident_dossier(
+    incident_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """Export complete cryptographically-hashed incident dossier."""
     try:
-        return export_service.generate_incident_report(incident_id=incident_id, exported_by="operator")
+        return export_service.generate_incident_report(incident_id=incident_id, exported_by=current_user.username)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/{incident_id}/triage", response_model=IncidentResponse)
-def triage_incident(incident_id: str, body: IncidentTriageRequest):
+def triage_incident(
+    incident_id: str,
+    body: IncidentTriageRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Triage and verify incident."""
     try:
+        actor = body.actor_username or current_user.username
         inc = incident_service.triage_incident(
             incident_id=incident_id,
             priority=body.priority,
             playbook_id=body.playbook_id,
             notes=body.notes,
-            actor=body.actor_username or "operator",
+            actor=actor,
             version=body.version
         )
         return serialize_incident(inc)
@@ -243,16 +277,21 @@ def triage_incident(incident_id: str, body: IncidentTriageRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/assign", response_model=IncidentResponse)
-def assign_incident(incident_id: str, body: IncidentAssignRequest):
+def assign_incident(
+    incident_id: str,
+    body: IncidentAssignRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Assign incident to operator or tactical team."""
     try:
+        actor = body.actor_username or current_user.username
         inc = incident_service.assign_incident(
             incident_id=incident_id,
             assigned_to=body.assigned_to,
             assigned_team=body.assigned_team,
             assigned_unit=body.assigned_unit,
             notes=body.notes,
-            actor=body.actor_username or "operator",
+            actor=actor,
             version=body.version
         )
         return serialize_incident(inc)
@@ -260,29 +299,39 @@ def assign_incident(incident_id: str, body: IncidentAssignRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/checklist/step", response_model=IncidentResponse)
-def update_checklist_step(incident_id: str, body: IncidentChecklistStepUpdate):
+def update_checklist_step(
+    incident_id: str,
+    body: IncidentChecklistStepUpdate,
+    current_user: User = Depends(get_current_user)
+):
     """Update progress of a playbook checklist step."""
     try:
+        actor = body.actor_username or current_user.username
         inc = incident_service.update_checklist_step(
             incident_id=incident_id,
             step_id=body.step_id,
             is_completed=body.is_completed,
             notes=body.notes,
-            actor=body.actor_username or "operator"
+            actor=actor
         )
         return serialize_incident(inc)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/escalate", response_model=IncidentResponse)
-def escalate_incident(incident_id: str, body: IncidentEscalateRequest):
+def escalate_incident(
+    incident_id: str,
+    body: IncidentEscalateRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Escalate incident level."""
     try:
+        actor = body.actor_username or current_user.username
         inc = incident_service.escalate_incident(
             incident_id=incident_id,
             reason=body.reason,
             target_level=body.target_level,
-            actor=body.actor_username or "operator",
+            actor=actor,
             version=body.version
         )
         return serialize_incident(inc)
@@ -290,13 +339,18 @@ def escalate_incident(incident_id: str, body: IncidentEscalateRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/respond", response_model=IncidentResponse)
-def respond_incident(incident_id: str, body: IncidentActionRequest):
+def respond_incident(
+    incident_id: str,
+    body: IncidentActionRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Mark response unit deployed."""
     try:
+        actor = body.actor_username or current_user.username
         inc = incident_service.respond_incident(
             incident_id=incident_id,
             notes=body.notes,
-            actor=body.actor_username or "operator",
+            actor=actor,
             version=body.version
         )
         return serialize_incident(inc)
@@ -304,13 +358,18 @@ def respond_incident(incident_id: str, body: IncidentActionRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/contain", response_model=IncidentResponse)
-def contain_incident(incident_id: str, body: IncidentActionRequest):
+def contain_incident(
+    incident_id: str,
+    body: IncidentActionRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Mark perimeter secured and contained."""
     try:
+        actor = body.actor_username or current_user.username
         inc = incident_service.contain_incident(
             incident_id=incident_id,
             notes=body.notes,
-            actor=body.actor_username or "operator",
+            actor=actor,
             version=body.version
         )
         return serialize_incident(inc)
@@ -318,16 +377,21 @@ def contain_incident(incident_id: str, body: IncidentActionRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/resolve", response_model=IncidentResponse)
-def resolve_incident(incident_id: str, body: IncidentResolveRequest):
+def resolve_incident(
+    incident_id: str,
+    body: IncidentResolveRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Resolve incident with category and debrief notes."""
     try:
         cat = body.resolution_category or "Resolved"
         notes = body.resolution_notes or body.notes or "Incident resolved by operator."
+        actor = body.actor_username or current_user.username
         inc = incident_service.resolve_incident(
             incident_id=incident_id,
             resolution_category=cat,
             resolution_notes=notes,
-            actor=body.actor_username or "operator",
+            actor=actor,
             version=body.version
         )
         return serialize_incident(inc)
@@ -335,14 +399,19 @@ def resolve_incident(incident_id: str, body: IncidentResolveRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/false-alarm", response_model=IncidentResponse)
-def mark_false_alarm(incident_id: str, body: IncidentFalseAlarmRequest):
+def mark_false_alarm(
+    incident_id: str,
+    body: IncidentFalseAlarmRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Mark incident as false alarm with feedback category."""
     try:
+        actor = body.actor_username or current_user.username
         inc = incident_service.resolve_incident(
             incident_id=incident_id,
             resolution_category="False Alarm",
             resolution_notes=f"[{body.false_alarm_reason}] {body.false_alarm_notes or ''}",
-            actor=body.actor_username or "operator",
+            actor=actor,
             version=body.version
         )
         # Update false_alarm fields on DB model
@@ -362,10 +431,14 @@ def mark_false_alarm(incident_id: str, body: IncidentFalseAlarmRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/close", response_model=IncidentResponse)
-def close_incident(incident_id: str, body: Optional[IncidentActionRequest] = None):
+def close_incident(
+    incident_id: str,
+    body: Optional[IncidentActionRequest] = None,
+    current_user: User = Depends(get_current_user)
+):
     """Close an incident after post-incident review."""
     try:
-        actor = body.actor_username if body and body.actor_username else "supervisor"
+        actor = (body.actor_username if body and body.actor_username else None) or current_user.username
         version = body.version if body else None
         inc = incident_service.close_incident(incident_id=incident_id, actor=actor, version=version)
         return serialize_incident(inc)
@@ -373,7 +446,11 @@ def close_incident(incident_id: str, body: Optional[IncidentActionRequest] = Non
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{incident_id}/review", response_model=IncidentReviewResponse)
-def record_post_incident_review(incident_id: str, body: IncidentReviewCreate):
+def record_post_incident_review(
+    incident_id: str,
+    body: IncidentReviewCreate,
+    current_user: User = Depends(get_current_user)
+):
     """Record post-incident learning, outcome categorization, and calibration feedback."""
     try:
         review = incident_service.record_review(incident_id=incident_id, data=body)

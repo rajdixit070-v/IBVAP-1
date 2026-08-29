@@ -63,29 +63,29 @@ def test_alert_generation_and_deduplication(db_session):
     assert alert2.alert_id == alert1.alert_id
     assert alert2.risk_score == 92
 
-def test_alert_acknowledgement_api(db_session):
-    """Test operator acknowledgement of an alert via REST endpoint."""
-    evt = SecurityEvent(
-        event_id=f"EVT-ACK-{uuid.uuid4().hex[:6].upper()}",
-        camera_id="CAM-002",
-        track_id=888,
-        object_type="vehicle",
-        event_type="WATCHLIST_MATCH",
+def test_alert_acknowledgement_api(db_session, auth_headers):
+    """Test acknowledging an alert through REST API."""
+    event = SecurityEvent(
+        event_id=f"EVT-ACK-TEST-{uuid.uuid4().hex[:6]}",
+        camera_id="CAM-001",
+        track_id=88,
+        object_type="person",
+        event_type="RESTRICTED_ZONE_INTRUSION",
         severity="HIGH",
-        risk_score=75,
+        risk_score=85,
         risk_level="HIGH",
         status="ACTIVE"
     )
-    alert = alert_engine.process_security_event(evt)
+    alert = alert_engine.process_security_event(event)
     assert alert is not None
 
-    res = client.post(f"/api/v1/alerts/{alert.alert_id}/acknowledge", json={"acknowledged_by": "duty_officer"})
+    res = client.post(f"/api/v1/alerts/{alert.alert_id}/acknowledge", json={"acknowledged_by": "duty_officer"}, headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "ACKNOWLEDGED"
     assert data["acknowledged_by"] == "duty_officer"
 
-def test_incident_creation_and_list(db_session):
+def test_incident_creation_and_list(db_session, auth_headers):
     """Test creating a managed incident and querying it with pagination."""
     payload = {
         "title": "Unauthorized Perimeter Breach",
@@ -100,7 +100,7 @@ def test_incident_creation_and_list(db_session):
         "assigned_unit": "QRT-1"
     }
 
-    res = client.post("/api/v1/incidents/", json=payload)
+    res = client.post("/api/v1/incidents/", json=payload, headers=auth_headers)
     assert res.status_code == 201
     data = res.json()
     assert data["incident_id"].startswith("INC-")
@@ -108,12 +108,12 @@ def test_incident_creation_and_list(db_session):
     assert data["status"] == "NEW"
 
     # List
-    list_res = client.get("/api/v1/incidents/?priority=CRITICAL")
+    list_res = client.get("/api/v1/incidents/?priority=CRITICAL", headers=auth_headers)
     assert list_res.status_code == 200
     incidents = list_res.json()
     assert any(i["incident_id"] == data["incident_id"] for i in incidents)
 
-def test_incident_state_machine_valid_transitions(db_session):
+def test_incident_state_machine_valid_transitions(db_session, auth_headers):
     """Test controlled incident state machine through full lifecycle."""
     inc = incident_service.create_incident(
         Incident(
@@ -127,26 +127,26 @@ def test_incident_state_machine_valid_transitions(db_session):
     inc_id = inc.incident_id
 
     # 1. Assign
-    res1 = client.post(f"/api/v1/incidents/{inc_id}/assign", json={"assigned_to": "Officer Sharma", "assigned_unit": "Patrol Unit 2"})
+    res1 = client.post(f"/api/v1/incidents/{inc_id}/assign", json={"assigned_to": "Officer Sharma", "assigned_unit": "Patrol Unit 2"}, headers=auth_headers)
     assert res1.status_code == 200
     assert res1.json()["status"] == "ASSIGNED"
 
     # 2. Escalate
-    res2 = client.post(f"/api/v1/incidents/{inc_id}/escalate", json={"reason": "Suspect armed with breaching tools"})
+    res2 = client.post(f"/api/v1/incidents/{inc_id}/escalate", json={"reason": "Suspect armed with breaching tools"}, headers=auth_headers)
     assert res2.status_code == 200
     assert res2.json()["status"] == "ESCALATED"
 
     # 3. Resolve
-    res3 = client.post(f"/api/v1/incidents/{inc_id}/resolve", json={"resolution_notes": "QRT-2 intercepted subject and secured perimeter."})
+    res3 = client.post(f"/api/v1/incidents/{inc_id}/resolve", json={"resolution_notes": "QRT-2 intercepted subject and secured perimeter."}, headers=auth_headers)
     assert res3.status_code == 200
     assert res3.json()["status"] == "RESOLVED"
 
     # 4. Close
-    res4 = client.post(f"/api/v1/incidents/{inc_id}/close")
+    res4 = client.post(f"/api/v1/incidents/{inc_id}/close", headers=auth_headers)
     assert res4.status_code == 200
     assert res4.json()["status"] == "CLOSED"
 
-def test_incident_state_machine_invalid_transition_rejected(db_session):
+def test_incident_state_machine_invalid_transition_rejected(db_session, auth_headers):
     """Test that invalid state transitions are rejected with HTTP 400."""
     inc = incident_service.create_incident(
         Incident(
@@ -159,10 +159,10 @@ def test_incident_state_machine_invalid_transition_rejected(db_session):
     inc_id = inc.incident_id
 
     # Try to jump from NEW directly to CLOSED (invalid!)
-    res = client.post(f"/api/v1/incidents/{inc_id}/close")
+    res = client.post(f"/api/v1/incidents/{inc_id}/close", headers=auth_headers)
     assert res.status_code == 400
 
-def test_incident_false_alarm_workflow(db_session):
+def test_incident_false_alarm_workflow(db_session, auth_headers):
     """Test marking an incident as a FALSE_ALARM with category reason."""
     inc = incident_service.create_incident(
         Incident(
@@ -177,7 +177,7 @@ def test_incident_false_alarm_workflow(db_session):
     res = client.post(f"/api/v1/incidents/{inc_id}/false-alarm", json={
         "false_alarm_reason": "shadow",
         "false_alarm_notes": "Tree shadow sway triggered loitering anomaly"
-    })
+    }, headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "FALSE_ALARM"
@@ -209,9 +209,9 @@ def test_evidence_integrity_sha256_and_audit(db_session, auth_headers):
     ).first()
     assert audit is not None
 
-def test_incident_analytics_summary_endpoint(db_session):
+def test_incident_analytics_summary_endpoint(db_session, auth_headers):
     """Test operational response analytics endpoint."""
-    res = client.get("/api/v1/incidents/analytics/summary")
+    res = client.get("/api/v1/incidents/analytics/summary", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert "total_incidents" in data

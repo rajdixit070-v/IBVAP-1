@@ -193,16 +193,18 @@ class RTSPStreamer:
 
             # Exponential backoff sleep before retry
             if self._running:
-                delay = min(
-                    settings.RECONNECT_MAX_DELAY_SEC,
-                    settings.RECONNECT_BACKOFF_BASE ** min(self.reconnect_attempts, 6)
-                )
+                delay = self.calculate_reconnect_delay()
                 logger.info(f"[{self.camera_id}] Reconnecting in {delay:.1f}s (Attempt #{self.reconnect_attempts})...")
                 
                 # Interruptible sleep
                 sleep_end = time.time() + delay
                 while self._running and time.time() < sleep_end:
                     time.sleep(0.5)
+
+    def calculate_reconnect_delay(self, attempt: Optional[int] = None) -> float:
+        """Calculates exponential backoff delay in seconds bounded by RECONNECT_MAX_DELAY_SEC."""
+        att = attempt if attempt is not None else self.reconnect_attempts
+        return float(min(settings.RECONNECT_MAX_DELAY_SEC, settings.RECONNECT_BACKOFF_BASE ** min(att, 6)))
 
     def _process_new_frame(self, frame: np.ndarray, timestamp: float):
         """Processes received frame, computes FPS, and updates JPEG buffer."""

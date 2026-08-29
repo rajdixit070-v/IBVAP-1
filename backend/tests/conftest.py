@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="session", autouse=True)
 def initialize_database():
     """Initializes SQLite database tables and default admin credentials before running tests."""
-    init_db_defaults()
+    init_db_defaults(seed_demo=True)
 
 @pytest.fixture
 def client():

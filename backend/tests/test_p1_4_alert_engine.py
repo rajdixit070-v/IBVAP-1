@@ -102,7 +102,7 @@ def test_p1_4_2_duplicate_event_deduplication():
     finally:
         db.close()
 
-def test_p1_4_3_alert_acknowledgement_and_resolution():
+def test_p1_4_3_alert_acknowledgement_and_resolution(auth_headers):
     """Test 3: Alert acknowledgement and resolution state transitions are properly persisted."""
     db = SessionLocal()
     try:
@@ -134,14 +134,22 @@ def test_p1_4_3_alert_acknowledgement_and_resolution():
         assert alert.status == "NEW"
 
         # Acknowledge via API
-        ack_res = client.post(f"/api/v1/alerts/{alert.alert_id}/acknowledge", json={"acknowledged_by": "officer_raj"})
+        ack_res = client.post(
+            f"/api/v1/alerts/{alert.alert_id}/acknowledge",
+            json={"acknowledged_by": "officer_raj"},
+            headers=auth_headers
+        )
         assert ack_res.status_code == 200
         ack_data = ack_res.json()
         assert ack_data["status"] == "ACKNOWLEDGED"
         assert ack_data["acknowledged_by"] == "officer_raj"
 
         # Resolve via API
-        res_res = client.post(f"/api/v1/alerts/{alert.alert_id}/resolve", json={"resolved_by": "officer_raj", "notes": "False alarm - maintenance crew"})
+        res_res = client.post(
+            f"/api/v1/alerts/{alert.alert_id}/resolve",
+            json={"resolved_by": "officer_raj", "notes": "False alarm - maintenance crew"},
+            headers=auth_headers
+        )
         assert res_res.status_code == 200
         res_data = res_res.json()
         assert res_data["status"] == "RESOLVED"
@@ -231,16 +239,16 @@ def test_p1_4_5_multi_camera_isolation():
     assert alt_b.camera_id == cam_b
     assert alt_a.alert_id != alt_b.alert_id
 
-def test_p1_4_6_alert_api_filtering_and_pagination():
+def test_p1_4_6_alert_api_filtering_and_pagination(auth_headers):
     """Test 6: Alert API supports status, priority, and camera filtering with pagination."""
-    res = client.get("/api/v1/alerts/?limit=10")
+    res = client.get("/api/v1/alerts/?limit=10", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list)
     assert len(data) <= 10
 
     # Summary endpoint
-    sum_res = client.get("/api/v1/alerts/summary")
+    sum_res = client.get("/api/v1/alerts/summary", headers=auth_headers)
     assert sum_res.status_code == 200
     sum_data = sum_res.json()
     assert "critical_alerts" in sum_data
