@@ -9,6 +9,8 @@ import cv2
 
 logger = logging.getLogger("ibvap.ai.detector")
 
+from app.config import settings
+
 # Category mapping for border surveillance operations
 CATEGORY_MAPPINGS = {
     # Person
@@ -36,7 +38,7 @@ CATEGORY_MAPPINGS = {
     "zebra": "animal",
     "giraffe": "animal",
     
-    # Drone / UAV (Pluggable specialized model class)
+    # Dedicated Drone / UAV classes (when trained model weights present)
     "drone": "drone",
     "uav": "drone",
     "quadcopter": "drone",
@@ -50,14 +52,16 @@ class YOLOObjectDetector:
     """
     def __init__(
         self,
-        model_name: str = "yolov8n",
+        model_name: Optional[str] = None,
         device: str = "auto",
         conf_thresholds: Optional[Dict[str, float]] = None
     ):
-        self.model_name = model_name
+        self.model_name = model_name or getattr(settings, "YOLO_MODEL_PATH", "yolov8n.pt")
         self.device_setting = device
         self.model = None
         self.is_loaded = False
+        self.status = "UNAVAILABLE"
+        self.drone_status = "NOT CONFIGURED"
         self.device_used = "CPU"
         self._inference_lock = threading.Lock()
         
@@ -111,10 +115,19 @@ class YOLOObjectDetector:
             
             self.model = YOLO(model_filename)
             self.is_loaded = True
-            logger.info(f"YOLO detector '{model_filename}' successfully initialized on {self.device_used}.")
+            self.status = "LOADED"
+            
+            # Check if drone classes are present in loaded model
+            if self.model and hasattr(self.model, "names") and isinstance(self.model.names, dict):
+                has_drone_class = any(c in str(v).lower() for v in self.model.names.values() for c in ["drone", "uav", "quadcopter"])
+                self.drone_status = "LOADED" if has_drone_class else "NOT CONFIGURED"
+            
+            logger.info(f"YOLO detector '{model_filename}' successfully initialized on {self.device_used}. Drone status: {self.drone_status}.")
         except Exception as e:
             logger.error(f"Failed to load YOLO model '{self.model_name}': {e}.")
             self.is_loaded = False
+            self.status = "UNAVAILABLE"
+            self.drone_status = "NOT CONFIGURED"
             self.device_used = "CPU (Fallback)"
 
     def detect(

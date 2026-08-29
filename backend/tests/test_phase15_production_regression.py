@@ -325,3 +325,106 @@ def test_regression_20_frontend_api_configuration(client):
     m_data = metrics_res.json()
     assert "cpu_percent" in m_data
     assert "memory_rss_mb" in m_data
+
+def test_regression_21_evidence_disk_file_sha256(tmp_path):
+    """21. Evidence registration from actual disk file reads bytes and calculates genuine SHA-256."""
+    test_file = tmp_path / "camera_capture_evidence.jpg"
+    raw_payload = b"\xff\xd8\xff\xe0TACTICAL_EVIDENCE_CAPTURE_IMAGE_2026\xff\xd9"
+    test_file.write_bytes(raw_payload)
+    expected_hash = hashlib.sha256(raw_payload).hexdigest()
+
+    evd = evidence_manager.register_evidence(
+        camera_id="CAM-001",
+        evidence_type="SNAPSHOT",
+        file_path=str(test_file)
+    )
+    assert evd.checksum_sha256 == expected_hash
+    assert evd.file_size_bytes == len(raw_payload)
+    assert len(evd.checksum_sha256) == 64
+
+def test_regression_22_face_embedding_validation_nan_inf_rejected(client, auth_headers):
+    """22. Biometric embedding validation rejects NaN, Inf, non-numbers, and wrong dimensions."""
+    from app.services.face.embedding_engine import validate_embedding
+    
+    # 1. NaN rejected
+    nan_vec = [float('nan')] * 128
+    is_valid, err = validate_embedding(nan_vec)
+    assert is_valid is False
+    assert "non-finite" in err.lower()
+
+    # 2. Inf rejected
+    inf_vec = [1.0] * 127 + [float('inf')]
+    is_valid, err = validate_embedding(inf_vec)
+    assert is_valid is False
+    assert "non-finite" in err.lower()
+
+    # 3. Wrong dimension rejected
+    short_vec = [0.1] * 64
+    is_valid, err = validate_embedding(short_vec)
+    assert is_valid is False
+    assert "mismatch" in err.lower()
+
+    # 4. Zero vector rejected
+    zero_vec = [0.0] * 128
+    is_valid, err = validate_embedding(zero_vec)
+    assert is_valid is False
+
+    # 5. API rejects malformed embedding
+    res = client.post(
+        f"{settings.API_V1_STR}/watchlist/persons/",
+        json={
+            "person_id": f"TEST-FACE-{uuid.uuid4().hex[:4].upper()}",
+            "display_name": "Test Subject",
+            "category": "WATCHLIST",
+            "embedding": short_vec
+        },
+        headers=auth_headers
+    )
+    assert res.status_code == 400
+
+def test_regression_23_face_model_unavailable_safe_fallback():
+    """23. Unprovisioned face model safely returns None without fabricating fake heuristics."""
+    from app.services.face.embedding_engine import FaceEmbeddingEngine
+    import numpy as np
+
+    engine = FaceEmbeddingEngine(model_path="non_existent_face_model_weights.onnx")
+    assert engine.status == "FACE_MODEL_UNAVAILABLE"
+    assert engine.is_loaded is False
+
+    dummy_face = np.zeros((112, 112, 3), dtype=np.uint8)
+    embedding = engine.extract_embedding(dummy_face)
+    assert embedding is None
+
+def test_regression_24_weather_service_unavailable():
+    """24. Weather service reports UNAVAILABLE when no hardware station or API provider is configured."""
+    from app.services.intelligence.weather_service import weather_service
+
+    weather = weather_service.get_current_weather("BOP Alpha")
+    assert weather["status"] == "UNAVAILABLE"
+    assert weather["temperature_c"] is None
+    assert weather["humidity_percent"] is None
+    assert weather["wind_speed_kmh"] is None
+
+def test_regression_25_camera_relationships_persisted(client, auth_headers):
+    """25. Camera creation with site_id, bop_id, edge_node_id persists and returns valid relations."""
+    cam_id = f"CAM-REL-{uuid.uuid4().hex[:4].upper()}"
+    res = client.post(
+        f"{settings.API_V1_STR}/cameras",
+        json={
+            "camera_id": cam_id,
+            "camera_name": "Border Sector PTZ",
+            "bop_site": "BOP Alpha",
+            "site_id": "SITE-NORTH-01",
+            "bop_id": "BOP-001",
+            "edge_node_id": "EDGE-BOP-001",
+            "sector": "Sector North",
+            "rtsp_url": "synthetic://camera/live"
+        },
+        headers=auth_headers
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["camera_id"] == cam_id
+    assert data["site_id"] == "SITE-NORTH-01"
+    assert data["bop_id"] == "BOP-001"
+    assert data["edge_node_id"] == "EDGE-BOP-001"

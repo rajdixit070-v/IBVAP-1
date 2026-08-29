@@ -91,11 +91,14 @@ def test_face_embedding_and_cosine_similarity():
     img1 = np.ones((100, 100, 3), dtype=np.uint8) * 180
     img1[30:50, 30:70] = 20
     emb1 = face_embedding_engine.extract_embedding(img1)
-    assert len(emb1) == 128
-
-    # Identical image similarity should be 1.0
-    sim_self = compute_cosine_similarity(emb1, emb1)
-    assert sim_self >= 0.99
+    
+    if not face_embedding_engine.is_loaded:
+        assert emb1 is None
+        assert face_embedding_engine.status in ["FACE_MODEL_UNAVAILABLE", "FACE_MODEL_ERROR"]
+    else:
+        assert len(emb1) == 128
+        sim_self = compute_cosine_similarity(emb1, emb1)
+        assert sim_self >= 0.99
 
     # Orthogonal dummy vectors
     vec_a = [1.0] + [0.0] * 127
@@ -170,7 +173,7 @@ def test_person_watchlist_api_crud(auth_headers):
         "category": "WATCHLIST",
         "status": "ACTIVE",
         "notes": "Testing face identity registry",
-        "embedding": [0.0] * 128
+        "embedding": [0.1] * 128
     }, headers=auth_headers)
     assert resp.status_code == 201
     data = resp.json()

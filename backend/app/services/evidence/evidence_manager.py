@@ -31,13 +31,20 @@ class EvidenceManager:
             now = datetime.utcnow()
             evd_id = f"EVD-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
             
-            # Compute SHA-256 checksum
-            if data_bytes:
+            # Compute SHA-256 checksum from actual bytes or file
+            import os
+            if data_bytes is not None:
                 sha256 = hashlib.sha256(data_bytes).hexdigest()
                 size = len(data_bytes)
+            elif file_path and os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "rb") as f:
+                    file_content = f.read()
+                    sha256 = hashlib.sha256(file_content).hexdigest()
+                    size = len(file_content)
             else:
-                sha256 = hashlib.sha256(f"{evd_id}:{file_path}".encode("utf-8")).hexdigest()
-                size = 1024
+                raw = file_path.encode("utf-8") if file_path else evd_id.encode("utf-8")
+                sha256 = hashlib.sha256(raw).hexdigest()
+                size = len(raw)
 
             record = Evidence(
                 evidence_id=evd_id,

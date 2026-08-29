@@ -7,6 +7,9 @@ class CameraBase(BaseModel):
     camera_name: str = Field(..., description="Descriptive camera name")
     description: Optional[str] = None
     bop_site: str = Field(..., description="BOP or Site name, e.g. BOP Alpha")
+    site_id: Optional[str] = "SITE-BORDER-NORTH"
+    bop_id: Optional[str] = None
+    edge_node_id: Optional[str] = "EDGE-BOP-001"
     sector: str = Field(..., description="Sector name, e.g. North Sector")
     location: Optional[str] = None
     latitude: Optional[float] = None
@@ -31,6 +34,9 @@ class CameraUpdate(BaseModel):
     camera_name: Optional[str] = None
     description: Optional[str] = None
     bop_site: Optional[str] = None
+    site_id: Optional[str] = None
+    bop_id: Optional[str] = None
+    edge_node_id: Optional[str] = None
     sector: Optional[str] = None
     location: Optional[str] = None
     latitude: Optional[float] = None
@@ -47,6 +53,9 @@ class CameraResponse(BaseModel):
     camera_name: str
     description: Optional[str] = None
     bop_site: str
+    site_id: Optional[str] = None
+    bop_id: Optional[str] = None
+    edge_node_id: Optional[str] = None
     sector: str
     location: Optional[str] = None
     latitude: Optional[float] = None

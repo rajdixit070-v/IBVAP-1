@@ -57,6 +57,8 @@ class FaceAnalyticsService:
 
         # 3. Generate 128-d L2 Normalized Embedding
         current_embedding = face_embedding_engine.extract_embedding(face_crop)
+        if current_embedding is None:
+            return None
 
         # 4. Query Watchlist Database for Cosine Matches
         db: Session = SessionLocal()

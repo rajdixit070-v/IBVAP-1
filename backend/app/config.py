@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     TARGET_INFERENCE_FPS: float = float(os.getenv("TARGET_INFERENCE_FPS", "10.0"))
     MAX_BATCH_SIZE: int = int(os.getenv("MAX_BATCH_SIZE", "4"))
     
+    # Model Provisioning & Integration Paths
+    YOLO_MODEL_PATH: str = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
+    FACE_MODEL_PATH: str = os.getenv("FACE_MODEL_PATH", "face_recognition_sface.onnx")
+    DRONE_MODEL_PATH: str = os.getenv("DRONE_MODEL_PATH", "")
+    WEATHER_API_KEY: Optional[str] = os.getenv("WEATHER_API_KEY", None)
+    WEATHER_PROVIDER: str = os.getenv("WEATHER_PROVIDER", "none")  # "none", "openweather", "station"
+    
     # Default Admin Credentials
     DEFAULT_ADMIN_USERNAME: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     DEFAULT_ADMIN_PASSWORD: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@IBVAP2026")

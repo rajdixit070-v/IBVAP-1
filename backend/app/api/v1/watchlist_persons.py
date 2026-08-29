@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.person_watchlist import PersonWatchlist
 from app.models.audit_log import SecurityAuditLog
 from app.schemas.face import PersonWatchlistCreate, PersonWatchlistUpdate, PersonWatchlistResponse
+from app.services.face.embedding_engine import validate_embedding
 
 router = APIRouter()
 
@@ -53,11 +54,12 @@ def create_watchlist_person(
     if existing:
         raise HTTPException(status_code=400, detail=f"Person ID '{pid}' is already registered.")
 
-    # Require real 128-dimensional embedding
-    if not data.embedding or len(data.embedding) != 128:
+    # Strict biometric embedding validation
+    is_valid, error_msg = validate_embedding(data.embedding, expected_dim=128)
+    if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A valid 128-dimensional biometric embedding vector must be provided or extracted from a facial photo."
+            detail=error_msg or "A valid 128-dimensional biometric embedding vector must be provided."
         )
     embedding_vec = data.embedding
 
@@ -125,8 +127,9 @@ def update_watchlist_person(
     if data.photo_ref is not None:
         person.photo_ref = data.photo_ref
     if data.embedding is not None:
-        if len(data.embedding) != 128:
-            raise HTTPException(status_code=400, detail="Embedding must be a 128-dimensional vector.")
+        is_valid, error_msg = validate_embedding(data.embedding, expected_dim=128)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg or "Embedding must be a valid 128-dimensional vector.")
         person.embedding_json = json.dumps(data.embedding)
 
     person.updated_at = datetime.utcnow()

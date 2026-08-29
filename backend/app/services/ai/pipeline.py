@@ -9,6 +9,7 @@ from app.services.ai.detector import YOLOObjectDetector
 from app.services.ai.tracker import ByteTracker, STrack
 from app.schemas.ai import CameraAIStatus, CameraAICounters, TrackedObject, Point2D, BoundingBox
 from app.services.stream_manager import stream_manager
+from app.config import settings
 
 logger = logging.getLogger("ibvap.ai.pipeline")
 
@@ -211,7 +212,7 @@ class AIPipelineManager:
     Orchestrates shared YOLO models, per-camera workers, WebSocket dispatching, and dynamic configuration.
     """
     def __init__(self):
-        self.detector = YOLOObjectDetector(model_name="yolov8n", device="auto")
+        self.detector = YOLOObjectDetector(model_name=getattr(settings, "YOLO_MODEL_PATH", "yolov8n.pt"), device="auto")
         self.workers: Dict[str, CameraAIWorker] = {}
         self.ws_subscribers: Dict[str, List[Any]] = {} # camera_id -> list of websocket connections
         self._lock = threading.Lock()
