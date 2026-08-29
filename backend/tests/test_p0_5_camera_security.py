@@ -64,7 +64,7 @@ def test_p0_5_3_live_unauthorized_camera_idor(client, db_session):
     resp = client.get("/api/v1/cameras/CAM-UNAUTHORIZED-999/live", headers=headers)
     assert resp.status_code in [403, 404]
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_p0_5_4_live_authorized_camera(admin_headers):
     """Test 4: Valid authorized user can connect to live streaming generator."""
     stream_manager.start_camera(

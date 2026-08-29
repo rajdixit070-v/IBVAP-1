@@ -59,9 +59,14 @@ class YOLOObjectDetector:
         self.model_name = model_name or getattr(settings, "YOLO_MODEL_PATH", "yolov8n.pt")
         self.device_setting = device
         self.model = None
+        self.drone_model = None
         self.is_loaded = False
-        self.status = "UNAVAILABLE"
-        self.drone_status = "NOT CONFIGURED"
+        self.status = "NOT_CONFIGURED"
+        self.error: Optional[str] = None
+        self.drone_status = "NOT_CONFIGURED"
+        self.drone_error: Optional[str] = None
+        self.resolved_path: Optional[str] = None
+        self.resolved_drone_path: Optional[str] = None
         self.device_used = "CPU"
         self._inference_lock = threading.Lock()
         
@@ -82,53 +87,104 @@ class YOLOObjectDetector:
         """Dynamically updates class confidence thresholds."""
         self.thresholds.update(new_thresholds)
 
+    @staticmethod
+    def _resolve_path(path: Optional[str]) -> Optional[str]:
+        """Resolves local model file path without triggering automatic external downloads."""
+        if not path:
+            return None
+        # Clean extensions
+        candidates = [path]
+        if not path.endswith((".pt", ".onnx", ".engine")):
+            candidates.append(f"{path}.pt")
+
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+        for c in candidates:
+            if os.path.isabs(c) and os.path.exists(c) and os.path.isfile(c):
+                return c
+            if os.path.exists(c) and os.path.isfile(c):
+                return os.path.abspath(c)
+            
+            search_paths = [
+                os.path.join(base_dir, c),
+                os.path.join(base_dir, "models", c),
+                os.path.join(base_dir, "weights", c),
+                os.path.join(base_dir, "backend", c),
+                os.path.join(base_dir, "backend", "models", c),
+            ]
+            for sp in search_paths:
+                if os.path.exists(sp) and os.path.isfile(sp):
+                    return os.path.abspath(sp)
+        return None
+
     def _initialize_model(self):
-        """Loads YOLO model with hardware detection and CPU fallback."""
-        try:
-            import torch
-            from ultralytics import YOLO
+        """Loads YOLO model with explicit file presence check, hardware detection and CPU fallback."""
+        self.error = None
+        self.drone_error = None
+        self.is_loaded = False
+        self.model = None
+        self.drone_model = None
 
-            # Determine device
-            if self.device_setting == "cuda" and torch.cuda.is_available():
-                self.device_used = "CUDA"
-            elif self.device_setting == "cpu":
-                self.device_used = "CPU"
+        # 1. Primary YOLO Model Check
+        if not self.model_name:
+            self.status = "NOT_CONFIGURED"
+            logger.info("YOLO model not configured (YOLO_MODEL_PATH is empty).")
+        else:
+            self.resolved_path = self._resolve_path(self.model_name)
+            if not self.resolved_path or not os.path.exists(self.resolved_path):
+                self.status = "FILE_MISSING"
+                self.error = f"YOLO model file not found at '{self.model_name}'."
+                logger.warning(f"YOLO detector file missing at '{self.model_name}'. Status: {self.status}.")
             else:
-                self.device_used = "CUDA" if torch.cuda.is_available() else "CPU"
+                try:
+                    import torch
+                    from ultralytics import YOLO
 
-            model_filename = f"{self.model_name}.pt" if not self.model_name.endswith((".pt", ".onnx", ".engine")) else self.model_name
-            
-            # Resolve relative model paths robustly across launch locations
-            if not os.path.isabs(model_filename) and not os.path.exists(model_filename):
-                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-                possible_paths = [
-                    os.path.join(base_dir, model_filename),
-                    os.path.join(base_dir, "models", model_filename),
-                    os.path.join(base_dir, "weights", model_filename),
-                ]
-                for p in possible_paths:
-                    if os.path.exists(p):
-                        model_filename = p
-                        break
+                    # Determine device
+                    if self.device_setting == "cuda" and torch.cuda.is_available():
+                        self.device_used = "CUDA"
+                    elif self.device_setting == "cpu":
+                        self.device_used = "CPU"
+                    else:
+                        self.device_used = "CUDA" if torch.cuda.is_available() else "CPU"
 
-            logger.info(f"Loading YOLO detector '{model_filename}' on {self.device_used}...")
-            
-            self.model = YOLO(model_filename)
-            self.is_loaded = True
-            self.status = "LOADED"
-            
-            # Check if drone classes are present in loaded model
-            if self.model and hasattr(self.model, "names") and isinstance(self.model.names, dict):
+                    logger.info(f"Loading YOLO detector '{self.resolved_path}' on {self.device_used}...")
+                    self.model = YOLO(self.resolved_path)
+                    self.is_loaded = True
+                    self.status = "LOADED"
+                    logger.info(f"YOLO detector successfully initialized from '{self.resolved_path}' on {self.device_used}.")
+                except Exception as e:
+                    self.is_loaded = False
+                    self.status = "ERROR"
+                    self.error = str(e)
+                    logger.error(f"Failed to load YOLO model from '{self.resolved_path}': {e}")
+                    self.device_used = "CPU (Fallback)"
+
+        # 2. Dedicated Drone / UAV Model Check
+        drone_path = getattr(settings, "DRONE_MODEL_PATH", None)
+        if not drone_path:
+            # Check if primary YOLO model has explicit drone class
+            if self.is_loaded and self.model and hasattr(self.model, "names") and isinstance(self.model.names, dict):
                 has_drone_class = any(c in str(v).lower() for v in self.model.names.values() for c in ["drone", "uav", "quadcopter"])
-                self.drone_status = "LOADED" if has_drone_class else "NOT CONFIGURED"
-            
-            logger.info(f"YOLO detector '{model_filename}' successfully initialized on {self.device_used}. Drone status: {self.drone_status}.")
-        except Exception as e:
-            logger.error(f"Failed to load YOLO model '{self.model_name}': {e}.")
-            self.is_loaded = False
-            self.status = "UNAVAILABLE"
-            self.drone_status = "NOT CONFIGURED"
-            self.device_used = "CPU (Fallback)"
+                self.drone_status = "LOADED" if has_drone_class else "NOT_CONFIGURED"
+            else:
+                self.drone_status = "NOT_CONFIGURED"
+        else:
+            self.resolved_drone_path = self._resolve_path(drone_path)
+            if not self.resolved_drone_path or not os.path.exists(self.resolved_drone_path):
+                self.drone_status = "FILE_MISSING"
+                self.drone_error = f"Dedicated drone model file not found at '{drone_path}'."
+                logger.warning(f"Drone detector file missing at '{drone_path}'. Status: {self.drone_status}.")
+            else:
+                try:
+                    from ultralytics import YOLO
+                    self.drone_model = YOLO(self.resolved_drone_path)
+                    self.drone_status = "LOADED"
+                    logger.info(f"Dedicated Drone detector successfully initialized from '{self.resolved_drone_path}'.")
+                except Exception as e:
+                    self.drone_status = "ERROR"
+                    self.drone_error = str(e)
+                    logger.error(f"Failed to load dedicated drone model from '{self.resolved_drone_path}': {e}")
 
     def detect(
         self,
@@ -205,7 +261,47 @@ class YOLOObjectDetector:
 
             except Exception as e:
                 logger.error(f"Inference error on camera {camera_id}: {e}")
-                return []
 
-        # Return empty list cleanly if model is not loaded or frame cannot be processed
-        return []
+        # 2. Run dedicated drone detector if loaded
+        if self.drone_status == "LOADED" and self.drone_model is not None:
+            try:
+                with self._inference_lock:
+                    drone_results = self.drone_model(
+                        frame,
+                        imgsz=input_size,
+                        device=0 if self.device_used == "CUDA" else "cpu",
+                        verbose=False,
+                        conf=self.thresholds.get("drone", 0.30)
+                    )
+                if drone_results and len(drone_results) > 0:
+                    d_boxes = drone_results[0].boxes
+                    for i in range(len(d_boxes)):
+                        cls_id = int(d_boxes.cls[i].item())
+                        class_name = self.drone_model.names.get(cls_id, "drone").lower()
+                        conf = float(d_boxes.conf[i].item())
+                        min_conf = self.thresholds.get("drone", 0.30)
+                        if conf < min_conf:
+                            continue
+                        xyxy = d_boxes.xyxy[i].cpu().numpy()
+                        x1, y1, x2, y2 = xyxy
+                        x1 = max(0, min(orig_w - 1, float(x1)))
+                        y1 = max(0, min(orig_h - 1, float(y1)))
+                        x2 = max(x1 + 1, min(orig_w, float(x2)))
+                        y2 = max(y1 + 1, min(orig_h, float(y2)))
+                        detections.append({
+                            "class_name": class_name,
+                            "category": "drone",
+                            "confidence": round(conf, 3),
+                            "bbox": {
+                                "x": round(x1, 1),
+                                "y": round(y1, 1),
+                                "width": round(x2 - x1, 1),
+                                "height": round(y2 - y1, 1)
+                            },
+                            "timestamp": timestamp,
+                            "camera_id": camera_id
+                        })
+            except Exception as e:
+                logger.error(f"Dedicated drone model inference error on camera {camera_id}: {e}")
+
+        return detections

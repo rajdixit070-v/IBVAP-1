@@ -1,4 +1,5 @@
 import pytest
+import json
 import uuid
 import hashlib
 from datetime import datetime, timedelta
@@ -17,6 +18,14 @@ from app.services.alert.alert_engine import alert_engine
 from app.services.incident.incident_service import incident_service
 from app.services.evidence.evidence_manager import evidence_manager
 from app.core.security import get_password_hash
+
+@pytest.fixture
+def db():
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 def test_regression_01_unauthenticated_alert_access_rejected(client):
     """1. Unauthenticated alert access must return HTTP 401."""
@@ -428,3 +437,138 @@ def test_regression_25_camera_relationships_persisted(client, auth_headers):
     assert data["site_id"] == "SITE-NORTH-01"
     assert data["bop_id"] == "BOP-001"
     assert data["edge_node_id"] == "EDGE-BOP-001"
+
+def test_regression_26_multimodal_event_real_sha256(db):
+    """26. Multimodal event with actual evidence produces genuine 64-char SHA-256 hash."""
+    from app.services.multimodal.multimodal_engine import MultimodalEngine
+    
+    evidence_payload = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRGENUINE_EVIDENCE_PAYLOAD_BYTES_2026"
+    expected_digest = hashlib.sha256(evidence_payload).hexdigest()
+    assert len(expected_digest) == 64
+
+    obs, event = MultimodalEngine.record_observation({
+        "camera_id": "CAM-001",
+        "site_id": "SITE-BORDER-NORTH",
+        "bop_id": "BOP-ALPHA",
+        "zone_id": "ZONE-ZERO-LINE",
+        "track_id": 7771,
+        "observation_type": "PERSON",
+        "confidence": 0.95,
+        "lighting_condition": "DAY",
+        "speed": 2.5,
+        "evidence_bytes": evidence_payload
+    }, db, auto_fuse=True)
+
+    assert event is not None
+    assert event.evidence_sha256 == expected_digest
+    assert len(event.evidence_sha256) == 64
+    
+    bundle = json.loads(event.evidence_bundle_json)
+    assert bundle["evidence_sha256"] == expected_digest
+    assert bundle["integrity_verified"] is True
+
+def test_regression_27_multimodal_evidence_verification_and_mismatch(db):
+    """27. Verification against stored hash matches genuine bytes and detects modification."""
+    from app.services.multimodal.multimodal_engine import MultimodalEngine
+    
+    evidence_payload = b"CRITICAL_TACTICAL_BORDER_EVIDENCE_2026_SNAPSHOT"
+    expected_digest = hashlib.sha256(evidence_payload).hexdigest()
+
+    obs, event = MultimodalEngine.record_observation({
+        "camera_id": "CAM-001",
+        "site_id": "SITE-BORDER-NORTH",
+        "bop_id": "BOP-ALPHA",
+        "zone_id": "ZONE-ZERO-LINE",
+        "track_id": 7772,
+        "observation_type": "PERSON",
+        "confidence": 0.95,
+        "lighting_condition": "DAY",
+        "speed": 2.8,
+        "evidence_bytes": evidence_payload
+    }, db, auto_fuse=True)
+
+    assert event is not None
+    assert event.evidence_sha256 == expected_digest
+
+    # Recomputed evidence matches stored hash
+    is_valid = MultimodalEngine.verify_event_evidence(event.event_id, evidence_payload, db)
+    assert is_valid is True
+
+    # Modified / tampered evidence causes mismatch
+    tampered_payload = b"MODIFIED_CORRUPTED_OR_TAMPERED_EVIDENCE_BYTES"
+    is_tampered_valid = MultimodalEngine.verify_event_evidence(event.event_id, tampered_payload, db)
+    assert is_tampered_valid is False
+
+def test_regression_28_multimodal_event_no_evidence_no_fabricated_hash(db):
+    """28. Event without evidence has None/null hash and NEVER fabricates a fake SHA-256 or UUID."""
+    from app.services.multimodal.multimodal_engine import MultimodalEngine
+
+    obs, event = MultimodalEngine.record_observation({
+        "camera_id": "CAM-001",
+        "site_id": "SITE-BORDER-NORTH",
+        "bop_id": "BOP-ALPHA",
+        "zone_id": "ZONE-ZERO-LINE",
+        "track_id": 7773,
+        "observation_type": "PERSON",
+        "confidence": 0.93,
+        "lighting_condition": "DAY",
+        "speed": 3.1
+    }, db, auto_fuse=True)
+
+    assert event is not None
+    # Must be None, NEVER a 32-char UUID or fabricated hex digest
+    assert event.evidence_sha256 is None
+    
+    bundle = json.loads(event.evidence_bundle_json)
+    assert bundle["evidence_sha256"] is None
+    assert bundle["integrity_verified"] is False
+
+def test_regression_29_model_status_api_truthful_reporting(client, auth_headers):
+    """29. Model status API exposes truthful status for YOLO, Face, and Drone under RBAC."""
+    res = client.get(f"{settings.API_V1_STR}/ai/models/status", headers=auth_headers)
+    assert res.status_code == 200
+    models = res.json()
+    assert isinstance(models, list)
+    assert len(models) >= 3
+
+    valid_statuses = {"NOT_CONFIGURED", "FILE_MISSING", "LOADING", "LOADED", "ERROR"}
+    names = [m["model_name"] for m in models]
+    assert any("YOLO" in n for n in names)
+    assert any("Face" in n for n in names)
+    assert any("Drone" in n for n in names)
+
+    for m in models:
+        assert "model_name" in m
+        assert "model_path" in m
+        assert "configured" in m
+        assert "file_exists" in m
+        assert "loaded" in m
+        assert "status" in m
+        assert m["status"] in valid_statuses
+        assert "capabilities" in m
+
+def test_regression_30_missing_model_file_does_not_crash_backend():
+    """30. Backend handles missing model weights cleanly as FILE_MISSING without crashing or fabricating."""
+    from app.services.ai.detector import YOLOObjectDetector
+    import numpy as np
+
+    detector = YOLOObjectDetector(model_name="nonexistent_missing_weights_12345.pt")
+    assert detector.is_loaded is False
+    assert detector.status == "FILE_MISSING"
+    assert detector.error is not None
+
+    # Inference returns empty list cleanly, never fabricates fake detections
+    dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    detections = detector.detect(dummy_frame, "CAM-TEST")
+    assert detections == []
+
+def test_regression_31_drone_unconfigured_honest_status():
+    """31. Drone detector without dedicated weights honestly reports NOT_CONFIGURED or FILE_MISSING."""
+    from app.services.ai.detector import YOLOObjectDetector
+
+    detector = YOLOObjectDetector(model_name="yolov8n.pt")
+    # Drone status should be NOT_CONFIGURED if no dedicated drone weights configured
+    assert detector.drone_status in ["NOT_CONFIGURED", "FILE_MISSING", "LOADED"]
+    if detector.drone_status != "LOADED":
+        assert detector.drone_model is None
+

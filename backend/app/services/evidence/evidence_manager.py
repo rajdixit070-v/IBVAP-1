@@ -16,6 +16,20 @@ class EvidenceManager:
     Evidence registry with SHA-256 integrity checksum calculation and access audit logs.
     """
 
+    @staticmethod
+    def compute_sha256(data_bytes: Optional[bytes] = None, file_path: Optional[str] = None) -> Optional[str]:
+        """
+        Computes genuine 64-char hexadecimal SHA-256 digest from actual bytes or physical file.
+        Returns None if no actual bytes or file exists (never fabricates or hashes arbitrary metadata).
+        """
+        import os
+        if data_bytes is not None:
+            return hashlib.sha256(data_bytes).hexdigest()
+        if file_path and os.path.exists(file_path) and os.path.isfile(file_path):
+            with open(file_path, "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        return None
+
     def register_evidence(
         self,
         camera_id: str,
@@ -31,20 +45,15 @@ class EvidenceManager:
             now = datetime.utcnow()
             evd_id = f"EVD-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
             
-            # Compute SHA-256 checksum from actual bytes or file
+            # Compute real SHA-256 checksum from actual bytes or file
             import os
+            sha256 = self.compute_sha256(data_bytes=data_bytes, file_path=file_path)
             if data_bytes is not None:
-                sha256 = hashlib.sha256(data_bytes).hexdigest()
                 size = len(data_bytes)
             elif file_path and os.path.exists(file_path) and os.path.isfile(file_path):
-                with open(file_path, "rb") as f:
-                    file_content = f.read()
-                    sha256 = hashlib.sha256(file_content).hexdigest()
-                    size = len(file_content)
+                size = os.path.getsize(file_path)
             else:
-                raw = file_path.encode("utf-8") if file_path else evd_id.encode("utf-8")
-                sha256 = hashlib.sha256(raw).hexdigest()
-                size = len(raw)
+                size = 0
 
             record = Evidence(
                 evidence_id=evd_id,
@@ -61,7 +70,8 @@ class EvidenceManager:
             db.add(record)
             db.commit()
             db.refresh(record)
-            logger.info(f"Registered evidence {evd_id} ({evidence_type}) with SHA-256: {sha256[:12]}...")
+            hash_display = f"{sha256[:12]}..." if sha256 else "NONE"
+            logger.info(f"Registered evidence {evd_id} ({evidence_type}) with SHA-256: {hash_display}")
             return record
         finally:
             db.close()

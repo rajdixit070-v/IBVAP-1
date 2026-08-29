@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com)
 [![React 18](https://img.shields.io/badge/React-18+-61dafb.svg)](https://reactjs.org/)
 [![Zero-Trust Security](https://img.shields.io/badge/Security-Zero--Trust%20Hardened-emerald.svg)](docs/SECURITY.md)
-[![Tests Passing](https://img.shields.io/badge/Tests-250%2F250%20Passed-brightgreen.svg)](backend/tests/)
+[![Tests Passing](https://img.shields.io/badge/Tests-256%2F256%20Passed-brightgreen.svg)](backend/tests/)
 
 IBVAP is a production-grade, distributed edge-to-cloud security analytics platform designed for perimeter defense, real-time intrusion detection, ANPR, facial analytics, multi-camera handover, and federated command center operations across tactical border outposts (BOPs).
 
@@ -87,6 +87,68 @@ To connect live physical cameras in production without demo data:
    ```
 3. Credentials are encrypted at rest with AES-256 and URLs are masked in logs and API responses.
 4. If thermal or drone models are not loaded, the system reports stream available and model unconfigured without fabricating fake detections.
+
+---
+
+## 🤖 AI Model Provisioning & Truthful Runtime Status
+
+IBVAP implements strict model truthfulness and optional model resiliency. The platform never fabricates pseudo-random bounding boxes, fake detections, or heuristic biometric vectors when physical neural weights are absent.
+
+### 1. Configuration Variables
+| Model Variable | Default Path | Supported Capabilities | Fallback When Missing |
+|:---|:---|:---|:---|
+| `YOLO_MODEL_PATH` | `models/yolov8n.pt` | Person, Vehicle, Animal detection | Status: `FILE_MISSING` / `NOT_CONFIGURED`. Detections omitted. |
+| `FACE_MODEL_PATH` | `models/face_recognition_sface.onnx` | Biometric embedding extraction, Cosine similarity | Status: `FACE_MODEL_UNAVAILABLE`. Biometrics return `None`. |
+| `DRONE_MODEL_PATH` | `models/yolov8_drone.pt` | Dedicated UAV / Quadcopter detection | Status: `NOT_CONFIGURED`. Drone detections omitted. |
+
+### 2. Runtime Behavior When Model Weights are Missing
+- **Resilient Startup**: The backend boots up cleanly without crashing.
+- **Continuous Ingestion**: Live RTSP camera streams connect, ingest frames, and display in the UI normally.
+- **Zero Fabrication**: The system outputs empty detection lists for unprovisioned models rather than inventing synthetic detections.
+- **Truthful Status Reporting**: The status endpoint immediately exposes `FILE_MISSING` or `NOT_CONFIGURED`.
+- **Operator Dashboard**: The Command Center and AI telemetry view display clear `UNAVAILABLE` or `UNPROVISIONED` indicators.
+
+### 3. Verification API
+Inspect truthful runtime model provisioning via the RBAC-protected endpoint:
+```bash
+GET /api/v1/ai/models/status
+Authorization: Bearer <JWT_TOKEN>
+```
+Response format:
+```json
+[
+  {
+    "model_name": "YOLO Object Detector",
+    "model_path": "models/yolov8n.pt",
+    "configured": true,
+    "file_exists": true,
+    "loaded": true,
+    "status": "LOADED",
+    "error": null,
+    "capabilities": ["person", "vehicle", "animal"]
+  },
+  {
+    "model_name": "Face Biometric Recognizer (SFace/ArcFace)",
+    "model_path": "models/face_recognition_sface.onnx",
+    "configured": true,
+    "file_exists": false,
+    "loaded": false,
+    "status": "FILE_MISSING",
+    "error": "Face recognition model file not found at 'models/face_recognition_sface.onnx'.",
+    "capabilities": []
+  },
+  {
+    "model_name": "Dedicated Drone/UAV Detector",
+    "model_path": null,
+    "configured": false,
+    "file_exists": false,
+    "loaded": false,
+    "status": "NOT_CONFIGURED",
+    "error": null,
+    "capabilities": []
+  }
+]
+```
 
 ---
 

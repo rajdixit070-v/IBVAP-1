@@ -98,3 +98,17 @@ class AIRealTimeTelemetryMessage(BaseModel):
     latency_ms: float
     counters: CameraAICounters
     tracks: List[TrackedObject]
+
+class ModelStatusItem(BaseModel):
+    model_name: str
+    model_path: Optional[str] = None
+    configured: bool
+    file_exists: bool
+    loaded: bool
+    status: str  # NOT_CONFIGURED, FILE_MISSING, LOADING, LOADED, ERROR
+    error: Optional[str] = None
+    capabilities: List[str] = []
+
+class AIModelsOverviewResponse(BaseModel):
+    models: List[ModelStatusItem]
+    system_ready: bool

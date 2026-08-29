@@ -65,6 +65,7 @@ class MultimodalEventBase(BaseModel):
     timeline_json: str = "[]"
     graph_json: str = "{}"
     evidence_bundle_json: str = "{}"
+    evidence_sha256: Optional[str] = None
     status: str = "DETECTED"
     model_versions_json: str = "{}"
 

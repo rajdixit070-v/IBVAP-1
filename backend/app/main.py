@@ -232,6 +232,13 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                 if "resolution_notes" not in alert_cols:
                     conn.execute(text("ALTER TABLE alerts ADD COLUMN resolution_notes VARCHAR(500)"))
 
+            # Multimodal security events auto-migrations
+            cursor = conn.execute(text("PRAGMA table_info(multimodal_security_events)"))
+            mme_cols = [row[1] for row in cursor.fetchall()]
+            if mme_cols:
+                if "evidence_sha256" not in mme_cols:
+                    conn.execute(text("ALTER TABLE multimodal_security_events ADD COLUMN evidence_sha256 VARCHAR(64)"))
+
             conn.commit()
     except Exception as e:
         logger.warning(f"Schema auto-migration notice: {e}")

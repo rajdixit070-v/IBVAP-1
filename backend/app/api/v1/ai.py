@@ -11,9 +11,11 @@ from app.schemas.ai import (
     CameraAIStatus,
     CameraAIConfigSchema,
     CameraAIConfigUpdate,
-    TrackedObject
+    TrackedObject,
+    ModelStatusItem
 )
 from app.services.ai.pipeline import ai_pipeline_manager
+from app.services.ai.model_provisioning import get_ai_models_status
 
 router = APIRouter(prefix="/ai", tags=["AI Inference Pipeline"])
 
@@ -151,3 +153,17 @@ def get_ai_metrics(
         "model": ai_pipeline_manager.detector.model_name,
         "device": ai_pipeline_manager.detector.device_used
     }
+
+@router.get("/models/status", response_model=List[ModelStatusItem])
+@router.get("/model-status", response_model=List[ModelStatusItem])
+def get_ai_models_provisioning_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Returns truthful, authenticated runtime status for all configured AI models
+    (YOLO, SFace Face Biometrics, and Dedicated Drone Detector).
+    Exposes: model_name, model_path, configured, file_exists, loaded, status, error.
+    Status values: NOT_CONFIGURED, FILE_MISSING, LOADING, LOADED, ERROR.
+    """
+    is_admin = current_user.role in ["SUPER_ADMIN", "ADMIN", "SITE_ADMIN"]
+    return get_ai_models_status(is_admin=is_admin)

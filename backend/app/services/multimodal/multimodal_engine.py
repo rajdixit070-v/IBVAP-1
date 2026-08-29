@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_, and_
 
+import hashlib
 from app.models.multimodal_models import (
     AIObservation,
     MultimodalSecurityEvent,
@@ -17,6 +18,8 @@ from app.models.multimodal_models import (
 from app.models.camera import Camera
 from app.models.alert import Alert
 from app.models.incident import Incident
+from app.models.evidence import Evidence
+from app.services.evidence.evidence_manager import evidence_manager
 from app.services.federation.scope_service import ScopeService
 
 logger = logging.getLogger("ibvap.multimodal.engine")
@@ -111,7 +114,9 @@ class MultimodalEngine:
         # Multimodal Fusion Check
         fused_event = None
         if auto_fuse:
-            fused_event = cls.evaluate_fusion_rules(obs, db)
+            ev_bytes = observation_data.get("evidence_bytes")
+            ev_file = observation_data.get("evidence_file_path") or observation_data.get("file_path")
+            fused_event = cls.evaluate_fusion_rules(obs, db, evidence_bytes=ev_bytes, evidence_file_path=ev_file)
 
         return obs, fused_event
 
@@ -119,7 +124,9 @@ class MultimodalEngine:
     def evaluate_fusion_rules(
         cls,
         obs: AIObservation,
-        db: Session
+        db: Session,
+        evidence_bytes: Optional[bytes] = None,
+        evidence_file_path: Optional[str] = None
     ) -> Optional[MultimodalSecurityEvent]:
         """
         Section 4, 8, 9, 10, 11, 15, 24: Detection Fusion and Correlated Anomaly Generation.
@@ -284,14 +291,51 @@ class MultimodalEngine:
             "security_significance": "HIGH RISK: Requires immediate operational triage" if risk_score >= 75 else "ELEVATED: Monitored by Central SOC"
         }
 
+        # Check for actual evidence in observation metadata or registered Evidence records
+        evidence_sha256 = None
+        evidence_file_path = None
+        
+        meta = {}
+        if obs.metadata_json:
+            try:
+                meta = json.loads(obs.metadata_json) if isinstance(obs.metadata_json, str) else obs.metadata_json
+            except Exception:
+                meta = {}
+
+        raw_evidence = evidence_bytes or meta.get("evidence_bytes")
+        candidate_file = evidence_file_path or meta.get("evidence_file_path") or meta.get("file_path")
+        
+        if isinstance(raw_evidence, str):
+            try:
+                import base64
+                raw_evidence = base64.b64decode(raw_evidence)
+            except Exception:
+                pass
+        
+        if raw_evidence is not None:
+            evidence_sha256 = evidence_manager.compute_sha256(data_bytes=raw_evidence)
+        elif candidate_file:
+            evidence_sha256 = evidence_manager.compute_sha256(file_path=candidate_file)
+            if evidence_sha256:
+                evidence_file_path = candidate_file
+
+        # Check if an Evidence record exists in DB for this observation
+        if evidence_sha256 is None:
+            evd_record = db.query(Evidence).filter(Evidence.source_event_id == obs.observation_id).first()
+            if evd_record and evd_record.checksum_sha256:
+                evidence_sha256 = evd_record.checksum_sha256
+                evidence_file_path = evd_record.file_path
+
         # Evidence Bundle (Section 68-69)
+        # Never fabricate a fake SHA-256 or UUID hash if no actual evidence exists
         evidence_bundle = {
-            "snapshot_url": f"/api/v1/evidence/snapshots/{camera_id}_{obs.observation_id}.jpg",
-            "pre_event_clip_id": f"CLIP-PRE-{obs.observation_id}",
-            "event_clip_id": f"CLIP-ACT-{obs.observation_id}",
-            "post_event_clip_id": f"CLIP-PST-{obs.observation_id}",
-            "evidence_sha256": uuid.uuid4().hex,
-            "integrity_verified": True
+            "snapshot_url": f"/api/v1/evidence/snapshots/{camera_id}_{obs.observation_id}.jpg" if evidence_sha256 else None,
+            "pre_event_clip_id": f"CLIP-PRE-{obs.observation_id}" if evidence_sha256 else None,
+            "event_clip_id": f"CLIP-ACT-{obs.observation_id}" if evidence_sha256 else None,
+            "post_event_clip_id": f"CLIP-PST-{obs.observation_id}" if evidence_sha256 else None,
+            "file_path": evidence_file_path,
+            "evidence_sha256": evidence_sha256,
+            "integrity_verified": bool(evidence_sha256)
         }
 
         mme = MultimodalSecurityEvent(
@@ -319,6 +363,7 @@ class MultimodalEngine:
             timeline_json=json.dumps(timeline),
             graph_json=json.dumps(graph),
             evidence_bundle_json=json.dumps(evidence_bundle),
+            evidence_sha256=evidence_sha256,
             status="DETECTED",
             is_cooldown_suppressed=False,
             model_versions_json=json.dumps({obs.model_name: obs.model_version, "fusion_engine": "v2.0.0"}),
@@ -334,6 +379,70 @@ class MultimodalEngine:
         cls._cooldown_cache[cooldown_key] = now
         logger.info(f"Generated Correlated Multimodal Event: {mme.event_id} ({mme.event_type}) Risk={mme.risk_score}")
         return mme
+
+    @classmethod
+    def attach_evidence_to_event(
+        cls,
+        event_id: str,
+        data_bytes: Optional[bytes] = None,
+        file_path: Optional[str] = None,
+        db: Optional[Session] = None
+    ) -> Optional[MultimodalSecurityEvent]:
+        """
+        Attaches actual evidence bytes/file to an existing MultimodalSecurityEvent,
+        computes real canonical SHA-256 via EvidenceManager, and updates the event.
+        """
+        if not db:
+            from app.database import SessionLocal
+            db = SessionLocal()
+            close_db = True
+        else:
+            close_db = False
+
+        try:
+            mme = db.query(MultimodalSecurityEvent).filter(MultimodalSecurityEvent.event_id == event_id).first()
+            if not mme:
+                return None
+
+            sha256 = evidence_manager.compute_sha256(data_bytes=data_bytes, file_path=file_path)
+            if sha256:
+                mme.evidence_sha256 = sha256
+                bundle = {}
+                if mme.evidence_bundle_json:
+                    try:
+                        bundle = json.loads(mme.evidence_bundle_json)
+                    except Exception:
+                        bundle = {}
+                bundle["evidence_sha256"] = sha256
+                bundle["integrity_verified"] = True
+                if file_path:
+                    bundle["file_path"] = file_path
+                mme.evidence_bundle_json = json.dumps(bundle)
+                db.commit()
+                db.refresh(mme)
+            return mme
+        finally:
+            if close_db:
+                db.close()
+
+    @classmethod
+    def verify_event_evidence(
+        cls,
+        event_id: str,
+        data_bytes: bytes,
+        db: Session
+    ) -> bool:
+        """
+        Verifies actual evidence bytes against stored MultimodalSecurityEvent.evidence_sha256.
+        Returns False if event not found, no stored hash, or bytes mismatch.
+        """
+        if not data_bytes:
+            return False
+        mme = db.query(MultimodalSecurityEvent).filter(MultimodalSecurityEvent.event_id == event_id).first()
+        if not mme or not mme.evidence_sha256:
+            return False
+        computed = hashlib.sha256(data_bytes).hexdigest()
+        return computed == mme.evidence_sha256
 
     @staticmethod
     def _fuse_confidence_scores(confidences: List[float]) -> float:

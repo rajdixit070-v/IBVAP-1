@@ -15,7 +15,7 @@ class Evidence(Base):
     evidence_type = Column(String(30), default="SNAPSHOT", nullable=False)
     
     file_path = Column(String(500), nullable=False)
-    checksum_sha256 = Column(String(64), nullable=False) # SHA-256 integrity hash
+    checksum_sha256 = Column(String(64), nullable=True) # SHA-256 integrity hash (None if no actual evidence bytes)
     mime_type = Column(String(50), default="image/jpeg")
     file_size_bytes = Column(BigInteger, default=0)
     

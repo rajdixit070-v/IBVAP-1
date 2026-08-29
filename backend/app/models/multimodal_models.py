@@ -111,6 +111,7 @@ class MultimodalSecurityEvent(Base):
     
     # Evidence Bundle & Hash Integrity
     evidence_bundle_json = Column(Text, default='{}')         # {"pre_clip_id": "...", "post_clip_id": "...", "snapshot_url": "...", "hash": "..."}
+    evidence_sha256 = Column(String(64), nullable=True, index=True) # Real SHA-256 digest of attached evidence
     
     # Lifecycle & Deduplication
     status = Column(String(30), default="DETECTED", index=True) # DETECTED, CONFIRMED, ACKNOWLEDGED, RESOLVED, FALSE_POSITIVE, UNCERTAIN

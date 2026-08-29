@@ -77,34 +77,55 @@ class FaceEmbeddingEngine:
         self.model_path = model_path or getattr(settings, "FACE_MODEL_PATH", "face_recognition_sface.onnx")
         self.model = None
         self.is_loaded = False
-        self.status = "FACE_MODEL_UNAVAILABLE"
+        self.status = "NOT_CONFIGURED"
+        self.error: Optional[str] = None
+        self.resolved_path: Optional[str] = None
         self._initialize_model()
+
+    @property
+    def face_model_status(self) -> str:
+        """Backward-compatible biometric status."""
+        if self.status == "LOADED":
+            return "FACE_MODEL_LOADED"
+        elif self.status == "ERROR":
+            return "FACE_MODEL_ERROR"
+        return "FACE_MODEL_UNAVAILABLE"
 
     def _initialize_model(self):
         """Attempts to load real SFace/ONNX neural face recognizer if model file is present."""
-        resolved_path = self._resolve_model_path(self.model_path)
-        if not resolved_path or not os.path.exists(resolved_path):
+        self.error = None
+        self.is_loaded = False
+        self.model = None
+
+        if not self.model_path:
             self.status = "FACE_MODEL_UNAVAILABLE"
-            self.is_loaded = False
+            logger.info("Face recognition model not configured (FACE_MODEL_PATH is empty).")
+            return
+
+        self.resolved_path = self._resolve_model_path(self.model_path)
+        if not self.resolved_path or not os.path.exists(self.resolved_path):
+            self.status = "FACE_MODEL_UNAVAILABLE"
+            self.error = f"Face recognition model file not found at '{self.model_path}'."
             logger.info(f"Face recognition neural weights not found at '{self.model_path}'. Status: {self.status}.")
             return
 
         try:
             # Attempt to create SFace recognizer via OpenCV DNN module
             if hasattr(cv2, "FaceRecognizerSF"):
-                self.model = cv2.FaceRecognizerSF.create(resolved_path, "")
+                self.model = cv2.FaceRecognizerSF.create(self.resolved_path, "")
                 self.is_loaded = True
                 self.status = "FACE_MODEL_LOADED"
-                logger.info(f"Face recognizer model successfully loaded from '{resolved_path}'.")
+                logger.info(f"Face recognizer model successfully loaded from '{self.resolved_path}'.")
             else:
-                self.model = cv2.dnn.readNet(resolved_path)
+                self.model = cv2.dnn.readNet(self.resolved_path)
                 self.is_loaded = True
                 self.status = "FACE_MODEL_LOADED"
-                logger.info(f"Generic ONNX face model loaded from '{resolved_path}'.")
+                logger.info(f"Generic ONNX face model loaded from '{self.resolved_path}'.")
         except Exception as e:
             self.status = "FACE_MODEL_ERROR"
+            self.error = str(e)
             self.is_loaded = False
-            logger.error(f"Failed to load face recognition model from '{resolved_path}': {e}")
+            logger.error(f"Failed to load face recognition model from '{self.resolved_path}': {e}")
 
     def _resolve_model_path(self, path: str) -> Optional[str]:
         if not path:
