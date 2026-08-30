@@ -150,6 +150,20 @@ def test_risk_score_decay():
 
 def test_behaviour_events_api_and_pagination(db_session, auth_headers):
     """Test behaviour events listing, search, and pagination endpoints."""
+    if db_session.query(BehaviourEvent).count() == 0:
+        evt = BehaviourEvent(
+            event_id=f"BEH-TEST-{uuid.uuid4().hex[:6]}",
+            camera_id="CAM-001",
+            local_track_id=1,
+            event_type="REPEATED_APPROACH",
+            risk_level="HIGH",
+            risk_score=75,
+            factors_json=json.dumps([{"factor": "Repeated Approach", "weight": 25, "description": "Subject repeatedly approaching boundary line"}]),
+            counter_factors_json=json.dumps([])
+        )
+        db_session.add(evt)
+        db_session.commit()
+
     res = client.get("/api/v1/behaviour/events?limit=10", headers=auth_headers)
     assert res.status_code == 200
     events = res.json()
@@ -199,8 +213,21 @@ def test_behaviour_rules_crud_and_versioning(db_session, auth_headers):
     assert audit is not None
 
 def test_operator_feedback_and_false_positive_metrics(db_session, auth_headers):
-    """Test operator feedback submission and analytics summary calculation."""
     # Find or emit an event
+    if db_session.query(BehaviourEvent).count() == 0:
+        evt = BehaviourEvent(
+            event_id=f"BEH-TEST-{uuid.uuid4().hex[:6]}",
+            camera_id="CAM-001",
+            local_track_id=1,
+            event_type="REPEATED_APPROACH",
+            risk_level="HIGH",
+            risk_score=75,
+            factors_json=json.dumps([{"factor": "Repeated Approach", "weight": 25, "description": "Subject repeatedly approaching boundary line"}]),
+            counter_factors_json=json.dumps([])
+        )
+        db_session.add(evt)
+        db_session.commit()
+
     res = client.get("/api/v1/behaviour/events?limit=1", headers=auth_headers)
     events = res.json()
     assert len(events) >= 1

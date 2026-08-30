@@ -24,9 +24,11 @@ import { EnterpriseSecurityPage } from './pages/EnterpriseSecurityPage';
 import { CameraDetailsModal } from './components/cameras/CameraDetailsModal';
 import { CameraModal } from './components/cameras/CameraModal';
 import { SituationalMapModal } from './components/incidents/SituationalMapModal';
+import { AIAssistantModal } from './components/multimodal/AIAssistantModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { DemoModeBanner } from './components/common/DemoModeBanner';
 import { Camera } from './types/camera';
+import { Bot } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -34,6 +36,7 @@ const MainLayout: React.FC = () => {
   const [selectedCameraForEdit, setSelectedCameraForEdit] = useState<Camera | null>(null);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [globalMapOpen, setGlobalMapOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   const { refreshCameras } = useCameras();
 
@@ -48,7 +51,10 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0b0f17] text-slate-100">
-      <Header onOpenMap={() => setGlobalMapOpen(true)} />
+      <Header
+        onOpenMap={() => setGlobalMapOpen(true)}
+        onOpenAssistant={() => setAssistantOpen(true)}
+      />
       <div className="flex-1 flex overflow-hidden">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         <main className="flex-1 overflow-y-auto bg-[#070b12]">
@@ -112,6 +118,22 @@ const MainLayout: React.FC = () => {
         onInspectCamera={(cam) => {
           setSelectedCameraForInspection(cam);
         }}
+      />
+
+      {/* Floating AI Virtual Assistant Action Button */}
+      <button
+        onClick={() => setAssistantOpen(true)}
+        className="fixed bottom-6 right-6 z-40 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white px-4 py-2.5 rounded-full shadow-2xl shadow-cyan-500/40 flex items-center gap-2 border border-cyan-400/40 group transition-all transform hover:scale-105"
+        title="Open AI Virtual Assistant Copilot"
+      >
+        <Bot className="w-4 h-4 text-cyan-200 group-hover:rotate-12 transition-transform" />
+        <span className="text-xs font-bold font-mono tracking-wide">AI Copilot</span>
+      </button>
+
+      {/* Global AI Virtual Assistant Modal */}
+      <AIAssistantModal
+        isOpen={assistantOpen}
+        onClose={() => setAssistantOpen(false)}
       />
     </div>
   );

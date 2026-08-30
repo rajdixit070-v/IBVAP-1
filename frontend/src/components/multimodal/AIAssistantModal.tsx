@@ -26,10 +26,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const [response, setResponse] = useState<AIAssistantResponse | null>(null);
 
   const sampleQueries = [
-    'Show high risk night time events in Alpha',
-    'Vehicles detected with plate reads in sector north',
-    'Prolonged presence and loitering violations',
-    'Critical alerts on perimeter fence'
+    'What is system status?',
+    'How to add a camera?',
+    'How to draw a geofence zone?',
+    'How to add vehicle watchlist plate?',
+    'How to register suspect face?',
+    'How to run Incident SOP playbooks?',
+    'Show high risk night time events',
+    'Check AI model engines status'
   ];
 
   const handleSearch = async (qText: string) => {
@@ -136,7 +140,9 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 <div className="text-xs font-mono text-cyan-400 mb-1 flex items-center gap-1.5 uppercase">
                   <CheckCircle className="w-3.5 h-3.5" /> AI Synthesis & Citations
                 </div>
-                <p className="text-xs text-slate-200 leading-relaxed">{response.explanation}</p>
+                <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-line font-sans">
+                  {response.explanation}
+                </div>
 
                 {/* Citations list */}
                 {response.cited_event_ids.length > 0 && (

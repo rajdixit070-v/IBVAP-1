@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut } from 'lucide-react';
+import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
@@ -7,9 +7,10 @@ import { incidentService } from '../../services/incidentService';
 
 interface HeaderProps {
   onOpenMap?: () => void;
+  onOpenAssistant?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenMap }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant }) => {
   const { user, logout } = useAuth();
   const { summary, refreshCameras, loading } = useCameras();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -78,6 +79,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap }) => {
               <span className="text-slate-600">|</span>
               <span className="text-rose-400">OFFLINE: <strong>{summary.offline}</strong></span>
             </div>
+          )}
+
+          {/* AI Virtual Assistant Trigger Button */}
+          {onOpenAssistant && (
+            <button
+              onClick={onOpenAssistant}
+              className="px-2.5 py-1.5 bg-gradient-to-r from-cyan-500/10 to-sky-500/10 hover:from-cyan-500/20 hover:to-sky-500/20 text-cyan-400 hover:text-cyan-300 rounded-lg border border-cyan-500/30 transition flex items-center gap-1.5 text-xs font-mono shadow-sm"
+              title="Open AI Virtual Assistant (Operational Workflows & Telemetry)"
+            >
+              <Bot className="w-4 h-4 text-cyan-400" />
+              <span className="hidden sm:inline font-semibold">AI Copilot</span>
+            </button>
           )}
 
           {/* Situational Map Trigger Button */}
