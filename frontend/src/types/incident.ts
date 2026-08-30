@@ -86,6 +86,10 @@ export interface Notification {
   is_read?: boolean;
   incident_id?: string;
   alert_id?: string;
+  evidence_id?: string;
+  evidence_url?: string;
+  camera_id?: string;
+  location_description?: string;
   created_at: string;
 }
 

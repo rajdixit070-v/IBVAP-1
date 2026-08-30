@@ -67,7 +67,7 @@ def build_authenticated_rtsp_url(base_rtsp_url: str, username: Optional[str], pa
     """Safely builds full RTSP URL injecting username and password if provided."""
     if not base_rtsp_url:
         return ""
-    if not username or not password:
+    if not username or not password or base_rtsp_url.startswith(("webcam://", "device://")) or base_rtsp_url.isdigit():
         return base_rtsp_url
     if "://" in base_rtsp_url:
         proto, host_path = base_rtsp_url.split("://", 1)

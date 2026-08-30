@@ -195,6 +195,11 @@ export const DemoModeBanner: React.FC = () => {
   const totalStepsCount = scenarios.find((s) => s.id === selectedScenario)?.steps_count || 16;
   const currentStepNum = running && currentStepIndex > 0 ? currentStepIndex : (status?.current_step || 0);
 
+  // If demo mode is not enabled and not actively running, do not render demo controls
+  if (status && !status.demo_mode_enabled && !status.demo_active) {
+    return null;
+  }
+
   return (
     <>
       {/* Floating Demo Control Trigger Button */}

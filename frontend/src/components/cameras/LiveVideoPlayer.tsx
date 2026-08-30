@@ -10,7 +10,6 @@ import {
   Minimize2,
   Camera as CameraIcon,
   AlertTriangle,
-  Radio,
   Cpu,
   Eye,
   EyeOff,
@@ -214,25 +213,23 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
 
         {/* Main Video & Detection Overlay Surface */}
         <div className="relative flex-1 flex items-center justify-center min-h-[220px] bg-slate-950 overflow-hidden">
-          {camera.enabled && camera.status === 'HEALTHY' && (
+          {camera.enabled && camera.status !== 'OFFLINE' ? (
             <>
-              {useFallbackMjpeg ? (
-                <img
-                  src={cameraService.getLiveStreamUrl(camera.camera_id)}
-                  alt={camera.camera_name}
-                  className="w-full h-full object-contain"
-                />
-              ) : frameSrc ? (
+              {frameSrc ? (
                 <img
                   src={frameSrc}
                   alt={camera.camera_name}
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <div className="flex flex-col items-center gap-2 text-slate-400">
-                  <Radio className="w-8 h-8 text-sky-400 animate-spin" />
-                  <span className="text-xs font-mono">CONNECTING TO RTSP STREAM...</span>
-                </div>
+                <img
+                  src={cameraService.getLiveStreamUrl(camera.camera_id)}
+                  alt={camera.camera_name}
+                  className="w-full h-full object-contain"
+                  onError={() => {
+                    // Fallback to retrying or showing connection spinner
+                  }}
+                />
               )}
 
               {/* Tactical Bounding Boxes & Virtual Zones Overlay */}
@@ -245,25 +242,19 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                 />
               )}
             </>
-          )}
-
-          {/* Offline or Disabled State */}
-          {(!camera.enabled || camera.status !== 'HEALTHY') && (
+          ) : (
+            /* Offline or Disabled State */
             <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400 space-y-2">
               <div className="w-12 h-12 rounded-full bg-slate-900/80 border border-slate-800 flex items-center justify-center text-slate-500">
                 <AlertTriangle className="w-6 h-6 text-amber-400/80" />
               </div>
               <div className="font-mono text-sm font-semibold text-slate-300 uppercase">
-                {camera.status === 'OFFLINE'
-                  ? 'STREAM OFFLINE'
-                  : camera.status === 'DEGRADED'
-                  ? 'STREAM DEGRADED / RECONNECTING'
-                  : 'CAMERA DISABLED'}
+                {!camera.enabled ? 'CAMERA DISABLED' : 'STREAM OFFLINE'}
               </div>
               <p className="text-xs text-slate-500 max-w-xs">
-                {camera.status === 'OFFLINE'
-                  ? 'Camera stream disconnected. Backend automatic exponential backoff is actively retrying.'
-                  : 'Click Test Connection or check network routing to RTSP endpoint.'}
+                {!camera.enabled
+                  ? 'Camera feed is disabled by administrator policy.'
+                  : 'Camera stream disconnected. Backend automatic exponential backoff is actively retrying.'}
               </p>
             </div>
           )}

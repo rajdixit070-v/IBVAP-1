@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { NormalizedPoint } from '../../types/zone';
+import { NormalizedPoint, SecurityZone } from '../../types/zone';
 import { MousePointer, RotateCcw, Trash2 } from 'lucide-react';
 
 interface ZoneDrawingCanvasProps {
   isDrawing: boolean;
   points: NormalizedPoint[];
   onPointsChange: (points: NormalizedPoint[]) => void;
+  existingZones?: SecurityZone[];
   className?: string;
 }
 
@@ -13,6 +14,7 @@ export const ZoneDrawingCanvas: React.FC<ZoneDrawingCanvasProps> = ({
   isDrawing,
   points,
   onPointsChange,
+  existingZones = [],
   className = ''
 }) => {
   const containerRef = useRef<SVGSVGElement>(null);
@@ -56,7 +58,7 @@ export const ZoneDrawingCanvas: React.FC<ZoneDrawingCanvasProps> = ({
   const svgPointsString = points.map((p) => `${p.x * 100},${p.y * 100}`).join(' ');
 
   return (
-    <div className={`relative w-full h-full ${className}`}>
+    <div className={`absolute inset-0 w-full h-full ${isDrawing ? 'z-20' : 'z-10 pointer-events-none'} ${className}`}>
       <svg
         ref={containerRef}
         onClick={handleSvgClick}
@@ -64,15 +66,57 @@ export const ZoneDrawingCanvas: React.FC<ZoneDrawingCanvasProps> = ({
         onMouseLeave={() => setCursorPos(null)}
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
-        className={`absolute inset-0 w-full h-full ${isDrawing ? 'cursor-crosshair' : 'pointer-events-none'}`}
+        className={`w-full h-full ${isDrawing ? 'cursor-crosshair' : 'pointer-events-none'}`}
       >
-        {/* Closed Polygon Fill & Stroke if >= 3 points */}
+        {/* Render Already Configured Security Zones */}
+        {existingZones.map((zone) => {
+          if (!zone.polygon || zone.polygon.length < 3) return null;
+          const zonePointsStr = zone.polygon.map((p) => `${p.x * 100},${p.y * 100}`).join(' ');
+          let fillColor = 'rgba(244, 63, 94, 0.15)';
+          let strokeColor = '#f43f5e';
+          if (zone.zone_type === 'MONITORING') {
+            fillColor = 'rgba(16, 185, 129, 0.15)';
+            strokeColor = '#10b981';
+          } else if (zone.zone_type === 'BUFFER') {
+            fillColor = 'rgba(14, 165, 233, 0.15)';
+            strokeColor = '#0ea5e9';
+          } else if (zone.zone_type === 'HIGH_SECURITY') {
+            fillColor = 'rgba(245, 158, 11, 0.15)';
+            strokeColor = '#f59e0b';
+          }
+
+          const centerPoint = zone.polygon[0];
+
+          return (
+            <g key={zone.zone_id} opacity={zone.enabled ? 1.0 : 0.4}>
+              <polygon
+                points={zonePointsStr}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth="0.5"
+                strokeDasharray={zone.enabled ? 'none' : '1, 1'}
+              />
+              <text
+                x={centerPoint.x * 100 + 1}
+                y={centerPoint.y * 100 - 1}
+                fontSize="2.2"
+                fill={strokeColor}
+                fontFamily="monospace"
+                fontWeight="bold"
+              >
+                {zone.name}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Currently Drawing Closed Polygon Fill & Stroke if >= 3 points */}
         {points.length >= 3 && (
           <polygon
             points={svgPointsString}
-            fill="rgba(244, 63, 94, 0.25)"
-            stroke="#f43f5e"
-            strokeWidth="0.75"
+            fill="rgba(56, 189, 248, 0.25)"
+            stroke="#38bdf8"
+            strokeWidth="0.8"
             strokeDasharray={isDrawing ? '1, 1' : 'none'}
           />
         )}

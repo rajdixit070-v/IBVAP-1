@@ -19,7 +19,7 @@ class SSRFValidator:
         "::1"
     ]
 
-    ALLOWED_SCHEMES = ["rtsp", "rtsps", "http", "https", "synthetic"]
+    ALLOWED_SCHEMES = ["rtsp", "rtsps", "http", "https", "synthetic", "test", "webcam", "device", "rtmp", "rtmps", "udp"]
 
     @classmethod
     def validate_destination_url(
@@ -34,14 +34,26 @@ class SSRFValidator:
         if not url:
             return False, "Target URL cannot be empty."
 
+        clean_url = url.strip()
+        # Local webcams and synthetic testing streams bypass remote network SSRF checks
+        if clean_url.startswith(("webcam://", "device://")) or clean_url.isdigit():
+            return True, None
+
+        if clean_url.startswith(("synthetic://", "test://")):
+            return True, None
+
         try:
-            parsed = urllib.parse.urlparse(url)
+            parsed = urllib.parse.urlparse(clean_url)
         except Exception as e:
             return False, f"Malformed URL: {str(e)}"
 
         scheme = parsed.scheme.lower()
         if scheme not in cls.ALLOWED_SCHEMES:
             return False, f"Disallowed protocol scheme '{scheme}'. Supported: {', '.join(cls.ALLOWED_SCHEMES)}"
+
+        # Drone UDP stream receivers listen locally on 0.0.0.0 or ground station ports
+        if scheme == "udp":
+            return True, None
 
         hostname = parsed.hostname
         if not hostname:
@@ -51,7 +63,10 @@ class SSRFValidator:
 
         # Check explicit forbidden hosts
         if hostname_lower in cls.FORBIDDEN_HOSTS:
-            return False, f"Security Violation: Target host '{hostname}' is strictly forbidden (Cloud Metadata / Loopback)."
+            if allow_internal_subnets and hostname_lower in ("127.0.0.1", "localhost", "0.0.0.0", "::1"):
+                pass  # Permitted for local testing, drone ground station, and mobile IP cameras
+            else:
+                return False, f"Security Violation: Target host '{hostname}' is strictly forbidden (Cloud Metadata / Loopback)."
 
         # Try parsing as IP address
         try:

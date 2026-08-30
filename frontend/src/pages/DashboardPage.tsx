@@ -280,16 +280,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       </div>
 
       {/* Live Recent Security Incidents Ticker */}
-      {recentEvents.length > 0 && (
-        <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-[#1e293b] pb-2">
-            <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-sky-400" />
-              LATEST DETECTED THREAT INCIDENTS
-            </h4>
-            <span className="text-[11px] font-mono text-slate-400">Live Real-Time Stream</span>
-          </div>
+      <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between border-b border-[#1e293b] pb-2">
+          <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-sky-400" />
+            LATEST DETECTED THREAT INCIDENTS
+          </h4>
+          <span className="text-[11px] font-mono text-slate-400">Live Real-Time Stream</span>
+        </div>
 
+        {recentEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {recentEvents.map((evt) => (
               <div
@@ -311,8 +311,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="py-6 text-center space-y-1.5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              PERIMETER SECURE • NO ACTIVE THREAT INCIDENTS DETECTED
+            </div>
+            <p className="text-[11px] font-mono text-slate-500 max-w-xl mx-auto">
+              Real-time threat events will stream here automatically when perimeter intrusions, unauthorized vehicle loitering, or anomalous target tracks are verified.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Camera Infrastructure Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

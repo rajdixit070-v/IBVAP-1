@@ -1,7 +1,7 @@
 import React from 'react';
 import { Camera } from '../../types/camera';
 import { StatusBadge } from '../common/StatusBadge';
-import { Activity, Eye, Edit2, Trash2 } from 'lucide-react';
+import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone } from 'lucide-react';
 
 interface CameraCardProps {
   camera: Camera;
@@ -18,6 +18,30 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   onDelete,
   onTest
 }) => {
+  const url = camera.rtsp_url || '';
+  const st = camera.stream_type || '';
+  let SourceIcon = Video;
+  let sourceBadge = 'RTSP';
+  let sourceClass = 'bg-sky-950/60 border-sky-500/30 text-sky-300';
+  let iconColor = 'text-sky-400';
+
+  if (st === 'webcam' || url.startsWith('webcam://')) {
+    SourceIcon = Laptop;
+    sourceBadge = 'WEBCAM';
+    sourceClass = 'bg-cyan-950/60 border-cyan-500/30 text-cyan-300';
+    iconColor = 'text-cyan-400';
+  } else if (st === 'drone' || url.startsWith('udp://') || url.startsWith('rtmp://')) {
+    SourceIcon = Plane;
+    sourceBadge = 'DRONE';
+    sourceClass = 'bg-purple-950/60 border-purple-500/30 text-purple-300';
+    iconColor = 'text-purple-400';
+  } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
+    SourceIcon = Smartphone;
+    sourceBadge = 'ANDROID';
+    sourceClass = 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300';
+    iconColor = 'text-emerald-400';
+  }
+
   return (
     <div className="bg-[#111a2e] border border-[#1e293b] hover:border-sky-500/40 rounded-xl overflow-hidden shadow-lg transition-all flex flex-col justify-between group">
       {/* Header */}
@@ -26,6 +50,10 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
               {camera.camera_id}
+            </span>
+            <span className={`px-1.5 py-0.2 rounded border font-mono text-[9px] font-bold flex items-center gap-1 ${sourceClass}`}>
+              <SourceIcon className={`w-3 h-3 ${iconColor}`} />
+              {sourceBadge}
             </span>
             <StatusBadge status={camera.status} />
           </div>
@@ -36,7 +64,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
 
         <button
           onClick={() => onView(camera)}
-          className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded-lg transition"
+          className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded-lg transition cursor-pointer"
           title="Open Live Inspection"
         >
           <Eye className="w-4 h-4" />

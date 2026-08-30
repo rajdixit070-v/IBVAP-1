@@ -103,6 +103,18 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
               </div>
               <div className="text-xs font-bold text-white">{n.title}</div>
               <p className="text-[11px] text-slate-400 leading-snug">{n.message}</p>
+              {(n.evidence_url || n.evidence_id) && (
+                <div className="mt-2 rounded-lg overflow-hidden border border-slate-700 bg-black/40">
+                  <img
+                    src={n.evidence_url || `/api/v1/evidence/${n.evidence_id}/file`}
+                    alt="Forensic Evidence"
+                    className="w-full h-24 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).parentElement?.classList.add('hidden');
+                    }}
+                  />
+                </div>
+              )}
             </div>
           ))
         )}

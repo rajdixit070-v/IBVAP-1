@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot } from 'lucide-react';
+import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
 import { incidentService } from '../../services/incidentService';
+import { alertSoundService } from '../../services/alertSoundService';
 
 interface HeaderProps {
   onOpenMap?: () => void;
   onOpenAssistant?: () => void;
+  onToggleSidebar?: () => void;
+  sidebarOpen?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onToggleSidebar, sidebarOpen = true }) => {
   const { user, logout } = useAuth();
   const { summary, refreshCameras, loading } = useCameras();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isMuted, setIsMuted] = useState(alertSoundService.isMuted());
 
   useEffect(() => {
     loadUnread();
@@ -33,11 +37,26 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant }) =>
 
   return (
     <>
-      <header className="h-16 bg-[#0d131f] border-b border-[#1e293b] px-6 flex items-center justify-between sticky top-0 z-30">
-        {/* Brand & Badge */}
-        <div className="flex items-center gap-4">
+      <header className="h-16 bg-[#0d131f] border-b border-[#1e293b] px-4 md:px-6 flex items-center justify-between shrink-0 z-30 select-none">
+        {/* Brand & Badge & Hamburger */}
+        <div className="flex items-center gap-3">
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className={`p-2 rounded-lg transition-colors border ${
+                sidebarOpen
+                  ? 'text-cyan-400 bg-cyan-950/40 border-cyan-800/60 hover:bg-cyan-900/50'
+                  : 'text-slate-400 bg-slate-900/60 border-slate-800 hover:text-white hover:bg-slate-800'
+              }`}
+              title={sidebarOpen ? "Collapse Operational Modules" : "Expand Operational Modules"}
+              aria-label="Toggle Operational Modules Sidebar"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shadow-lg shadow-sky-500/10">
+            <div className="w-10 h-10 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shadow-lg shadow-sky-500/10 shrink-0">
               <Shield className="w-6 h-6 text-sky-400" />
             </div>
             <div>
@@ -117,6 +136,25 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant }) =>
                 {unreadCount}
               </span>
             )}
+          </button>
+
+          {/* Audio Alarm Mute/Unmute Toggle */}
+          <button
+            onClick={() => {
+              const nextMuted = alertSoundService.toggleMute();
+              setIsMuted(nextMuted);
+              if (!nextMuted) {
+                alertSoundService.playAlarm('INFO');
+              }
+            }}
+            className={`p-2 rounded-lg border transition flex items-center gap-1 text-xs font-mono cursor-pointer ${
+              !isMuted
+                ? 'text-cyan-300 bg-cyan-950/40 border-cyan-500/40 hover:bg-cyan-900/50 shadow-sm'
+                : 'text-slate-500 bg-slate-900/60 border-slate-800 hover:text-slate-400'
+            }`}
+            title={!isMuted ? "Tactical Audio Threat Siren Active (Click to Mute)" : "Tactical Audio Alarm Muted (Click to Unmute)"}
+          >
+            {!isMuted ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
           </button>
 
           {/* Sync Button */}

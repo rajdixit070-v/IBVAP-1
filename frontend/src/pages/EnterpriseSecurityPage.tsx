@@ -203,13 +203,18 @@ export const EnterpriseSecurityPage: React.FC = () => {
 
       {/* Top Executive Posture Strip */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3.5">
-        <div className="bg-[#0e1626] border border-slate-800 p-3.5 rounded-xl">
-          <div className="text-[11px] font-mono text-slate-400 uppercase">Posture Score</div>
+        <div className="bg-[#0e1626] border border-slate-800 p-3.5 rounded-xl group relative">
+          <div className="text-[11px] font-mono text-slate-400 uppercase flex items-center justify-between">
+            <span>Posture Score</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 font-mono">
+              ZERO-TRUST
+            </span>
+          </div>
           <div className="text-xl font-bold text-cyan-400 mt-1">
             {overview?.posture_score ?? 88} / 100
           </div>
-          <div className="text-[10px] text-emerald-400 font-mono mt-0.5">
-            Status: {overview?.overall_status ?? 'STRONG'}
+          <div className="text-[10px] text-emerald-400 font-mono mt-0.5" title="Hardware & architectural hardening: AES-256 Fernet, Bcrypt-72, Anti-SSRF">
+            Architecture: {overview?.overall_status ?? 'HARDENED'}
           </div>
         </div>
 
@@ -585,43 +590,116 @@ export const EnterpriseSecurityPage: React.FC = () => {
 
       {/* Sub-Tab 6: Password Policy Simulator */}
       {activeSubTab === 'policy' && (
-        <div className="max-w-xl bg-[#0e1626] border border-slate-800 p-6 rounded-xl space-y-4">
-          <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-            <Lock className="w-4 h-4 text-cyan-400" /> Live Password Complexity & Policy Validator
-          </h3>
-          <p className="text-xs text-slate-400">
-            Simulate password strength rules (minimum 8 chars, uppercase, lowercase, numbers, special characters).
-          </p>
+        <div className="max-w-2xl bg-[#0e1626] border border-slate-800 p-6 rounded-xl space-y-5 shadow-2xl">
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <Lock className="w-4 h-4 text-cyan-400" /> Live Password Complexity & Policy Validator
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              SOC administrators use this testing utility to verify that candidate credentials for operators, border posts, and API service accounts meet military-grade Zero-Trust complexity requirements before saving.
+            </p>
+          </div>
+
+          {/* Quick Preset Buttons */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-[11px] font-mono text-slate-500 font-bold uppercase mr-1">Quick Presets:</span>
+            <button
+              type="button"
+              onClick={() => handleTestPassword('admin123')}
+              className="px-2.5 py-1 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-500/30 rounded text-[11px] font-mono transition cursor-pointer"
+            >
+              Test Weak: "admin123"
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTestPassword('BorderPass2026')}
+              className="px-2.5 py-1 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 border border-amber-500/30 rounded text-[11px] font-mono transition cursor-pointer"
+            >
+              Test Medium: "BorderPass2026"
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTestPassword('Admin@IBVAP2026!')}
+              className="px-2.5 py-1 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-500/30 rounded text-[11px] font-mono transition cursor-pointer"
+            >
+              Test Strong: "Admin@IBVAP2026!"
+            </button>
+            {testPassword && (
+              <button
+                type="button"
+                onClick={() => handleTestPassword('')}
+                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[11px] font-mono transition cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Enter Password to Validate:</label>
+            <label className="block text-xs font-mono text-slate-300 mb-1.5 font-semibold">Candidate Password to Validate:</label>
             <input
               type="text"
-              placeholder="Type a candidate password..."
+              placeholder="Type candidate password (e.g. Admin@IBVAP2026)..."
               value={testPassword}
               onChange={(e) => handleTestPassword(e.target.value)}
-              className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono"
+              className="w-full p-3 bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-lg text-xs text-white font-mono placeholder-slate-600 focus:outline-none transition"
             />
           </div>
 
+          {/* Interactive 5-Point Policy Checklist */}
+          {testPassword && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl font-mono text-[11px]">
+              <div className={`flex items-center gap-1.5 ${testPassword.length >= 8 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                <span>{testPassword.length >= 8 ? '✓' : '○'}</span>
+                <span>Length (8+ chars)</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(testPassword) ? 'text-emerald-400' : 'text-slate-500'}`}>
+                <span>{/[A-Z]/.test(testPassword) ? '✓' : '○'}</span>
+                <span>Uppercase (A-Z)</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[a-z]/.test(testPassword) ? 'text-emerald-400' : 'text-slate-500'}`}>
+                <span>{/[a-z]/.test(testPassword) ? '✓' : '○'}</span>
+                <span>Lowercase (a-z)</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[0-9]/.test(testPassword) ? 'text-emerald-400' : 'text-slate-500'}`}>
+                <span>{/[0-9]/.test(testPassword) ? '✓' : '○'}</span>
+                <span>Digit (0-9)</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\/`~]/.test(testPassword) ? 'text-emerald-400' : 'text-slate-500'}`}>
+                <span>{/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\/`~]/.test(testPassword) ? '✓' : '○'}</span>
+                <span>Special Character</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${!testPassword.toLowerCase().includes('admin') ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <span>{!testPassword.toLowerCase().includes('admin') ? '✓' : '!'}</span>
+                <span>No Username Match</span>
+              </div>
+            </div>
+          )}
+
           {policyResult && (
-            <div className="p-4 bg-slate-950 border border-slate-800 rounded-lg space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold">Compliance Status:</span>
+            <div className={`p-4 rounded-xl border space-y-2 ${
+              policyResult.is_valid
+                ? 'bg-emerald-950/30 border-emerald-500/40'
+                : 'bg-rose-950/30 border-rose-500/40'
+            }`}>
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="font-semibold text-slate-300">Military-Grade Policy Verdict:</span>
                 <span
-                  className={`font-mono font-bold ${
-                    policyResult.is_valid ? 'text-emerald-400' : 'text-rose-400'
+                  className={`font-bold px-2 py-0.5 rounded border uppercase ${
+                    policyResult.is_valid
+                      ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                      : 'bg-rose-950 text-rose-300 border-rose-500/50'
                   }`}
                 >
-                  {policyResult.is_valid ? 'COMPLIANT' : 'NON-COMPLIANT'} (Score: {policyResult.score}/100)
+                  {policyResult.is_valid ? 'COMPLIANT & SECURE' : 'POLICY VIOLATION'} (Score: {policyResult.score}/100)
                 </span>
               </div>
 
               {policyResult.errors.length > 0 && (
-                <div className="space-y-1 text-xs text-rose-400">
+                <div className="space-y-1 text-xs text-rose-300 font-mono pt-1">
                   {policyResult.errors.map((err, idx) => (
                     <div key={idx} className="flex items-center gap-1.5">
-                      <span>•</span>
+                      <span className="text-rose-400 font-bold">•</span>
                       <span>{err}</span>
                     </div>
                   ))}

@@ -201,6 +201,7 @@ export const PerimeterIntelligencePage: React.FC = () => {
                 isDrawing={isDrawing}
                 points={drawnPoints}
                 onPointsChange={setDrawnPoints}
+                existingZones={zones}
               />
             </div>
           </div>

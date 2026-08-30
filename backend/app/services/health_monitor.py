@@ -87,6 +87,7 @@ class HealthMonitor:
 
                     # Interruption tracking
                     now = datetime.utcnow()
+                    event = None
                     if new_status in ["OFFLINE", "DEGRADED", "ERROR"]:
                         if camera_id not in self._interruption_tracker:
                             self._interruption_tracker[camera_id] = now

@@ -11,6 +11,10 @@ class NotificationResponse(BaseModel):
     message: str
     priority: str
     read: bool
+    evidence_id: Optional[str] = None
+    evidence_url: Optional[str] = None
+    camera_id: Optional[str] = None
+    location_description: Optional[str] = None
     created_at: datetime
 
     class Config:

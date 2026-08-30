@@ -39,7 +39,7 @@ from app.schemas.multimodal_schemas import (
     HeatmapPoint,
     FlowAnalyticsResponse
 )
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, get_current_user_optional, require_admin
 from app.services.federation.scope_service import ScopeService
 from app.services.multimodal.multimodal_engine import MultimodalEngine
 
@@ -360,17 +360,18 @@ def search_ai_events(
 def query_ai_assistant(
     payload: AIAssistantQueryRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Section 82-85: Natural Language Search with Explainable Citations and Safety Boundaries.
     """
-    auth_sites = ScopeService.get_authorized_site_ids(current_user, db)
+    auth_sites = ScopeService.get_authorized_site_ids(current_user, db) if current_user else None
     res = MultimodalEngine.natural_language_query(payload.query, auth_sites, db)
     
+    username = current_user.username if current_user else "operator"
     db.add(SecurityAuditLog(
         action="AI_ASSISTANT_QUERY",
-        username=current_user.username,
+        username=username,
         resource_type="AI_ASSISTANT",
         resource_id="QUERY",
         details=f"Queried NL Assistant: '{payload.query}' (Found {len(res['results'])} matches)"

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Camera } from '../../types/camera';
 import { StatusBadge } from '../common/StatusBadge';
-import { Activity, Eye, Edit2, Trash2, Video } from 'lucide-react';
+import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone } from 'lucide-react';
 
 interface CameraTableProps {
   cameras: Camera[];
@@ -42,7 +42,32 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                 </td>
               </tr>
             ) : (
-              cameras.map((camera) => (
+              cameras.map((camera) => {
+                const url = camera.rtsp_url || '';
+                const st = camera.stream_type || '';
+                let SourceIcon = Video;
+                let sourceBadge = 'RTSP';
+                let sourceClass = 'bg-sky-950/60 border-sky-500/30 text-sky-300';
+                let iconColor = 'text-sky-400';
+
+                if (st === 'webcam' || url.startsWith('webcam://')) {
+                  SourceIcon = Laptop;
+                  sourceBadge = 'WEBCAM';
+                  sourceClass = 'bg-cyan-950/60 border-cyan-500/30 text-cyan-300';
+                  iconColor = 'text-cyan-400';
+                } else if (st === 'drone' || url.startsWith('udp://') || url.startsWith('rtmp://')) {
+                  SourceIcon = Plane;
+                  sourceBadge = 'DRONE';
+                  sourceClass = 'bg-purple-950/60 border-purple-500/30 text-purple-300';
+                  iconColor = 'text-purple-400';
+                } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
+                  SourceIcon = Smartphone;
+                  sourceBadge = 'ANDROID';
+                  sourceClass = 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300';
+                  iconColor = 'text-emerald-400';
+                }
+
+                return (
                 <tr
                   key={camera.camera_id}
                   className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
@@ -51,12 +76,17 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                   {/* Camera ID & Name */}
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/80 flex items-center justify-center text-sky-400 group-hover:border-sky-500 transition">
-                        <Video className="w-4 h-4" />
+                      <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/80 flex items-center justify-center group-hover:border-sky-500 transition">
+                        <SourceIcon className={`w-4 h-4 ${iconColor}`} />
                       </div>
                       <div>
-                        <div className="font-semibold text-white group-hover:text-sky-300 transition">
-                          {camera.camera_name}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-white group-hover:text-sky-300 transition">
+                            {camera.camera_name}
+                          </span>
+                          <span className={`px-1.5 py-0.2 rounded border font-mono text-[9px] font-bold ${sourceClass}`}>
+                            {sourceBadge}
+                          </span>
                         </div>
                         <div className="font-mono text-[10px] text-slate-400">
                           {camera.camera_id} • {camera.stream_type}
@@ -134,7 +164,8 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

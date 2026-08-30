@@ -27,6 +27,7 @@ import { SituationalMapModal } from './components/incidents/SituationalMapModal'
 import { AIAssistantModal } from './components/multimodal/AIAssistantModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { DemoModeBanner } from './components/common/DemoModeBanner';
+import { LiveAlertToast } from './components/common/LiveAlertToast';
 import { Camera } from './types/camera';
 import { Bot } from 'lucide-react';
 
@@ -37,6 +38,7 @@ const MainLayout: React.FC = () => {
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [globalMapOpen, setGlobalMapOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const { refreshCameras } = useCameras();
 
@@ -50,14 +52,20 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0b0f17] text-slate-100">
+    <div className="h-screen flex flex-col bg-[#0b0f17] text-slate-100 overflow-hidden">
       <Header
         onOpenMap={() => setGlobalMapOpen(true)}
         onOpenAssistant={() => setAssistantOpen(true)}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        sidebarOpen={sidebarOpen}
       />
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <main className="flex-1 overflow-y-auto bg-[#070b12]">
+      <LiveAlertToast
+        onOpenMap={() => setGlobalMapOpen(true)}
+        onOpenIncident={() => setActiveTab('incidents')}
+      />
+      <div className="flex-1 flex overflow-hidden min-h-0 relative">
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={sidebarOpen} />
+        <main className="flex-1 h-full overflow-y-auto min-h-0 bg-[#070b12]">
           {activeTab === 'dashboard' && (
             <DashboardPage
               onNavigateToCameras={() => setActiveTab('cameras')}

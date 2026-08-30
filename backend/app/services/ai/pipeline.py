@@ -121,7 +121,7 @@ class CameraAIWorker:
                     from app.services.intelligence.zone_analyzer import zone_intelligence_service
                     h, w = frame.shape[:2]
                     zone_tracker = zone_intelligence_service.get_tracker(self.camera_id)
-                    zone_tracker.analyze_tracks(active_tracks, frame_width=w, frame_height=h)
+                    zone_tracker.analyze_tracks(active_tracks, frame_width=w, frame_height=h, frame=frame)
                 except Exception as ze:
                     logger.error(f"Perimeter analysis error on {self.camera_id}: {ze}")
 

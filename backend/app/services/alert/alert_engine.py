@@ -41,6 +41,21 @@ class AlertEngine:
         with self._lock:
             subscribers = list(self._ws_subscribers)
 
+        evd_url = None
+        evd_id = None
+        if alert.event_id:
+            try:
+                db_sub = SessionLocal()
+                try:
+                    se = db_sub.query(SecurityEvent).filter(SecurityEvent.event_id == alert.event_id).first()
+                    if se and se.evidence_id:
+                        evd_id = se.evidence_id
+                        evd_url = f"/api/v1/evidence/{se.evidence_id}/file"
+                finally:
+                    db_sub.close()
+            except Exception:
+                pass
+
         payload = {
             "type": "alert.event",
             "event": event_name,
@@ -56,6 +71,8 @@ class AlertEngine:
                 "status": alert.status,
                 "assigned_to": alert.assigned_to,
                 "is_escalated": alert.is_escalated,
+                "evidence_id": evd_id,
+                "evidence_url": evd_url,
                 "acknowledged_at": alert.acknowledged_at.isoformat() if alert.acknowledged_at else None,
                 "acknowledged_by": alert.acknowledged_by,
                 "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
@@ -129,13 +146,30 @@ class AlertEngine:
                 )
                 db.add(alert)
 
-                # In-app notification
+                # In-app notification with forensic evidence proof & precise location
+                evd_id = getattr(event, 'evidence_id', None)
+                evd_url = f"/api/v1/evidence/{evd_id}/file" if evd_id else None
+
+                # Query camera for precise outpost / GPS location
+                from app.models.camera import Camera
+                cam = db.query(Camera).filter(Camera.camera_id == event.camera_id).first()
+                loc_desc = getattr(event, 'location_description', None)
+                if not loc_desc and cam:
+                    coords = f"(GPS: {cam.latitude:.4f}, {cam.longitude:.4f})" if cam.latitude and cam.longitude else ""
+                    loc_desc = f"{cam.bop_site} // {cam.sector} // {cam.camera_name} {coords}".strip()
+                if not loc_desc:
+                    loc_desc = f"Perimeter Outpost // {event.camera_id}"
+
                 notification = Notification(
                     alert_id=new_alert_id,
                     title=title,
-                    message=f"Risk Score {event.risk_score}/100. Target Track #{event.track_id} in zone '{event.zone_name or 'Border Wire'}'.",
+                    message=f"Target {event.object_type.upper()} #{event.track_id} detected at {loc_desc} in zone '{event.zone_name or 'Border Sector'}'. Risk: {event.risk_score}/100.",
                     priority=priority,
                     read=False,
+                    camera_id=event.camera_id,
+                    location_description=loc_desc,
+                    evidence_id=evd_id,
+                    evidence_url=evd_url,
                     created_at=now
                 )
                 db.add(notification)

@@ -25,38 +25,48 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     switch (category.toLowerCase()) {
       case 'person':
         return {
-          stroke: '#38bdf8', // Sky 400
-          fill: 'rgba(56, 189, 248, 0.15)',
-          badgeBg: '#0284c7',
-          badgeText: '#ffffff'
+          stroke: '#ef4444', // High-Alert Tactical Red
+          fill: 'rgba(239, 68, 68, 0.22)',
+          badgeBg: '#dc2626',
+          badgeText: '#ffffff',
+          isThreat: true,
+          labelPrefix: '🔴 UNKNOWN PERSON'
         };
       case 'vehicle':
         return {
-          stroke: '#34d399', // Emerald 400
-          fill: 'rgba(52, 211, 153, 0.15)',
-          badgeBg: '#059669',
-          badgeText: '#ffffff'
+          stroke: '#f59e0b', // High-Visibility Amber
+          fill: 'rgba(245, 158, 11, 0.20)',
+          badgeBg: '#d97706',
+          badgeText: '#ffffff',
+          isThreat: false,
+          labelPrefix: '🟡 VEHICLE'
         };
       case 'animal':
         return {
-          stroke: '#fbbf24', // Amber 400
-          fill: 'rgba(251, 191, 36, 0.15)',
-          badgeBg: '#d97706',
-          badgeText: '#ffffff'
+          stroke: '#10b981', // Natural Emerald
+          fill: 'rgba(16, 185, 129, 0.18)',
+          badgeBg: '#059669',
+          badgeText: '#ffffff',
+          isThreat: false,
+          labelPrefix: '🟢 ANIMAL'
         };
       case 'drone':
         return {
-          stroke: '#c084fc', // Purple 400
-          fill: 'rgba(192, 132, 252, 0.20)',
-          badgeBg: '#9333ea',
-          badgeText: '#ffffff'
+          stroke: '#06b6d4', // Aerial Cyan
+          fill: 'rgba(6, 182, 212, 0.22)',
+          badgeBg: '#0891b2',
+          badgeText: '#ffffff',
+          isThreat: true,
+          labelPrefix: '🔵 AERIAL DRONE'
         };
       default:
         return {
           stroke: '#94a3b8', // Slate 400
           fill: 'rgba(148, 163, 184, 0.15)',
           badgeBg: '#475569',
-          badgeText: '#ffffff'
+          badgeText: '#ffffff',
+          isThreat: false,
+          labelPrefix: 'TARGET'
         };
     }
   };
@@ -153,23 +163,34 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
         const { bbox, track_id, object_type, category, confidence, direction, speed, trajectory } = track;
         const colors = getCategoryColor(category);
 
-        const cornerLen = Math.min(bbox.width * 0.25, bbox.height * 0.25, 25);
-        const top = bbox.y;
-        const left = bbox.x;
-        const right = bbox.x + bbox.width;
-        const bottom = bbox.y + bbox.height;
+        const isNormalized = bbox.x <= 1.05 && bbox.y <= 1.05 && bbox.width <= 1.05;
+        const left = isNormalized ? bbox.x * VIEW_WIDTH : bbox.x;
+        const top = isNormalized ? bbox.y * VIEW_HEIGHT : bbox.y;
+        const width = isNormalized ? bbox.width * VIEW_WIDTH : bbox.width;
+        const height = isNormalized ? bbox.height * VIEW_HEIGHT : bbox.height;
+        const right = left + width;
+        const bottom = top + height;
+        const cx = left + width / 2;
+        const cy = top + height / 2;
+        const cornerLen = Math.min(width * 0.25, height * 0.25, 30);
 
         return (
           <g key={track_id} className="transition-all duration-75">
             {/* Trajectory Trail */}
             {showTrajectories && trajectory && trajectory.length > 1 && (
               <polyline
-                points={trajectory.map((p) => `${p.x},${p.y}`).join(' ')}
+                points={trajectory
+                  .map((p) => {
+                    const px = isNormalized ? p.x * VIEW_WIDTH : p.x;
+                    const py = isNormalized ? p.y * VIEW_HEIGHT : p.y;
+                    return `${px},${py}`;
+                  })
+                  .join(' ')}
                 fill="none"
                 stroke={colors.stroke}
                 strokeWidth="2.5"
-                strokeDasharray="3, 3"
-                opacity="0.75"
+                strokeDasharray="4, 3"
+                opacity="0.8"
               />
             )}
 
@@ -177,12 +198,12 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
             <rect
               x={left}
               y={top}
-              width={bbox.width}
-              height={bbox.height}
+              width={width}
+              height={height}
               fill={colors.fill}
               stroke={colors.stroke}
-              strokeWidth="1.5"
-              strokeDasharray="2, 2"
+              strokeWidth="2"
+              strokeDasharray={colors.isThreat ? 'none' : '4, 2'}
             />
 
             {/* Tactical Corner Reticles */}
@@ -191,55 +212,93 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
               d={`M ${left} ${top + cornerLen} L ${left} ${top} L ${left + cornerLen} ${top}`}
               fill="none"
               stroke={colors.stroke}
-              strokeWidth="3.5"
+              strokeWidth="4"
             />
             {/* Top-Right */}
             <path
               d={`M ${right - cornerLen} ${top} L ${right} ${top} L ${right} ${top + cornerLen}`}
               fill="none"
               stroke={colors.stroke}
-              strokeWidth="3.5"
+              strokeWidth="4"
             />
             {/* Bottom-Left */}
             <path
               d={`M ${left} ${bottom - cornerLen} L ${left} ${bottom} L ${left + cornerLen} ${bottom}`}
               fill="none"
               stroke={colors.stroke}
-              strokeWidth="3.5"
+              strokeWidth="4"
             />
             {/* Bottom-Right */}
             <path
               d={`M ${right - cornerLen} ${bottom} L ${right} ${bottom} L ${right} ${bottom - cornerLen}`}
               fill="none"
               stroke={colors.stroke}
-              strokeWidth="3.5"
+              strokeWidth="4"
             />
+
+            {/* Center Tactical Crosshair Point Reticle */}
+            <circle
+              cx={cx}
+              cy={cy}
+              r="12"
+              fill="none"
+              stroke={colors.stroke}
+              strokeWidth="2"
+              strokeDasharray="4, 3"
+              opacity="0.85"
+            />
+            <line x1={cx - 18} y1={cy} x2={cx - 5} y2={cy} stroke={colors.stroke} strokeWidth="2" />
+            <line x1={cx + 5} y1={cy} x2={cx + 18} y2={cy} stroke={colors.stroke} strokeWidth="2" />
+            <line x1={cx} y1={cy - 18} x2={cx} y2={cy - 5} stroke={colors.stroke} strokeWidth="2" />
+            <line x1={cx} y1={cy + 5} x2={cx} y2={cy + 18} stroke={colors.stroke} strokeWidth="2" />
+            <circle cx={cx} cy={cy} r="3" fill={colors.stroke} />
+
+            {/* Top Target Pinpoint Arrow Marker */}
+            <polygon
+              points={`${cx},${Math.max(0, top - 3)} ${cx - 7},${Math.max(0, top - 15)} ${cx + 7},${Math.max(0, top - 15)}`}
+              fill={colors.stroke}
+            />
+
+            {/* Ground Plane Contact Beacon Point */}
+            <ellipse
+              cx={cx}
+              cy={bottom}
+              rx={Math.max(16, width * 0.35)}
+              ry="6"
+              fill="none"
+              stroke={colors.stroke}
+              strokeWidth="2"
+              opacity="0.75"
+            />
+            <circle cx={cx} cy={bottom} r="3.5" fill={colors.stroke} />
 
             {/* Tactical Track Header Badge */}
             <rect
               x={left}
-              y={Math.max(0, top - 26)}
-              width={Math.max(130, object_type.length * 9 + 80)}
-              height="24"
+              y={Math.max(0, top - 28)}
+              width={Math.max(140, (colors.labelPrefix?.length || 8) * 9 + 80)}
+              height="26"
               fill={colors.badgeBg}
-              rx="3"
+              rx="4"
+              stroke={colors.stroke}
+              strokeWidth="1"
             />
             <text
-              x={left + 6}
-              y={Math.max(16, top - 9)}
+              x={left + 7}
+              y={Math.max(18, top - 10)}
               fill={colors.badgeText}
               fontSize="12.5"
               fontFamily="monospace"
               fontWeight="bold"
             >
-              {object_type.toUpperCase()} #{track_id} • {Math.round(confidence * 100)}%
+              {colors.labelPrefix || object_type.toUpperCase()} #{track_id} • {Math.round(confidence * 100)}%
             </text>
 
             {/* Tactical Direction & Relative Speed Badge */}
             <rect
               x={left}
-              y={bottom + 3}
-              width={Math.max(120, direction.length * 8 + 65)}
+              y={bottom + 8}
+              width={Math.max(120, (direction || '').length * 8 + 65)}
               height="20"
               fill="#090d16"
               stroke={colors.stroke}
@@ -249,13 +308,13 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
             />
             <text
               x={left + 5}
-              y={bottom + 17}
+              y={bottom + 22}
               fill="#e2e8f0"
               fontSize="10.5"
               fontFamily="monospace"
               fontWeight="600"
             >
-              DIR: {direction} • {Math.round(speed)} px/s
+              DIR: {direction || 'STATIONARY'} • {Math.round(speed || 0)} px/s
             </text>
           </g>
         );

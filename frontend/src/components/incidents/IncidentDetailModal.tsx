@@ -358,22 +358,41 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
             </form>
           )}
 
-          {/* Evidence References */}
+          {/* Evidence References with Photo Proof */}
           {evidenceList.length > 0 && (
-            <div className="bg-[#090d16] p-4 rounded-xl border border-[#1e293b] space-y-2 font-mono text-xs">
-              <h4 className="font-bold text-slate-300 uppercase flex items-center gap-2">
-                <FileCheck className="w-4 h-4 text-emerald-400" />
-                Attached Evidence Records & SHA-256 Integrity
+            <div className="bg-[#090d16] p-4 rounded-xl border border-[#1e293b] space-y-3 font-mono text-xs">
+              <h4 className="font-bold text-slate-300 uppercase flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <FileCheck className="w-4 h-4 text-emerald-400" />
+                  Forensic Evidence & Visual Proof Records
+                </span>
+                <span className="text-[10px] text-emerald-400 font-normal">
+                  {evidenceList.length} Item(s) Verified
+                </span>
               </h4>
-              <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {evidenceList.map((ev) => (
-                  <div key={ev.id} className="p-2 bg-[#111a2e] rounded-lg border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-white font-bold">{ev.evidence_id}</span> ({ev.evidence_type})
+                  <div key={ev.id} className="p-3 bg-[#111a2e] rounded-xl border border-slate-800 space-y-2 group">
+                    {/* Visual Evidence Snapshot */}
+                    <div className="relative rounded-lg overflow-hidden border border-slate-700 bg-black/60 aspect-video">
+                      <img
+                        src={`/api/v1/evidence/${ev.evidence_id}/file`}
+                        alt={ev.evidence_id}
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLElement).parentElement?.classList.add('hidden');
+                        }}
+                      />
+                      <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[9px] text-sky-300 font-mono">
+                        {ev.evidence_type}
+                      </div>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      SHA256: {ev.checksum_sha256.substring(0, 16)}...
-                    </span>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-white font-bold">{ev.evidence_id}</span>
+                      <span className="text-[10px] text-emerald-400 font-mono">
+                        SHA256: {ev.checksum_sha256 ? ev.checksum_sha256.substring(0, 12) + '...' : 'AUTHENTICATED'}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

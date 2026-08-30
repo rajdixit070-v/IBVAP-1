@@ -22,8 +22,10 @@ import {
   Sliders,
   RefreshCw
 } from 'lucide-react';
+import { useCameras } from '../context/CameraContext';
 
 export const PredictiveIntelligencePage: React.FC = () => {
+  const { cameras } = useCameras();
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [timeSeries, setTimeSeries] = useState<ActivityTimeSeriesResponse | null>(null);
   const [warnings, setWarnings] = useState<EarlyWarning[]>([]);
@@ -33,7 +35,7 @@ export const PredictiveIntelligencePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Selected filters
-  const [selectedCamera, setSelectedCamera] = useState('CAM-001');
+  const [selectedCamera, setSelectedCamera] = useState('');
   const [horizonMinutes, setHorizonMinutes] = useState(60);
 
   // Modals
@@ -41,6 +43,11 @@ export const PredictiveIntelligencePage: React.FC = () => {
   const [warningModalOpen, setWarningModalOpen] = useState(false);
   const [hotspotsModalOpen, setHotspotsModalOpen] = useState(false);
   const [shiftsModalOpen, setShiftsModalOpen] = useState(false);
+  useEffect(() => {
+    if (cameras.length > 0 && !selectedCamera) {
+      setSelectedCamera(cameras[0].camera_id);
+    }
+  }, [cameras, selectedCamera]);
 
   useEffect(() => {
     loadData();
@@ -51,19 +58,23 @@ export const PredictiveIntelligencePage: React.FC = () => {
   const loadData = async () => {
     try {
       const [fData, tsData, wData, hData, rData, mData] = await Promise.all([
-        predictiveService.getForecast({ target_id: selectedCamera, horizon_minutes: horizonMinutes }),
-        predictiveService.getActivityTimeSeries({ target_id: selectedCamera, window_minutes: 15, history_points: 12 }),
-        predictiveService.getEarlyWarnings({ limit: 50 }),
-        predictiveService.getHotspots(),
-        predictiveService.getRecommendedAttention(),
-        predictiveService.getModelHealth()
+        selectedCamera
+          ? predictiveService.getForecast({ target_id: selectedCamera, horizon_minutes: horizonMinutes }).catch(() => null)
+          : Promise.resolve(null),
+        selectedCamera
+          ? predictiveService.getActivityTimeSeries({ target_id: selectedCamera, window_minutes: 15, history_points: 12 }).catch(() => null)
+          : Promise.resolve(null),
+        predictiveService.getEarlyWarnings({ limit: 50 }).catch(() => []),
+        predictiveService.getHotspots().catch(() => []),
+        predictiveService.getRecommendedAttention().catch(() => ({ recommendations: [] })),
+        predictiveService.getModelHealth().catch(() => null)
       ]);
 
       setForecast(fData);
       setTimeSeries(tsData);
       setWarnings(wData);
       setHotspots(hData);
-      setRecommendations(rData.recommendations || []);
+      setRecommendations(rData?.recommendations || []);
       setModelHealth(mData);
     } catch (e) {
       console.error('Failed to load predictive intelligence data', e);
@@ -194,10 +205,15 @@ export const PredictiveIntelligencePage: React.FC = () => {
             onChange={(e) => setSelectedCamera(e.target.value)}
             className="px-3 py-1.5 bg-[#090d16] border border-slate-700 rounded-lg text-white font-bold"
           >
-            <option value="CAM-001">CAM-001 (Perimeter Gate North-1)</option>
-            <option value="CAM-002">CAM-002 (Sector 4 River Crossing)</option>
-            <option value="CAM-003">CAM-003 (East Boundary Fencing)</option>
-            <option value="CAM-004">CAM-004 (South Approach Road)</option>
+            {cameras.length === 0 ? (
+              <option value="">No registered cameras</option>
+            ) : (
+              cameras.map((c) => (
+                <option key={c.camera_id} value={c.camera_id}>
+                  {c.camera_id} ({c.camera_name})
+                </option>
+              ))
+            )}
           </select>
         </div>
 

@@ -239,9 +239,21 @@ export const SecurityEventsPage: React.FC = () => {
                       <span className="text-sky-400 font-bold">{evt.camera_id}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 uppercase text-[10px]">
-                        {evt.object_type} #{evt.track_id}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {evt.evidence_url && (
+                          <img
+                            src={evt.evidence_url}
+                            alt="Snapshot"
+                            className="w-9 h-7 rounded object-cover border border-slate-700 bg-black shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLElement).classList.add('hidden');
+                            }}
+                          />
+                        )}
+                        <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 uppercase text-[10px]">
+                          {evt.object_type} #{evt.track_id}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-300">
                       {evt.zone_name || 'Restricted Wire'}

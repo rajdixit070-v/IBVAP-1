@@ -116,7 +116,7 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
     if seed_demo is explicitly True or settings.DEMO_MODE is True.
     """
     if seed_demo is None:
-        seed_demo = settings.DEMO_MODE
+        seed_demo = False
 
     Base.metadata.create_all(bind=engine)
     

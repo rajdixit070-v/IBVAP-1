@@ -60,6 +60,8 @@ def serialize_event(evt: SecurityEvent) -> SecurityEventResponse:
         last_bbox=BoundingBox(**bbox_raw) if bbox_raw else None,
         last_direction=evt.last_direction,
         last_speed=evt.last_speed,
+        evidence_id=getattr(evt, 'evidence_id', None),
+        evidence_url=f"/api/v1/evidence/{evt.evidence_id}/file" if getattr(evt, 'evidence_id', None) else None,
         started_at=evt.started_at,
         last_updated_at=evt.last_updated_at
     )

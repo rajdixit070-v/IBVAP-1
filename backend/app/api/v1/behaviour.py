@@ -195,10 +195,10 @@ def list_behaviour_rules(
 def create_behaviour_rule(
     rule_data: BehaviourRuleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Create a new configurable behaviour detection rule (Admin only).
+    Create a new configurable behaviour detection rule.
     """
     existing = db.query(BehaviourRule).filter(BehaviourRule.rule_id == rule_data.rule_id).first()
     if existing:
@@ -225,7 +225,7 @@ def update_behaviour_rule(
     rule_id: str,
     rule_update: BehaviourRuleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update behaviour detection rule with version increment and audit logging (Admin only).

@@ -13,6 +13,10 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     priority = Column(String(20), default="HIGH", index=True)
     read = Column(Boolean, default=False, index=True)
+    evidence_id = Column(String(50), nullable=True)
+    evidence_url = Column(String(300), nullable=True)
+    camera_id = Column(String(50), nullable=True, index=True)
+    location_description = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 Index("idx_notification_user_read", Notification.user_id, Notification.read, Notification.created_at)

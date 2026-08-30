@@ -43,10 +43,10 @@ def get_camera_graph(
 def create_camera_transition(
     data: CameraTransitionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Add a new directed transition edge to the camera graph (Admin only).
+    Add a new directed transition edge to the camera graph.
     """
     existing = db.query(CameraTransition).filter(
         CameraTransition.from_camera_id == data.from_camera_id,
@@ -66,10 +66,10 @@ def update_camera_transition(
     transition_id: int,
     data: CameraTransitionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Update travel time limits or status of an existing transition edge (Admin only).
+    Update travel time limits or status of an existing transition edge.
     """
     transition = db.query(CameraTransition).filter(CameraTransition.id == transition_id).first()
     if not transition:
@@ -81,6 +81,23 @@ def update_camera_transition(
     db.commit()
     db.refresh(transition)
     return transition
+
+@router.delete("/graph/transitions/{transition_id}", status_code=204)
+def delete_camera_transition(
+    transition_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Delete a transition edge from the camera graph.
+    """
+    transition = db.query(CameraTransition).filter(CameraTransition.id == transition_id).first()
+    if not transition:
+        raise HTTPException(status_code=404, detail="Transition edge not found.")
+
+    db.delete(transition)
+    db.commit()
+    return None
 
 # --- Global Tracks & Movement Journey Endpoints ---
 

@@ -32,6 +32,8 @@ class SecurityEventResponse(BaseModel):
     last_bbox: Optional[BoundingBox] = None
     last_direction: Optional[str] = None
     last_speed: float = 0.0
+    evidence_id: Optional[str] = None
+    evidence_url: Optional[str] = None
     started_at: datetime
     last_updated_at: datetime
 

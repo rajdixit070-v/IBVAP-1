@@ -22,9 +22,17 @@ class CameraBase(BaseModel):
     @field_validator('rtsp_url')
     def validate_rtsp_url(cls, v):
         v_clean = v.strip()
-        valid_prefixes = ("rtsp://", "http://", "https://", "synthetic://")
+        if v_clean.isdigit():
+            return f"webcam://{v_clean}"
+        valid_prefixes = (
+            "rtsp://", "http://", "https://", "synthetic://", "test://",
+            "webcam://", "device://", "rtmp://", "rtmps://", "udp://"
+        )
         if not any(v_clean.startswith(prefix) for prefix in valid_prefixes):
-            raise ValueError("Invalid stream URL. Must start with rtsp://, http://, https://, or synthetic://")
+            raise ValueError(
+                "Invalid stream URL. Supported formats: RTSP (rtsp://), HTTP/MJPEG (http://), "
+                "Drone Streams (rtmp://, udp://), or Local Webcam (webcam://0, device://0, or numeric index)."
+            )
         return v_clean
 
 class CameraCreate(CameraBase):

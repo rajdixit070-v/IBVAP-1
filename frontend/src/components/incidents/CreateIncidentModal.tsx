@@ -23,8 +23,8 @@ export const CreateIncidentModal: React.FC<CreateIncidentModalProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<IncidentPriority>('HIGH');
-  const [cameraId, setCameraId] = useState('CAM-001');
-  const [bopSite, setBopSite] = useState('BOP Alpha');
+  const [cameraId, setCameraId] = useState('');
+  const [bopSite, setBopSite] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
   const [assignedUnit, setAssignedUnit] = useState('Quick Reaction Team (QRT-1)');
 
@@ -42,8 +42,8 @@ export const CreateIncidentModal: React.FC<CreateIncidentModalProps> = ({
       setTitle('');
       setDescription('');
       setPriority('HIGH');
-      if (cameras.length > 0) setCameraId(cameras[0].camera_id);
-      setBopSite('BOP Alpha');
+      setCameraId(cameras.length > 0 ? cameras[0].camera_id : '');
+      setBopSite(cameras.length > 0 ? cameras[0].bop_site : '');
       setAssignedTo('');
     }
   }, [sourceAlert, isOpen, cameras]);

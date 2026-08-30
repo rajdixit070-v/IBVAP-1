@@ -34,6 +34,8 @@ export interface SecurityEvent {
   last_bbox?: BoundingBox;
   last_direction?: string;
   last_speed: number;
+  evidence_id?: string;
+  evidence_url?: string;
   started_at: string;
   last_updated_at: string;
 }

@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import socket
 import re
@@ -75,22 +76,70 @@ def test_rtsp_connection(
             details={"mode": "Synthetic Test Stream", "status": "Ready"}
         )
 
-    if not clean_url.startswith("rtsp://") and not clean_url.startswith("http://") and not clean_url.startswith("https://"):
+    # 3. Support for local Webcam / USB Cameras (DirectShow / V4L2)
+    if clean_url.startswith(("webcam://", "device://")) or clean_url.isdigit():
+        idx_str = clean_url.replace("webcam://", "").replace("device://", "").strip()
+        dev_idx = int(idx_str) if idx_str.isdigit() else 0
+        start_time = time.time()
+        cap = None
+        try:
+            if sys.platform == "win32":
+                cap = cv2.VideoCapture(dev_idx, cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(dev_idx)
+            if not cap.isOpened():
+                cap.release()
+                cap = cv2.VideoCapture(dev_idx)
+            if not cap.isOpened():
+                return CameraTestResponse(
+                    success=False,
+                    connected=False,
+                    error_type="DEVICE_NOT_FOUND",
+                    error_message=f"Local webcam device #{dev_idx} could not be opened. Verify camera permissions and that no other application is using it."
+                )
+            ret, frame = cap.read()
+            latency = (time.time() - start_time) * 1000.0
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            res_str = f"{w}x{h}" if w > 0 and h > 0 else "640x480"
+            return CameraTestResponse(
+                success=True,
+                connected=True,
+                resolution=res_str,
+                fps=round(float(fps), 1) if fps > 0 else 30.0,
+                codec="DirectShow / USB Video",
+                latency_ms=round(latency, 2),
+                details={"source_type": "WEBCAM", "device_index": dev_idx, "status": "Hardware Ready"}
+            )
+        except Exception as e:
+            return CameraTestResponse(
+                success=False,
+                connected=False,
+                error_type="WEBCAM_ERROR",
+                error_message=f"Error accessing webcam #{dev_idx}: {str(e)}"
+            )
+        finally:
+            if cap is not None:
+                cap.release()
+
+    valid_prefixes = ("rtsp://", "http://", "https://", "rtmp://", "rtmps://", "udp://")
+    if not any(clean_url.startswith(prefix) for prefix in valid_prefixes):
         return CameraTestResponse(
             success=False,
             connected=False,
             error_type="INVALID_RTSP_URL",
-            error_message="Stream URL must begin with 'rtsp://' (or 'http://' / 'https://')."
+            error_message="Stream URL must begin with 'rtsp://', 'http://', 'https://', 'rtmp://', 'udp://', or 'webcam://0'."
         )
 
-    # 3. Socket check to prevent long blocking on dead IPs
+    # 4. Socket check to prevent long blocking on dead IPs (skip for UDP)
     host, port = _parse_host_port(clean_url)
-    if host:
+    if host and not clean_url.startswith("udp://"):
         is_reachable, socket_error, socket_latency = _check_tcp_port(host, port, timeout_sec=min(3.0, timeout_sec))
         if not is_reachable:
             error_map = {
-                "CONNECTION_REFUSED": f"Connection refused at {host}:{port}. Ensure camera is powered on and RTSP port 554 is open.",
-                "TIMEOUT": f"Connection timed out trying to reach camera at {host}:{port}.",
+                "CONNECTION_REFUSED": f"Connection refused at {host}:{port}. Ensure camera/stream server is running and port {port} is open.",
+                "TIMEOUT": f"Connection timed out trying to reach camera stream at {host}:{port}.",
                 "INVALID_RTSP_URL": f"Host '{host}' could not be resolved. Check IP address or hostname.",
                 "UNKNOWN_ERROR": f"Unable to reach network host {host}:{port}."
             }
@@ -102,25 +151,33 @@ def test_rtsp_connection(
                 error_message=error_map.get(socket_error, f"Failed to connect to {host}:{port}")
             )
 
-    # 4. Open RTSP stream with OpenCV FFmpeg backend
+    # 5. Open stream with OpenCV
     auth_url = build_authenticated_rtsp_url(clean_url, username, password)
     start_time = time.time()
     
     cap = None
     try:
-        cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
-        if not cap.isOpened():
-            # Try default backend as fallback
-            cap.release()
+        if clean_url.startswith("udp://"):
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp|stimeout;3000000"
+            cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
+        elif clean_url.startswith(("http://", "https://")):
             cap = cv2.VideoCapture(auth_url)
+            if not cap.isOpened():
+                cap.release()
+                cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
+        else:
+            cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
+            if not cap.isOpened():
+                cap.release()
+                cap = cv2.VideoCapture(auth_url)
             
         if not cap.isOpened():
             latency = (time.time() - start_time) * 1000.0
-            error_msg = "Could not open RTSP video stream. Check credentials or stream path."
+            error_msg = "Could not open video stream. Check credentials, network address, or stream path."
             error_type = "STREAM_UNAVAILABLE"
             if username or password:
                 error_type = "AUTHENTICATION_FAILED"
-                error_msg = "Failed to authenticate with camera. Verify username and password."
+                error_msg = "Failed to authenticate with camera stream. Verify username and password."
             return CameraTestResponse(
                 success=False,
                 connected=False,

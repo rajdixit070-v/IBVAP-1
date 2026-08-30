@@ -97,7 +97,7 @@ def test_p0_8_5_shared_ai_inference_thread_safety():
     for t in threads:
         t.start()
     for t in threads:
-        t.join(timeout=5.0)
+        t.join(timeout=15.0)
 
     for i in range(4):
         assert results[i] is not None

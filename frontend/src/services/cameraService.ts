@@ -78,11 +78,15 @@ export const cameraService = {
   },
 
   getLiveStreamUrl(cameraId: string, fps = 25): string {
-    return `/api/v1/cameras/${cameraId}/live?fps=${fps}`;
+    const token = localStorage.getItem('ibvap_token');
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    return `/api/v1/cameras/${cameraId}/live?fps=${fps}${tokenParam}`;
   },
 
   getSnapshotUrl(cameraId: string): string {
-    return `/api/v1/cameras/${cameraId}/snapshot?t=${Date.now()}`;
+    const token = localStorage.getItem('ibvap_token');
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    return `/api/v1/cameras/${cameraId}/snapshot?t=${Date.now()}${tokenParam}`;
   },
 
   async getSnapshotBlob(cameraId: string): Promise<Blob> {

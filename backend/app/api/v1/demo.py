@@ -22,7 +22,9 @@ class RunScenarioRequest(BaseModel):
 @router.get("/status")
 def get_demo_status():
     """Returns current active demonstration state, history, and generated artifacts."""
-    return DemoService.get_status()
+    st = dict(DemoService.get_status())
+    st["demo_mode_enabled"] = bool(settings.DEMO_MODE)
+    return st
 
 @router.get("/scenarios")
 def list_available_scenarios():

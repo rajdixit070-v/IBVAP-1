@@ -39,6 +39,10 @@ class SecurityEvent(Base):
     last_direction = Column(String(30), nullable=True)
     last_speed = Column(Float, default=0.0)
     
+    # Forensic Evidence Attachment
+    evidence_id = Column(String(50), nullable=True, index=True)
+    evidence_file_path = Column(String(500), nullable=True)
+    
     started_at = Column(DateTime, default=datetime.utcnow, index=True)
     last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
 

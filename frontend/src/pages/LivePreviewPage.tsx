@@ -7,7 +7,10 @@ import { CameraModal } from '../components/cameras/CameraModal';
 import {
   RefreshCw,
   Cctv,
-  Radio
+  Radio,
+  Laptop,
+  Plane,
+  Smartphone
 } from 'lucide-react';
 
 export const LivePreviewPage: React.FC = () => {
@@ -124,7 +127,15 @@ export const LivePreviewPage: React.FC = () => {
       {/* Focus Mode Camera Selector Bar */}
       {gridMode === '1' && (
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          {cameras.map((cam: Camera) => (
+          {cameras.map((cam: Camera) => {
+            const url = cam.rtsp_url || '';
+            const st = cam.stream_type || '';
+            let CamIcon = Cctv;
+            if (st === 'webcam' || url.startsWith('webcam://')) CamIcon = Laptop;
+            else if (st === 'drone' || url.startsWith('udp://') || url.startsWith('rtmp://')) CamIcon = Plane;
+            else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) CamIcon = Smartphone;
+
+            return (
             <button
               key={cam.camera_id}
               onClick={() => setSelectedCameraId(cam.camera_id)}
@@ -134,11 +145,12 @@ export const LivePreviewPage: React.FC = () => {
                   : 'bg-[#111a2e] text-slate-400 border-[#1e293b] hover:text-white'
               }`}
             >
-              <Cctv className="w-3.5 h-3.5" />
+              <CamIcon className="w-3.5 h-3.5" />
               <span>{cam.camera_id}</span>
               <span className="text-[10px] text-slate-500">• {cam.camera_name}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 

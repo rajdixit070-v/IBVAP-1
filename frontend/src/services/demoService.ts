@@ -21,6 +21,7 @@ export interface DemoStatus {
     status: string;
   }>;
   artifacts: Record<string, string>;
+  demo_mode_enabled?: boolean;
 }
 
 export const demoService = {

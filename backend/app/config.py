@@ -1,8 +1,15 @@
 import os
 import sys
 import logging
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List, Optional
+
+# Ensure backend/.env is consistently loaded across all entry points
+_env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env"))
+if os.path.exists(_env_path):
+    load_dotenv(_env_path, override=False)
 
 logger = logging.getLogger("ibvap.config")
 
@@ -27,6 +34,14 @@ class Settings(BaseSettings):
     _base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     _db_path = os.path.join(_base_dir, "ibvap.db").replace("\\", "/")
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{_db_path}")
+
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def canonicalize_database_url(cls, v: str) -> str:
+        if not v or v in ("sqlite:///./ibvap.db", "sqlite:///ibvap.db", "sqlite:///./backend/ibvap.db"):
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            return f"sqlite:///{os.path.join(base_dir, 'ibvap.db').replace(chr(92), '/')}"
+        return v
     
     # Storage Paths
     STORAGE_PATH: str = os.getenv("STORAGE_PATH", "./storage")

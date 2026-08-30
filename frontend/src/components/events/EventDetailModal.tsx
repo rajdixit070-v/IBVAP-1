@@ -10,7 +10,9 @@ import {
   XCircle,
   FileText,
   AlertCircle,
-  TrendingUp
+  TrendingUp,
+  Camera,
+  MapPin
 } from 'lucide-react';
 
 interface EventDetailModalProps {
@@ -86,6 +88,56 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
           <RiskBadge level={event.risk_level} score={event.risk_score} />
         </div>
+
+        {/* Tactical Sensor & Geospatial Location Card */}
+        <div className="p-3.5 bg-[#0d1527] border border-[#1e293b] rounded-xl flex items-center justify-between font-mono text-xs shadow-inner">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 uppercase">DETECTION LOCATION & SENSOR SECTOR:</span>
+              <div className="text-white font-bold text-[12px]">
+                {event.location_description || `${event.camera_id} // Perimeter Sector 1`}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-slate-400 uppercase">TARGET BEARING:</span>
+            <div className="text-emerald-400 font-bold text-[11px]">
+              {event.last_direction || 'STATIONARY'} • {event.last_speed ? `${Math.round(event.last_speed)} px/s` : '0 px/s'}
+            </div>
+          </div>
+        </div>
+
+        {/* Forensic Visual Proof / Evidence Snapshot */}
+        {(event.evidence_url || event.evidence_id) && (
+          <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono font-bold text-sky-400 uppercase">
+              <span className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-emerald-400" />
+                VERIFIED FORENSIC EVIDENCE SNAPSHOT
+              </span>
+              <span className="text-[10px] text-emerald-400 font-normal">
+                CRYPTOGRAPHIC SHA-256 PROOF
+              </span>
+            </div>
+            <div className="relative rounded-lg overflow-hidden border border-slate-700 bg-black/60 aspect-video">
+              <img
+                src={event.evidence_url || `/api/v1/evidence/${event.evidence_id}/file`}
+                alt="Intrusion Forensic Evidence"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).parentElement?.parentElement?.classList.add('hidden');
+                }}
+              />
+              <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded text-[10px] font-mono text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                RECORD ID: {event.evidence_id || 'EVD-ATTACHED'}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Explainable Threat Risk Factor Breakdown */}
         <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl p-4 space-y-3">

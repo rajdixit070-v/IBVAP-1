@@ -55,7 +55,9 @@ class SecurityEventManager:
         bbox: Optional[Dict[str, float]] = None,
         direction: Optional[str] = None,
         speed: float = 0.0,
-        timeline_message: Optional[str] = None
+        timeline_message: Optional[str] = None,
+        evidence_id: Optional[str] = None,
+        evidence_path: Optional[str] = None
     ) -> Optional[SecurityEvent]:
         """
         Creates or updates a security event with risk score calculation,
@@ -103,6 +105,9 @@ class SecurityEventManager:
                         event_record.last_bbox_json = json.dumps(bbox) if bbox else None
                         event_record.last_direction = direction
                         event_record.last_speed = speed
+                        if evidence_id:
+                            event_record.evidence_id = evidence_id
+                            event_record.evidence_file_path = evidence_path
                         event_record.last_updated_at = now
                         db.commit()
                         db.refresh(event_record)
@@ -139,6 +144,8 @@ class SecurityEventManager:
                     last_bbox_json=json.dumps(bbox) if bbox else None,
                     last_direction=direction,
                     last_speed=speed,
+                    evidence_id=evidence_id,
+                    evidence_file_path=evidence_path,
                     started_at=now,
                     last_updated_at=now
                 )
@@ -192,6 +199,8 @@ class SecurityEventManager:
                 "timeline": json.loads(event_record.timeline_json or '[]'),
                 "last_direction": event_record.last_direction,
                 "last_speed": event_record.last_speed,
+                "evidence_id": event_record.evidence_id,
+                "evidence_url": f"/api/v1/evidence/{event_record.evidence_id}/file" if event_record.evidence_id else None,
                 "started_at": event_record.started_at.isoformat(),
                 "last_updated_at": event_record.last_updated_at.isoformat()
             }

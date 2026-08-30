@@ -8,7 +8,10 @@ import { LiveVideoPlayer } from '../cameras/LiveVideoPlayer';
 import {
   Layers,
   Eye,
-  Crosshair
+  Crosshair,
+  Laptop,
+  Plane,
+  Smartphone
 } from 'lucide-react';
 
 interface SituationalMapModalProps {
@@ -121,6 +124,21 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
               );
               const isSelected = selectedCam?.camera_id === cam.camera_id;
 
+              const url = cam.rtsp_url || '';
+              const st = cam.stream_type || '';
+              let MarkerIcon = Crosshair;
+              let markerColor = activeInc ? 'text-rose-400 animate-spin' : 'text-sky-400';
+              if (st === 'drone' || url.startsWith('udp://') || url.startsWith('rtmp://')) {
+                MarkerIcon = Plane;
+                if (!activeInc) markerColor = 'text-purple-400';
+              } else if (st === 'webcam' || url.startsWith('webcam://')) {
+                MarkerIcon = Laptop;
+                if (!activeInc) markerColor = 'text-cyan-400';
+              } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
+                MarkerIcon = Smartphone;
+                if (!activeInc) markerColor = 'text-emerald-400';
+              }
+
               return (
                 <div
                   key={cam.camera_id}
@@ -135,7 +153,7 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
-                      <Crosshair className={`w-3.5 h-3.5 ${activeInc ? 'text-rose-400 animate-spin' : 'text-sky-400'}`} />
+                      <MarkerIcon className={`w-3.5 h-3.5 ${markerColor}`} />
                       <span className="text-[11px] font-mono font-bold text-slate-200">{cam.camera_id}</span>
                     </div>
 

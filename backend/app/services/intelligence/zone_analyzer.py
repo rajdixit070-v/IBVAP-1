@@ -60,22 +60,71 @@ class CameraZoneStateTracker:
             finally:
                 db.close()
 
-    def analyze_tracks(self, tracks: List[STrack], frame_width: int = 1920, frame_height: int = 1080):
+    def analyze_tracks(self, tracks: List[STrack], frame_width: int = 1920, frame_height: int = 1080, frame: Optional[Any] = None):
         """
         Executes spatial zone intersection, boundary crossing, and behavioural anomaly detection.
+        Captures cryptographic forensic evidence snapshots on every confirmed detection.
         """
         self.refresh_zones_if_needed()
-        if not self._cached_zones:
-            return
-
         now = datetime.utcnow()
         is_night = is_night_hour(20, 6)
+
+        if not self._cached_zones:
+            # Default Field-of-View Monitoring:
+            # When no explicit virtual boundary polygon is drawn yet, treat detected persons,
+            # vehicles, or animals in frame as active surveillance detections!
+            for track in tracks:
+                if track.frame_count >= 2:
+                    evd = None
+                    if frame is not None:
+                        try:
+                            from app.services.evidence.evidence_manager import evidence_manager
+                            evd = evidence_manager.capture_and_save_frame(
+                                camera_id=self.camera_id,
+                                frame=frame,
+                                track=track,
+                                event_type=f"{track.object_type.upper()}_DETECTED"
+                            )
+                        except Exception as ee:
+                            logger.warning(f"Evidence snapshot save failed: {ee}")
+
+                    is_unauth_person = (track.category == "person")
+                    ev_type = "UNAUTHORIZED_INTRUSION" if is_unauth_person else f"{track.object_type.upper()}_ACTIVITY"
+                    security_event_manager.dispatch_security_event(
+                        camera_id=self.camera_id,
+                        track_id=track.track_id,
+                        object_type=track.object_type,
+                        event_type=ev_type,
+                        zone_name="Perimeter Surveillance Sector",
+                        zone_type="RESTRICTED" if is_unauth_person else "MONITORING",
+                        is_night=is_night,
+                        confidence=track.confidence,
+                        bbox=track.bbox,
+                        direction=track.direction,
+                        speed=track.speed,
+                        timeline_message=f"{track.object_type.capitalize()} #{track.track_id} detected in camera field of view",
+                        evidence_id=evd.evidence_id if evd else None,
+                        evidence_path=evd.file_path if evd else None
+                    )
+            return
 
         # 1. Group Movement Evaluation
         groups = check_group_movement(tracks, max_distance_px=140.0)
         for group in groups:
             sample_track = next((t for t in tracks if t.track_id == group[0]), None)
             if sample_track:
+                evd = None
+                if frame is not None:
+                    try:
+                        from app.services.evidence.evidence_manager import evidence_manager
+                        evd = evidence_manager.capture_and_save_frame(
+                            camera_id=self.camera_id,
+                            frame=frame,
+                            track=sample_track,
+                            event_type="GROUP_MOVEMENT"
+                        )
+                    except Exception:
+                        pass
                 security_event_manager.dispatch_security_event(
                     camera_id=self.camera_id,
                     track_id=group[0],
@@ -87,13 +136,27 @@ class CameraZoneStateTracker:
                     bbox=sample_track.bbox,
                     direction=sample_track.direction,
                     speed=sample_track.speed,
-                    timeline_message=f"Group movement detected: {len(group)} subjects moving in coordination (Tracks: {group})"
+                    timeline_message=f"Group movement detected: {len(group)} subjects moving in coordination (Tracks: {group})",
+                    evidence_id=evd.evidence_id if evd else None,
+                    evidence_path=evd.file_path if evd else None
                 )
 
         # 1b. Crowd Gathering Evaluation
         person_tracks_in_cam = [t for t in tracks if t.category == "person" and t.frame_count >= 2]
         if len(person_tracks_in_cam) >= 4:
             sample_track = person_tracks_in_cam[0]
+            evd = None
+            if frame is not None:
+                try:
+                    from app.services.evidence.evidence_manager import evidence_manager
+                    evd = evidence_manager.capture_and_save_frame(
+                        camera_id=self.camera_id,
+                        frame=frame,
+                        track=sample_track,
+                        event_type="CROWD_GATHERING"
+                    )
+                except Exception:
+                    pass
             security_event_manager.dispatch_security_event(
                 camera_id=self.camera_id,
                 track_id=sample_track.track_id,
@@ -105,7 +168,9 @@ class CameraZoneStateTracker:
                 bbox=sample_track.bbox,
                 direction=sample_track.direction,
                 speed=sample_track.speed,
-                timeline_message=f"Crowd gathering detected: {len(person_tracks_in_cam)} persons detected concurrently on {self.camera_id}"
+                timeline_message=f"Crowd gathering detected: {len(person_tracks_in_cam)} persons detected concurrently on {self.camera_id}",
+                evidence_id=evd.evidence_id if evd else None,
+                evidence_path=evd.file_path if evd else None
             )
 
         # 2. Per-Track Per-Zone Analysis
@@ -148,6 +213,19 @@ class CameraZoneStateTracker:
                         # Check for forbidden direction at moment of entry
                         is_forbid = is_direction_forbidden(track.direction, direction_rule)
 
+                        evd = None
+                        if frame is not None:
+                            try:
+                                from app.services.evidence.evidence_manager import evidence_manager
+                                evd = evidence_manager.capture_and_save_frame(
+                                    camera_id=self.camera_id,
+                                    frame=frame,
+                                    track=track,
+                                    event_type="ZONE_INTRUSION"
+                                )
+                            except Exception:
+                                pass
+
                         security_event_manager.dispatch_security_event(
                             camera_id=self.camera_id,
                             track_id=track.track_id,
@@ -162,7 +240,9 @@ class CameraZoneStateTracker:
                             bbox=track.bbox,
                             direction=track.direction,
                             speed=track.speed,
-                            timeline_message=f"{track.object_type.capitalize()} #{track.track_id} crossed boundary into {zone_name} ({zone_type})"
+                            timeline_message=f"{track.object_type.capitalize()} #{track.track_id} crossed boundary into {zone_name} ({zone_type})",
+                            evidence_id=evd.evidence_id if evd else None,
+                            evidence_path=evd.file_path if evd else None
                         )
 
                     else:

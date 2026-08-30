@@ -26,6 +26,10 @@ export const crossCameraService = {
     return response.data;
   },
 
+  async deleteTransition(id: number): Promise<void> {
+    await api.delete(`/cross-camera/graph/transitions/${id}`);
+  },
+
   // Global Tracks
   async getGlobalTracks(params?: {
     status?: string;

@@ -654,7 +654,8 @@ class MultimodalEngine:
         if any(k in q_lower for k in [
             "status", "health", "fleet", "system overview", "how many camera",
             "active alert", "alert status", "incident count", "model status",
-            "telemetry", "diagnostics", "hardware", "edge node"
+            "telemetry", "diagnostics", "hardware", "edge node", "kaise chal raha",
+            "halat", "chalu", "kitne camera", "kya status"
         ]):
             cam_q = db.query(Camera)
             if current_user_scope_sites:
@@ -686,7 +687,7 @@ class MultimodalEngine:
                 f"• **Edge Appliances**: {online_nodes}/{len(edge_nodes)} nodes synchronized\n"
                 f"• **AI Model Engines**: {models_summary}\n"
                 f"• **System Mode**: Pure Production (Clean database state, zero synthetic mocks)\n\n"
-                "💡 *Tip: Ask 'How to add a camera' or 'How to draw geofence zones' for step-by-step operational guidance.*"
+                "💡 *Tip: Ask 'Explain operational modules' or 'How to add a camera' for workflow guidance.*"
             )
             return {
                 "query": query_str,
@@ -698,8 +699,77 @@ class MultimodalEngine:
                 "safety_notice": "AI Virtual Assistant cited live database counts and hardware state. No configurations were modified."
             }
 
-        # 2. OPERATIONAL WORKFLOW GUIDANCE: CAMERA SETUP
-        if ("camera" in q_lower or "rtsp" in q_lower or "stream" in q_lower) and not any(w in q_lower for w in ["event", "intrusion", "breach", "detected"]):
+        # 2. OPERATIONAL MODULES COMPREHENSIVE WALKTHROUGH
+        if any(k in q_lower for k in [
+            "module", "modules", "operational module", "kya use", "kaise use", "kya kaam",
+            "functionality", "features", "options", "explain", "btao", "list module",
+            "overview module", "kya hai", "sab kuch", "use case"
+        ]):
+            explanation = (
+                "🧭 **IBVAP Operational Modules & Functionality Guide**\n\n"
+                "Platform ke sabhi 14 Operational Modules ka use aur functionality neeche di gayi hai:\n\n"
+                "1. **Command Overview (Dashboard)**: Fleet metrics, active threats, and high-risk camera preview.\n"
+                "2. **SOC Command Center**: Real-time triage matrix for perimeter alarms, alerts acknowledgment, and escalation.\n"
+                "3. **System Health Center**: Hardware CPU/RAM monitoring, AI model engine status (YOLO, SFace, Drone).\n"
+                "4. **Multi-Site Central Command**: National federation hierarchy (Org ➔ Region ➔ Site ➔ BOP Outposts).\n"
+                "5. **Multimodal AI Intelligence**: Multi-signal event correlation (optical, thermal, audio) with cryptographic SHA-256 evidence.\n"
+                "6. **Enterprise Zero-Trust Security**: RBAC roles, encrypted audit logs, and camera credential encryption.\n"
+                "7. **Predictive Intelligence**: Early warning forecasting, 24-hour activity trends, and sensor outage vs threat detection.\n"
+                "8. **Behaviour Intelligence**: Kinematic anomaly detection (sudden running sprint, fence-edge loitering, repeated approach).\n"
+                "9. **Movement Intelligence (Re-ID)**: Cross-camera handover graph, global tracking journeys, and impossible travel detection.\n"
+                "10. **Incidents & Response**: Tactical case files with step-by-step SOP checklists and QRT dispatch.\n"
+                "11. **Camera Management**: Register real RTSP streams, GPS placement, and stream health diagnostic tests.\n"
+                "12. **Live Multi-View**: Tactical video wall with 1x1, 2x2, and 3x3 multi-camera grid layouts.\n"
+                "13. **Vehicle Intelligence (ANPR)**: Automatic license plate OCR and stolen/suspect vehicle watchlist alarms.\n"
+                "14. **Face Intelligence**: 128D biometric facial recognition, suspect photo upload, and cosine similarity matching."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"intent": "MODULES_GUIDE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational module overview cited from IBVAP Platform Documentation."
+            }
+
+        # 3. SETUP & STARTING INSTRUCTIONS
+        if any(k in q_lower for k in [
+            "setup", "run kaise", "start kaise", "shuru kaise", "kaise chalaye", "starting se",
+            "kaise run krege", "requirements", "prerequisites", "kaise start"
+        ]):
+            explanation = (
+                "🚀 **IBVAP Setup & Execution Guide (Scratch se Real Run)**\n\n"
+                "**1. Backend Start (Terminal 1)**:\n"
+                "```powershell\n"
+                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\backend\n"
+                "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload\n"
+                "```\n"
+                "*(Note: Global Python 3.10 me saari libraries installed hain, venv activate karne ki zaroorat nahi hai).*\n\n"
+                "**2. Frontend Start (Terminal 2)**:\n"
+                "```powershell\n"
+                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\frontend\n"
+                "npm run dev\n"
+                "```\n\n"
+                "**3. Browser Access**:\n"
+                "• Open: `http://localhost:5173`\n"
+                "• Username: `admin`\n"
+                "• Password: `Admin@IBVAP2026`\n\n"
+                "**4. Add Real Cameras**:\n"
+                "Go to **Camera Management** ➔ Click **+ Add Camera** ➔ Enter RTSP URL (`rtsp://ip:554/stream`)."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"intent": "SETUP_GUIDE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Standard production deployment and execution instructions."
+            }
+
+        # 4. OPERATIONAL WORKFLOW GUIDANCE: CAMERA SETUP
+        if ("camera" in q_lower or "rtsp" in q_lower or "stream" in q_lower or "cctv" in q_lower) and not any(w in q_lower for w in ["event", "intrusion", "breach", "detected"]):
             explanation = (
                 "📹 **Camera Onboarding & RTSP Streaming Workflow**\n\n"
                 "1. **Navigate to Camera Management**: Click **Camera Management** in the left sidebar.\n"
@@ -722,8 +792,8 @@ class MultimodalEngine:
                 "safety_notice": "Operational guidance cited directly from IBVAP Camera Management documentation."
             }
 
-        # 3. OPERATIONAL WORKFLOW GUIDANCE: GEOFENCE & TRIPWIRES
-        if any(k in q_lower for k in ["zone", "geofence", "tripwire", "polygon", "virtual wire", "perimeter fence"]) and not any(w in q_lower for w in ["event", "intrusion", "breach"]):
+        # 5. OPERATIONAL WORKFLOW GUIDANCE: GEOFENCE & TRIPWIRES
+        if any(k in q_lower for k in ["zone", "geofence", "tripwire", "polygon", "virtual wire", "perimeter fence", "tar", "boundary"]) and not any(w in q_lower for w in ["event", "intrusion", "breach"]):
             explanation = (
                 "🛡️ **Perimeter Geofencing & Zone Setup Workflow**\n\n"
                 "1. **Navigate to Perimeter Intelligence**: Click **Perimeter Intelligence** in the left navigation.\n"
@@ -747,8 +817,8 @@ class MultimodalEngine:
                 "safety_notice": "Operational guidance cited from IBVAP Perimeter Intelligence specification."
             }
 
-        # 4. OPERATIONAL WORKFLOW GUIDANCE: VEHICLE INTELLIGENCE & ANPR
-        if (any(k in q_lower for k in ["anpr", "plate", "vehicle", "stolen", "car watchlist", "license plate"])) and any(w in q_lower for w in ["how", "add", "watchlist", "setup", "register", "guide"]):
+        # 6. OPERATIONAL WORKFLOW GUIDANCE: VEHICLE INTELLIGENCE & ANPR
+        if any(k in q_lower for k in ["anpr", "plate", "vehicle", "stolen", "car watchlist", "license plate", "gadi", "gaadi"]):
             explanation = (
                 "🚗 **Vehicle Intelligence & ANPR Watchlist Workflow**\n\n"
                 "1. **Navigate to Vehicle Intelligence**: Click **Vehicle Intelligence** on the sidebar.\n"
@@ -768,8 +838,8 @@ class MultimodalEngine:
                 "safety_notice": "Operational guidance cited from IBVAP Vehicle Intelligence specification."
             }
 
-        # 5. OPERATIONAL WORKFLOW GUIDANCE: FACE INTELLIGENCE
-        if any(k in q_lower for k in ["face", "biometric", "facial", "suspect photo", "person watchlist"]) and any(w in q_lower for w in ["how", "add", "watchlist", "setup", "register", "upload"]):
+        # 7. OPERATIONAL WORKFLOW GUIDANCE: FACE INTELLIGENCE
+        if any(k in q_lower for k in ["face", "biometric", "facial", "suspect photo", "person watchlist", "chehra"]):
             explanation = (
                 "👤 **Face Intelligence & Biometric Watchlist Workflow**\n\n"
                 "1. **Navigate to Face Intelligence**: Click **Face Intelligence** in the sidebar.\n"
@@ -789,8 +859,8 @@ class MultimodalEngine:
                 "safety_notice": "Operational guidance cited from IBVAP Face Intelligence specification."
             }
 
-        # 6. OPERATIONAL WORKFLOW GUIDANCE: INCIDENTS & PLAYBOOKS
-        if any(k in q_lower for k in ["incident", "playbook", "sop", "qrt", "dispatch", "response checklist"]) and any(w in q_lower for w in ["how", "guide", "setup", "run", "handle"]):
+        # 8. OPERATIONAL WORKFLOW GUIDANCE: INCIDENTS & PLAYBOOKS
+        if any(k in q_lower for k in ["incident", "playbook", "sop", "qrt", "dispatch", "response checklist", "khatra", "breach"]):
             explanation = (
                 "📑 **Incident Response & Tactical SOP Playbook Workflow**\n\n"
                 "1. **Locate Alert**: In the **SOC Command Center**, select any critical perimeter breach or threat alarm.\n"
@@ -813,16 +883,20 @@ class MultimodalEngine:
                 "safety_notice": "Operational guidance cited from IBVAP Incident Command specification."
             }
 
-        # 7. GENERAL ASSISTANT HELP / CAPABILITIES
-        if any(k in q_lower for k in ["help", "who are you", "what can you do", "capabilities", "kya kar sakte ho", "options"]):
+        # 9. GENERAL ASSISTANT HELP / CAPABILITIES
+        if any(k in q_lower for k in ["help", "who are you", "what can you do", "capabilities", "kya kar sakte ho", "hello", "hi"]):
             explanation = (
                 "🤖 **IBVAP AI Virtual Assistant Capabilities**\n\n"
-                "I am your tactical AI Copilot for border security analytics. I can assist you with:\n\n"
-                "1. **Live Fleet Telemetry**: Ask *'What is system status?'* or *'How many cameras are online?'*\n"
-                "2. **Operational Workflows**: Ask *'How to add a camera'*, *'How to draw geofence zones'*, *'How to add vehicle watchlist'*, or *'How to run SOP playbooks'*.\n"
-                "3. **Factual Event Search**: Ask *'Show high-risk night events'* or *'Find vehicle intrusions'* to search database events with verified citations.\n"
-                "4. **Hardware & AI Status**: Ask *'Check AI model status'* to inspect YOLOv8, SFace, and Drone model engines.\n"
-                "5. **Zero-Trust Security**: Read-only safe queries with cryptographic evidence verification."
+                "I am your tactical AI Copilot for border video analytics. Main aapki in chijon me madad kar sakta hoon:\n\n"
+                "1. **Live Fleet Telemetry**: Ask *'What is system status?'* or *'System ka status batao'* to see real-time camera and alert metrics.\n"
+                "2. **Operational Modules Guide**: Ask *'Explain operational modules'* or *'Modules ka kya use hai'* to learn how every page works.\n"
+                "3. **Operational Step-by-Step Workflows**:\n"
+                "   • *'How to add a camera'* / *'Camera kaise add kare'*\n"
+                "   • *'How to draw geofence zones'* / *'Perimeter zone kaise banaye'*\n"
+                "   • *'How to add vehicle watchlist'* / *'ANPR setup kaise kare'*\n"
+                "   • *'How to register suspect face'* / *'Biometrics photo upload'*\n"
+                "   • *'How to run SOP playbooks'* / *'Incident triage'*\n"
+                "4. **Factual Event Search**: Ask *'Show high-risk night events'* to search database records with verified SHA-256 evidence citations."
             )
             return {
                 "query": query_str,
@@ -834,19 +908,19 @@ class MultimodalEngine:
                 "safety_notice": "AI Virtual Assistant is ready to guide operational workflows and synthesize verified database records."
             }
 
-        # 8. DATABASE EVENT SEARCH (WITH FACTUAL CITATIONS)
+        # 10. DATABASE EVENT SEARCH (WITH FACTUAL CITATIONS)
         query = db.query(MultimodalSecurityEvent)
         if current_user_scope_sites is not None:
             query = query.filter(MultimodalSecurityEvent.site_id.in_(current_user_scope_sites))
 
         # Parse Intent & Criteria
-        if "night" in q_lower or "dark" in q_lower:
+        if "night" in q_lower or "dark" in q_lower or "raat" in q_lower:
             filters["lighting"] = "NIGHT"
             query = query.filter(
                 (MultimodalSecurityEvent.explanation_json.ilike("%night%")) |
                 (MultimodalSecurityEvent.title.ilike("%night%"))
             )
-        if "high risk" in q_lower or "critical" in q_lower:
+        if "high risk" in q_lower or "critical" in q_lower or "khatarnak" in q_lower:
             filters["risk_level"] = "HIGH/CRITICAL"
             query = query.filter(MultimodalSecurityEvent.risk_level.in_(["HIGH", "CRITICAL"]))
         if "loiter" in q_lower or "prolonged" in q_lower:
@@ -870,9 +944,14 @@ class MultimodalEngine:
 
         if not results:
             explanation = (
-                f"No historical security events matched query '{query_str}' in the clean production database. "
-                "All baseline activity is normal. Once your real physical cameras are connected and stream analytics begin, "
-                "matching detections and correlated multimodal events will automatically be indexed and cited here in real time."
+                f"💡 **AI Copilot Response for:** *\"{query_str}\"*\n\n"
+                "Clean database me is samay koi security alert/breach record nahi hai (zero threat state).\n\n"
+                "Aap in me se koi bhi command puch sakte hain:\n"
+                "• *'What is system status?'* ➔ Live camera, alert, aur hardware telemetry report\n"
+                "• *'Explain operational modules'* ➔ Sabhi 14 modules ki detail guide\n"
+                "• *'How to add a camera?'* ➔ RTSP IP camera connect karne ka workflow\n"
+                "• *'How to draw a geofence zone?'* ➔ Virtual fence aur polygon tripwire setup\n"
+                "• *'How to run from scratch?'* ➔ Full backend & frontend startup guide"
             )
         else:
             explanation = (

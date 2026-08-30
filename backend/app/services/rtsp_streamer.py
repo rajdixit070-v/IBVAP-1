@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import math
 import logging
@@ -144,17 +145,47 @@ class RTSPStreamer:
             try:
                 self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
                 start_conn = time.time()
-                
-                # Set TCP capture options
-                os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
-                cap = cv2.VideoCapture(self.auth_url, cv2.CAP_FFMPEG)
-                
-                if not cap.isOpened():
-                    cap.release()
-                    cap = cv2.VideoCapture(self.auth_url)
+                url_str = self.auth_url.strip()
 
-                if not cap.isOpened():
-                    raise ConnectionError("Unable to open RTSP stream connection.")
+                if url_str.startswith(("webcam://", "device://")) or url_str.isdigit():
+                    idx_str = url_str.replace("webcam://", "").replace("device://", "").strip()
+                    dev_idx = int(idx_str) if idx_str.isdigit() else 0
+                    self._update_status("CONNECTING", f"Connecting to local webcam device #{dev_idx}...")
+                    if sys.platform == "win32":
+                        cap = cv2.VideoCapture(dev_idx, cv2.CAP_DSHOW)
+                    else:
+                        cap = cv2.VideoCapture(dev_idx)
+                    if not cap.isOpened():
+                        cap.release()
+                        cap = cv2.VideoCapture(dev_idx)
+                    if not cap.isOpened():
+                        raise ConnectionError(f"Unable to open local webcam device #{dev_idx}. Ensure camera is connected and not locked by another app.")
+                elif url_str.startswith("udp://"):
+                    self._update_status("CONNECTING", "Connecting to Drone UDP video stream...")
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp|stimeout;5000000"
+                    cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
+                    if not cap.isOpened():
+                        cap.release()
+                        cap = cv2.VideoCapture(url_str)
+                    if not cap.isOpened():
+                        raise ConnectionError("Unable to open Drone UDP video stream.")
+                elif url_str.startswith(("http://", "https://")):
+                    self._update_status("CONNECTING", "Connecting to Mobile / HTTP video stream...")
+                    cap = cv2.VideoCapture(url_str)
+                    if not cap.isOpened():
+                        cap.release()
+                        cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
+                    if not cap.isOpened():
+                        raise ConnectionError("Unable to open HTTP/Mobile camera video stream.")
+                else:
+                    self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
+                    cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
+                    if not cap.isOpened():
+                        cap.release()
+                        cap = cv2.VideoCapture(url_str)
+                    if not cap.isOpened():
+                        raise ConnectionError("Unable to open RTSP stream connection.")
 
                 # Retrieve stream parameters
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
