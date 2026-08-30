@@ -17,7 +17,8 @@ import {
   Layers,
   AlertTriangle,
   Car,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
 
 export const MovementIntelligencePage: React.FC = () => {
@@ -70,6 +71,26 @@ export const MovementIntelligencePage: React.FC = () => {
   const handleOpenDetail = (trackId: string) => {
     setSelectedTrackId(trackId);
     setDetailModalOpen(true);
+  };
+
+  const handleDeleteTrack = async (e: React.MouseEvent, trackId: string) => {
+    e.stopPropagation();
+    try {
+      await crossCameraService.deleteGlobalTrack(trackId);
+      setTracks((prev) => prev.filter((t) => t.global_track_id !== trackId));
+    } catch (e) {
+      console.error('Failed to delete global track', e);
+    }
+  };
+
+  const handleClearTracks = async () => {
+    try {
+      const filterType = activeTab === 'vehicles' ? 'vehicle' : activeTab === 'persons' ? 'person' : undefined;
+      await crossCameraService.clearAllGlobalTracks(filterType);
+      loadData();
+    } catch (e) {
+      console.error('Failed to clear tracks', e);
+    }
   };
 
   return (
@@ -212,6 +233,17 @@ export const MovementIntelligencePage: React.FC = () => {
             <option value="COMPLETED">🔵 Completed</option>
           </select>
 
+          {tracks.length > 0 && (
+            <button
+              onClick={handleClearTracks}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 rounded-lg border border-rose-500/30 transition text-xs font-mono font-bold"
+              title={activeTab === 'vehicles' ? "Clear all vehicle journeys" : "Clear all movement tracks"}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {activeTab === 'vehicles' ? "CLEAR VEHICLES" : "CLEAR ALL"}
+            </button>
+          )}
+
           <button
             onClick={loadData}
             className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition"
@@ -235,12 +267,13 @@ export const MovementIntelligencePage: React.FC = () => {
                 <th className="px-4 py-3">TOTAL STOPS</th>
                 <th className="px-4 py-3">CONFIDENCE</th>
                 <th className="px-4 py-3">LAST SEEN</th>
+                <th className="px-4 py-3 text-right">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
               {tracks.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
                     No global multi-camera movement records found.
                   </td>
                 </tr>
@@ -283,6 +316,15 @@ export const MovementIntelligencePage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-[11px]">
                       {new Date(gt.last_observation_time).toLocaleTimeString()}
+                    </td>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => handleDeleteTrack(e, gt.global_track_id)}
+                        className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition border border-transparent hover:border-rose-500/30"
+                        title={`Remove ${gt.object_type} ${gt.global_track_id} from console`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))

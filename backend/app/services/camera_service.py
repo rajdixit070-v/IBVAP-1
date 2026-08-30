@@ -1,7 +1,10 @@
+import logging
 from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+
+logger = logging.getLogger("ibvap.camera_service")
 
 from app.models.camera import Camera
 from app.models.health_log import CameraHealthLog
@@ -168,16 +171,47 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
     return format_camera_response(db_camera)
 
 def delete_camera(db: Session, db_camera: Camera):
-    """Stops streamer, removes diagnostic logs, and deletes camera record."""
-    # Stop streamer
-    stream_manager.stop_camera(db_camera.camera_id)
-    
-    # Remove logs
-    db.query(CameraHealthLog).filter(CameraHealthLog.camera_id == db_camera.camera_id).delete()
-    
-    # Delete camera
+    """Stops streamer, unregisters AI worker, cleans up dependent records, and deletes camera record."""
+    cam_id = db_camera.camera_id
+
+    # 1. Stop streamer and AI worker
+    stream_manager.stop_camera(cam_id)
+    try:
+        from app.services.ai.pipeline import ai_pipeline
+        ai_pipeline.unregister_camera(cam_id)
+    except Exception as e:
+        logger.debug(f"AI pipeline unregister notice for {cam_id}: {e}")
+
+    # 2. Cascade delete dependent configurations & logs
+    try:
+        from app.models.ai_config import CameraAIConfig
+        db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == cam_id).delete(synchronize_session=False)
+    except Exception:
+        pass
+
+    try:
+        from app.models.zone import SecurityZone
+        db.query(SecurityZone).filter(SecurityZone.camera_id == cam_id).delete(synchronize_session=False)
+    except Exception:
+        pass
+
+    try:
+        from app.models.camera_transition import CameraTransition
+        db.query(CameraTransition).filter(
+            (CameraTransition.from_camera_id == cam_id) | (CameraTransition.to_camera_id == cam_id)
+        ).delete(synchronize_session=False)
+    except Exception:
+        pass
+
+    try:
+        db.query(CameraHealthLog).filter(CameraHealthLog.camera_id == cam_id).delete(synchronize_session=False)
+    except Exception:
+        pass
+
+    # 3. Delete camera
     db.delete(db_camera)
     db.commit()
+    logger.info(f"Camera {cam_id} and all related configurations deleted successfully.")
 
 def get_overview_summary(db: Session) -> Dict[str, Any]:
     """Aggregates high-level camera statistics grouped by BOP and health status."""

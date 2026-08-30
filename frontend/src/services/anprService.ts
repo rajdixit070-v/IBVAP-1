@@ -29,6 +29,16 @@ export const anprService = {
     return response.data;
   },
 
+  async deleteEvent(eventId: string): Promise<any> {
+    const response = await api.delete(`/anpr/events/${eventId}`);
+    return response.data;
+  },
+
+  async clearAllEvents(): Promise<any> {
+    const response = await api.delete('/anpr/events/clear-all');
+    return response.data;
+  },
+
   // Vehicle Watchlist CRUD
   async getVehicles(params?: {
     status?: string;

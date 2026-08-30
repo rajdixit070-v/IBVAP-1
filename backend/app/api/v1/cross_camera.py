@@ -187,6 +187,51 @@ def get_global_track_detail(
         anomalies=anom_responses
     )
 
+@router.delete("/tracks/clear-all")
+@router.post("/tracks/clear-all")
+def clear_all_global_tracks(
+    object_type: Optional[str] = Query(None, description="Optional filter: vehicle, person"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes all or filtered global movement tracks.
+    """
+    query = db.query(GlobalTrack)
+    if object_type:
+        query = query.filter(GlobalTrack.object_type == object_type)
+    tracks_to_delete = query.all()
+    deleted_ids = [t.global_track_id for t in tracks_to_delete]
+
+    if deleted_ids:
+        db.query(TrackObservation).filter(TrackObservation.global_track_id.in_(deleted_ids)).delete(synchronize_session=False)
+        db.query(TrackAssociation).filter(TrackAssociation.global_track_id.in_(deleted_ids)).delete(synchronize_session=False)
+        db.query(MovementAnomaly).filter(MovementAnomaly.global_track_id.in_(deleted_ids)).delete(synchronize_session=False)
+        for t in tracks_to_delete:
+            db.delete(t)
+        db.commit()
+    return {"status": "SUCCESS", "message": f"Deleted {len(deleted_ids)} global tracks."}
+
+@router.delete("/tracks/{global_track_id}")
+def delete_global_track(
+    global_track_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes a single global movement track and its associated observations, associations, and anomalies.
+    """
+    track = db.query(GlobalTrack).filter(GlobalTrack.global_track_id == global_track_id).first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Global Track not found.")
+
+    db.query(TrackObservation).filter(TrackObservation.global_track_id == global_track_id).delete()
+    db.query(TrackAssociation).filter(TrackAssociation.global_track_id == global_track_id).delete()
+    db.query(MovementAnomaly).filter(MovementAnomaly.global_track_id == global_track_id).delete()
+    db.delete(track)
+    db.commit()
+    return {"status": "SUCCESS", "message": f"Global Track {global_track_id} deleted."}
+
 # --- Association Human Review ---
 
 @router.post("/associations/{association_id}/review", response_model=TrackAssociationResponse)

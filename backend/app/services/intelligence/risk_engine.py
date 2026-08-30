@@ -54,8 +54,12 @@ class ThreatRiskEngine:
         p_low_conf = self._get_val("penalty_low_confidence", -10)
 
         # 1. Zone & Intrusion Factor
-        if event_type == "ZONE_INTRUSION":
-            if zone_type == "RESTRICTED":
+        if event_type in ["ZONE_INTRUSION", "UNAUTHORIZED_INTRUSION", "PERIMETER_HUMAN_DETECTED"]:
+            if event_type in ["UNAUTHORIZED_INTRUSION", "PERIMETER_HUMAN_DETECTED"]:
+                # High-priority intrusion on perimeter camera sensor
+                score += 70
+                factors.append({"factor": "UNAUTHORIZED_HUMAN_DETECTED", "weight": 70, "description": "Unauthorized human subject detected on perimeter camera sensor."})
+            elif zone_type == "RESTRICTED":
                 score += w_restricted
                 factors.append({"factor": "RESTRICTED_ZONE_INTRUSION", "weight": w_restricted, "description": "Subject penetrated a designated restricted perimeter zone."})
             elif zone_type == "HIGH_SECURITY":

@@ -47,6 +47,18 @@ export const crossCameraService = {
     return response.data;
   },
 
+  async deleteGlobalTrack(globalTrackId: string): Promise<any> {
+    const response = await api.delete(`/cross-camera/tracks/${globalTrackId}`);
+    return response.data;
+  },
+
+  async clearAllGlobalTracks(objectType?: string): Promise<any> {
+    const response = await api.delete('/cross-camera/tracks/clear-all', {
+      params: objectType ? { object_type: objectType } : undefined
+    });
+    return response.data;
+  },
+
   // Association Review
   async reviewAssociation(
     associationId: string,

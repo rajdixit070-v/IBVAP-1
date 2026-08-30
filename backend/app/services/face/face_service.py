@@ -126,7 +126,20 @@ class FaceAnalyticsService:
 
             logger.info(f"Face [{camera_id}] Track #{track.track_id} -> {match_status} (Sim: {round(best_similarity, 2)}, Quality: {quality_score})")
 
-            # 5. Escalate Risk Engine if Watchlist Potential Match
+            # 5. Capture Forensic Evidence & Escalate Risk Engine if Watchlist Potential Match
+            evd = None
+            if frame is not None and frame.size > 0:
+                try:
+                    from app.services.evidence.evidence_manager import evidence_manager
+                    evd = evidence_manager.capture_and_save_frame(
+                        camera_id=camera_id,
+                        frame=frame,
+                        track=track,
+                        event_type="FACE_IDENTIFIED"
+                    )
+                except Exception as ee:
+                    logger.warning(f"Face evidence save failed: {ee}")
+
             if match_status == "WATCHLIST_POTENTIAL_MATCH":
                 security_event_manager.dispatch_security_event(
                     camera_id=camera_id,
@@ -137,7 +150,9 @@ class FaceAnalyticsService:
                     bbox=track.bbox,
                     direction=track.direction,
                     speed=track.speed,
-                    timeline_message=f"Facial Match: Potential Watchlist Match for Person #{track.track_id} (Identity: {matched_name} • Similarity: {round(best_similarity * 100)}%)"
+                    timeline_message=f"Facial Match: Potential Watchlist Match for Person #{track.track_id} (Identity: {matched_name} • Similarity: {round(best_similarity * 100)}%)",
+                    evidence_id=evd.evidence_id if evd else None,
+                    evidence_path=evd.file_path if evd else None
                 )
 
             return FaceRecognitionResult(

@@ -424,30 +424,48 @@ export const MultiSiteCommandPage: React.FC = () => {
             <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40"></div>
 
             {/* Sites Layer */}
-            <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              {mapData.sites.map(s => (
-                <div
-                  key={s.id}
-                  onClick={() => { setSelectedSiteId(s.id); setActiveSubTab('directory'); }}
-                  className="bg-[#0f172a]/90 border border-indigo-500/40 p-4 rounded-xl shadow-lg hover:border-indigo-400 cursor-pointer transition"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-400">
-                      SITE: {s.code}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {s.latitude.toFixed(3)}°N, {s.longitude.toFixed(3)}°E
-                    </span>
-                  </div>
-                  <div className="text-sm font-bold text-white truncate">{s.name}</div>
-                  <div className="flex items-center justify-between text-xs font-mono mt-3 text-slate-400">
-                    <span>Health: <strong className="text-emerald-400">{s.health_score}%</strong></span>
-                    <span>Risk: <strong className="text-rose-400">{s.risk_score}/100</strong></span>
-                    <span>Cams: <strong className="text-sky-400">{s.total_cameras}</strong></span>
-                  </div>
+            {mapData.sites.length === 0 ? (
+              <div className="relative z-10 py-12 text-center space-y-3">
+                <Globe className="w-12 h-12 mx-auto text-indigo-400/60 animate-pulse" />
+                <div className="text-sm font-mono font-bold text-slate-300">
+                  NO FEDERATED SITES CONFIGURED
                 </div>
-              ))}
-            </div>
+                <p className="text-xs font-mono text-slate-500 max-w-md mx-auto">
+                  All synthetic demo sites have been purged. You can register genuine border command sites and BOPs to start multi-site federation.
+                </p>
+                <button
+                  onClick={() => setIsSiteModalOpen(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Register Tactical Site
+                </button>
+              </div>
+            ) : (
+              <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                {mapData.sites.map(s => (
+                  <div
+                    key={s.id}
+                    onClick={() => { setSelectedSiteId(s.id); setActiveSubTab('directory'); }}
+                    className="bg-[#0f172a]/90 border border-indigo-500/40 p-4 rounded-xl shadow-lg hover:border-indigo-400 cursor-pointer transition"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-400">
+                        SITE: {s.code}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {s.latitude.toFixed(3)}°N, {s.longitude.toFixed(3)}°E
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-white truncate">{s.name}</div>
+                    <div className="flex items-center justify-between text-xs font-mono mt-3 text-slate-400">
+                      <span>Health: <strong className="text-emerald-400">{s.health_score}%</strong></span>
+                      <span>Risk: <strong className="text-rose-400">{s.risk_score}/100</strong></span>
+                      <span>Cams: <strong className="text-sky-400">{s.total_cameras}</strong></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* BOPs & Cameras Cluster Layer */}
             <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -483,36 +501,52 @@ export const MultiSiteCommandPage: React.FC = () => {
       {/* SUBTAB 2: SITE DIRECTORY & HIERARCHY */}
       {activeSubTab === 'directory' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {sites.map(s => {
-              const isSelected = selectedSiteId === s.site_id;
-              return (
-                <div
-                  key={s.site_id}
-                  onClick={() => setSelectedSiteId(s.site_id)}
-                  className={`bg-[#0d1322] border rounded-2xl p-5 cursor-pointer transition shadow-lg ${
-                    isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-mono font-bold text-indigo-400">{s.site_id}</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                      s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                    }`}>
-                      {s.status}
-                    </span>
+          {sites.length === 0 ? (
+            <div className="bg-[#0d1322] border border-slate-800 rounded-2xl py-16 px-4 text-center space-y-3">
+              <Building2 className="w-12 h-12 mx-auto text-indigo-400/60" />
+              <div className="text-sm font-mono font-bold text-slate-300">NO TACTICAL SITES CONFIGURED</div>
+              <p className="text-xs font-mono text-slate-500 max-w-md mx-auto">
+                No sites are currently configured. Register your primary tactical command center or border outpost.
+              </p>
+              <button
+                onClick={() => setIsSiteModalOpen(true)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg inline-flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Register Tactical Site
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {sites.map(s => {
+                const isSelected = selectedSiteId === s.site_id;
+                return (
+                  <div
+                    key={s.site_id}
+                    onClick={() => setSelectedSiteId(s.site_id)}
+                    className={`bg-[#0d1322] border rounded-2xl p-5 cursor-pointer transition shadow-lg ${
+                      isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-mono font-bold text-indigo-400">{s.site_id}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                        s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-white">{s.name}</h3>
+                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{s.description || 'Tactical border command center.'}</p>
+                    
+                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-400">
+                      <span>Region: {s.region_id}</span>
+                      <span>TZ: {s.timezone}</span>
+                    </div>
                   </div>
-                  <h3 className="text-base font-bold text-white">{s.name}</h3>
-                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{s.description || 'Tactical border command center.'}</p>
-                  
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-400">
-                    <span>Region: {s.region_id}</span>
-                    <span>TZ: {s.timezone}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Drill-down Site Telemetry */}
           {siteOverview && (
@@ -569,70 +603,88 @@ export const MultiSiteCommandPage: React.FC = () => {
       {/* SUBTAB 3: BOP GRID & CAMERA WALL */}
       {activeSubTab === 'bop-wall' && (
         <div className="space-y-6">
-          {/* BOP Selector Header */}
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0d1322] border border-slate-800 p-5 rounded-2xl">
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 text-emerald-400" />
-              <div>
-                <h3 className="text-sm font-bold text-white">
-                  Border Outpost Surveillance Wall: {bopOverview?.name || selectedBopId}
-                </h3>
-                <p className="text-xs text-slate-400 font-mono">
-                  {bopOverview ? `${bopOverview.total_cameras} Total Cameras • Status: ${bopOverview.status} • Priority: ${bopOverview.operational_priority}` : 'Select a BOP'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-mono text-slate-400">Switch BOP:</span>
-              <select
-                value={selectedBopId}
-                onChange={(e) => setSelectedBopId(e.target.value)}
-                className="bg-[#111a2e] border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-emerald-400 focus:outline-none"
+          {bops.length === 0 ? (
+            <div className="bg-[#0d1322] border border-slate-800 rounded-2xl py-16 px-4 text-center space-y-3">
+              <Shield className="w-12 h-12 mx-auto text-emerald-400/60" />
+              <div className="text-sm font-mono font-bold text-slate-300">NO BORDER OUTPOSTS (BOPs) CONFIGURED</div>
+              <p className="text-xs font-mono text-slate-500 max-w-md mx-auto">
+                No border outposts are currently configured under federation. Register a BOP outpost to view localized camera grids.
+              </p>
+              <button
+                onClick={() => setIsBopModalOpen(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg inline-flex items-center gap-2 cursor-pointer"
               >
-                {bops.map(b => (
-                  <option key={b.bop_id} value={b.bop_id}>
-                    {b.name} ({b.code}) — {b.site_id}
-                  </option>
-                ))}
-              </select>
+                <Plus className="w-4 h-4" /> Register Border Outpost
+              </button>
             </div>
-          </div>
-
-          {/* Camera Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {bopCameras.map(c => (
-              <div key={c.camera_id} className="bg-[#0d1322] border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col justify-between space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-sky-400">{c.camera_id}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                    c.status === 'ONLINE' || c.status === 'HEALTHY' ? 'bg-emerald-500/20 text-emerald-400' :
-                    c.status === 'DEGRADED' ? 'bg-orange-500/20 text-orange-400' : 'bg-rose-500/20 text-rose-400'
-                  }`}>
-                    {c.status}
-                  </span>
+          ) : (
+            <>
+              {/* BOP Selector Header */}
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0d1322] border border-slate-800 p-5 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-5 h-5 text-emerald-400" />
+                  <div>
+                    <h3 className="text-sm font-bold text-white">
+                      Border Outpost Surveillance Wall: {bopOverview?.name || selectedBopId}
+                    </h3>
+                    <p className="text-xs text-slate-400 font-mono">
+                      {bopOverview ? `${bopOverview.total_cameras} Total Cameras • Status: ${bopOverview.status} • Priority: ${bopOverview.operational_priority}` : 'Select a BOP'}
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <h4 className="text-sm font-bold text-white truncate">{c.camera_name}</h4>
-                  <p className="text-[11px] font-mono text-slate-400 mt-0.5">
-                    FPS: {c.fps?.toFixed(1)} / {c.expected_fps} • Priority: {c.priority}
-                  </p>
-                </div>
-
-                <div className="p-2.5 bg-[#070b14] border border-slate-800 rounded-lg text-xs font-mono">
-                  <div className="flex items-center justify-between text-slate-400">
-                    <span>Event:</span>
-                    <span className="text-amber-400 font-semibold truncate ml-2">{c.current_event}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-slate-400 mt-1">
-                    <span>Risk:</span>
-                    <span className="text-rose-400 font-bold">{c.risk_score}/100</span>
-                  </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-slate-400">Switch BOP:</span>
+                  <select
+                    value={selectedBopId}
+                    onChange={(e) => setSelectedBopId(e.target.value)}
+                    className="bg-[#111a2e] border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-emerald-400 focus:outline-none"
+                  >
+                    {bops.map(b => (
+                      <option key={b.bop_id} value={b.bop_id}>
+                        {b.name} ({b.code}) — {b.site_id}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            ))}
-          </div>
+
+              {/* Camera Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {bopCameras.map(c => (
+                  <div key={c.camera_id} className="bg-[#0d1322] border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col justify-between space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold text-sky-400">{c.camera_id}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                        c.status === 'ONLINE' || c.status === 'HEALTHY' ? 'bg-emerald-500/20 text-emerald-400' :
+                        c.status === 'DEGRADED' ? 'bg-orange-500/20 text-orange-400' : 'bg-rose-500/20 text-rose-400'
+                      }`}>
+                        {c.status}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-bold text-white truncate">{c.camera_name}</h4>
+                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+                        FPS: {c.fps?.toFixed(1)} / {c.expected_fps} • Priority: {c.priority}
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 bg-[#070b14] border border-slate-800 rounded-lg text-xs font-mono">
+                      <div className="flex items-center justify-between text-slate-400">
+                        <span>Event:</span>
+                        <span className="text-amber-400 font-semibold truncate ml-2">{c.current_event}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-400 mt-1">
+                        <span>Risk:</span>
+                        <span className="text-rose-400 font-bold">{c.risk_score}/100</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 

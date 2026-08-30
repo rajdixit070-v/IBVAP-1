@@ -14,7 +14,8 @@ import {
   Flame,
   Plus,
   RefreshCw,
-  BellRing
+  BellRing,
+  Trash2
 } from 'lucide-react';
 
 export const CommandCenterPage: React.FC = () => {
@@ -64,6 +65,25 @@ export const CommandCenterPage: React.FC = () => {
       loadSOCData();
     } catch (e) {
       console.error('Failed to acknowledge alert', e);
+    }
+  };
+
+  const handleDeleteAlert = async (e: React.MouseEvent, alertId: string) => {
+    e.stopPropagation();
+    try {
+      await incidentService.deleteAlert(alertId);
+      setAlerts(prev => prev.filter(a => a.alert_id !== alertId));
+    } catch (e) {
+      console.error('Failed to delete alert', e);
+    }
+  };
+
+  const handleClearAllAlerts = async () => {
+    try {
+      await incidentService.clearAllAlerts();
+      setAlerts([]);
+    } catch (e) {
+      console.error('Failed to clear all alerts', e);
     }
   };
 
@@ -202,7 +222,18 @@ export const CommandCenterPage: React.FC = () => {
                 <ShieldAlert className="w-4 h-4 text-sky-400" />
                 Live Real-Time Alert Stream ({alerts.length})
               </h3>
-              <span className="text-[11px] font-mono text-slate-500">Auto-Deduplicated Stream</span>
+              <div className="flex items-center gap-2">
+                {alerts.length > 0 && (
+                  <button
+                    onClick={handleClearAllAlerts}
+                    className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition border border-transparent hover:border-rose-500/30"
+                    title="Delete all alerts from stream"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <span className="text-[11px] font-mono text-slate-500">Auto-Deduplicated Stream</span>
+              </div>
             </div>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -212,7 +243,7 @@ export const CommandCenterPage: React.FC = () => {
                 alerts.slice(0, 10).map((a: Alert) => (
                   <div
                     key={a.alert_id}
-                    className="p-3 bg-[#090d16] border border-[#1e293b] hover:border-slate-700 rounded-xl flex items-center justify-between transition gap-3"
+                    className="p-3 bg-[#090d16] border border-[#1e293b] hover:border-slate-700 rounded-xl flex items-center justify-between transition gap-3 group"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -253,6 +284,13 @@ export const CommandCenterPage: React.FC = () => {
                         className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded text-[10px] font-mono font-bold transition"
                       >
                         INCIDENT
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteAlert(e, a.alert_id)}
+                        className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition border border-transparent hover:border-rose-500/30"
+                        title="Delete alert"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

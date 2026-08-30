@@ -24,15 +24,35 @@ export const incidentService = {
     return response.data;
   },
 
+  async deleteAlert(alertId: string): Promise<any> {
+    const response = await api.delete(`/alerts/${alertId}`);
+    return response.data;
+  },
+
+  async clearAllAlerts(): Promise<any> {
+    const response = await api.delete('/alerts/clear-all');
+    return response.data;
+  },
+
   // Notifications
-  async getNotifications(params?: { is_read?: boolean; limit?: number } | boolean): Promise<Notification[]> {
-    const query = typeof params === 'boolean' ? { is_read: params } : params;
+  async getNotifications(params?: { is_read?: boolean; unread_only?: boolean; limit?: number } | boolean): Promise<Notification[]> {
+    const query = typeof params === 'boolean' ? { unread_only: params } : params;
     const response = await api.get<Notification[]>('/notifications', { params: query });
     return response.data;
   },
 
   async markAllNotificationsRead(): Promise<any> {
     const response = await api.post('/notifications/read-all');
+    return response.data;
+  },
+
+  async deleteNotification(notificationId: number): Promise<any> {
+    const response = await api.delete(`/notifications/${notificationId}`);
+    return response.data;
+  },
+
+  async clearAllNotifications(): Promise<any> {
+    const response = await api.delete('/notifications/clear-all');
     return response.data;
   },
 

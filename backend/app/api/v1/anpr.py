@@ -70,3 +70,32 @@ def get_anpr_event_detail(
     if not event:
         raise HTTPException(status_code=404, detail="ANPR event not found.")
     return event
+
+@router.delete("/events/clear-all")
+@router.post("/events/clear-all")
+def clear_all_anpr_events(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes all recorded vehicle ANPR events.
+    """
+    count = db.query(ANPREvent).delete()
+    db.commit()
+    return {"status": "SUCCESS", "message": f"All {count} ANPR events deleted."}
+
+@router.delete("/events/{event_id}")
+def delete_anpr_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes a single ANPR event.
+    """
+    event = db.query(ANPREvent).filter(ANPREvent.event_id == event_id).first()
+    if event:
+        db.delete(event)
+        db.commit()
+        return {"status": "SUCCESS", "message": f"ANPR Event {event_id} deleted."}
+    raise HTTPException(status_code=404, detail=f"ANPR Event '{event_id}' not found.")

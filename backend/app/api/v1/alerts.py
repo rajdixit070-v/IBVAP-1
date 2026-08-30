@@ -134,3 +134,32 @@ def resolve_alert(
         return updated
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@router.delete("/clear-all")
+@router.post("/clear-all")
+def clear_all_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes all alerts from the SOC real-time alert stream.
+    """
+    count = db.query(Alert).delete()
+    db.commit()
+    return {"status": "SUCCESS", "message": f"All {count} alerts deleted."}
+
+@router.delete("/{alert_id}")
+def delete_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes a single alert from the database.
+    """
+    alt = db.query(Alert).filter(Alert.alert_id == alert_id).first()
+    if alt:
+        db.delete(alt)
+        db.commit()
+        return {"status": "SUCCESS", "message": f"Alert {alert_id} deleted."}
+    raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found.")

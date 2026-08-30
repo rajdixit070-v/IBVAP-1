@@ -70,6 +70,24 @@ export const VehicleIntelligencePage: React.FC = () => {
     }
   };
 
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      await anprService.deleteEvent(eventId);
+      setEvents(prev => prev.filter(e => e.event_id !== eventId));
+    } catch (e) {
+      console.error('Failed to delete ANPR event', e);
+    }
+  };
+
+  const handleClearEvents = async () => {
+    try {
+      await anprService.clearAllEvents();
+      setEvents([]);
+    } catch (e) {
+      console.error('Failed to clear ANPR events', e);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Top Welcome Banner */}
@@ -203,6 +221,17 @@ export const VehicleIntelligencePage: React.FC = () => {
             <option value="UNKNOWN">❓ Unknown</option>
           </select>
 
+          {events.length > 0 && activeTab === 'events' && (
+            <button
+              onClick={handleClearEvents}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 rounded-lg border border-rose-500/30 transition text-xs font-mono font-bold"
+              title="Clear all recorded ANPR events"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              CLEAR LOG
+            </button>
+          )}
+
           <button
             onClick={loadData}
             className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition"
@@ -227,12 +256,13 @@ export const VehicleIntelligencePage: React.FC = () => {
                   <th className="px-4 py-3">OBSERVATIONS</th>
                   <th className="px-4 py-3">TIME</th>
                   <th className="px-4 py-3">OWNER / NOTES</th>
+                  <th className="px-4 py-3 text-right">ACTIONS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
                 {events.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                    <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
                       No ANPR recognition events found matching criteria.
                     </td>
                   </tr>
@@ -287,6 +317,15 @@ export const VehicleIntelligencePage: React.FC = () => {
                         ) : (
                           <span className="text-slate-600">—</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleDeleteEvent(evt.event_id)}
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition border border-transparent hover:border-rose-500/30"
+                          title={`Delete ANPR event ${evt.event_id}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))

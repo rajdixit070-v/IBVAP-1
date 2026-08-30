@@ -58,6 +58,9 @@ class AlertSoundService {
     try {
       const ctx = this.getAudioContext();
       if (!ctx) return;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
@@ -71,8 +74,8 @@ class AlertSoundService {
         osc.frequency.exponentialRampToValueAtTime(880, now + 0.30);
         osc.frequency.exponentialRampToValueAtTime(520, now + 0.45);
 
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.55);
+        gain.gain.setValueAtTime(0.50, now);
+        gain.gain.linearRampToValueAtTime(0.02, now + 0.55);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -85,14 +88,14 @@ class AlertSoundService {
         osc.frequency.setValueAtTime(660, now);
         osc.frequency.setValueAtTime(880, now + 0.12);
 
-        gain.gain.setValueAtTime(0.20, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+        gain.gain.setValueAtTime(0.40, now);
+        gain.gain.linearRampToValueAtTime(0.02, now + 0.38);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
 
         osc.start(now);
-        osc.stop(now + 0.35);
+        osc.stop(now + 0.38);
       } else {
         // Soft operational notification beep
         osc.type = 'sine';

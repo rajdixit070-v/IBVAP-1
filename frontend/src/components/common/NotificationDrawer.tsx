@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Notification } from '../../types/incident';
 import { incidentService } from '../../services/incidentService';
-import { Bell, CheckCheck, X } from 'lucide-react';
+import { Bell, CheckCheck, X, Trash2 } from 'lucide-react';
 
 interface NotificationDrawerProps {
   isOpen: boolean;
@@ -44,6 +44,25 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     }
   };
 
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      await incidentService.deleteNotification(id);
+      setNotifications((prev) => prev.filter((item) => item.id !== id));
+    } catch (e) {
+      console.error('Failed to delete notification', e);
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      await incidentService.clearAllNotifications();
+      setNotifications([]);
+    } catch (e) {
+      console.error('Failed to clear all notifications', e);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -53,18 +72,29 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
         <div className="flex items-center gap-2">
           <Bell className="w-4 h-4 text-sky-400" />
           <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-            SOC Alert Notifications
+            SOC Notifications ({notifications.length})
           </h3>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleMarkAllRead}
-            className="p-1.5 text-slate-400 hover:text-sky-400 transition"
-            title="Mark all read"
-          >
-            <CheckCheck className="w-4 h-4" />
-          </button>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white transition">
+        <div className="flex items-center gap-1.5">
+          {notifications.length > 0 && (
+            <>
+              <button
+                onClick={handleMarkAllRead}
+                className="p-1.5 text-slate-400 hover:text-sky-400 transition rounded"
+                title="Mark all as read"
+              >
+                <CheckCheck className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleClearAll}
+                className="p-1.5 text-slate-400 hover:text-rose-400 transition rounded"
+                title="Delete all notifications"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white transition rounded">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -75,13 +105,13 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
         {loading ? (
           <div className="text-center py-12 text-xs font-mono text-slate-500">Loading alerts...</div>
         ) : notifications.length === 0 ? (
-          <div className="text-center py-12 text-xs font-mono text-slate-500">No new notifications.</div>
+          <div className="text-center py-12 text-xs font-mono text-slate-500">No active notifications.</div>
         ) : (
           notifications.map((n) => (
             <div
               key={n.id}
               onClick={() => n.alert_id && onSelectAlert && onSelectAlert(n.alert_id)}
-              className={`p-3 rounded-xl border transition cursor-pointer space-y-1.5 ${
+              className={`p-3 rounded-xl border transition cursor-pointer space-y-1.5 group ${
                 !n.read
                   ? 'bg-[#111a2e] border-sky-500/40 hover:border-sky-400'
                   : 'bg-[#090d16] border-[#1e293b] opacity-70 hover:opacity-100'
@@ -97,9 +127,18 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                 >
                   {n.priority}
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">
-                  {new Date(n.created_at).toLocaleTimeString()}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {new Date(n.created_at).toLocaleTimeString()}
+                  </span>
+                  <button
+                    onClick={(e) => handleDelete(e, n.id)}
+                    className="p-1 text-slate-500 hover:text-rose-400 opacity-60 group-hover:opacity-100 transition rounded"
+                    title="Delete notification"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div className="text-xs font-bold text-white">{n.title}</div>
               <p className="text-[11px] text-slate-400 leading-snug">{n.message}</p>

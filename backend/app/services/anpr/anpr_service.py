@@ -125,7 +125,20 @@ class ANPRService:
 
             logger.info(f"ANPR [{camera_id}] Vehicle #{track.track_id} -> {consensus_plate} ({match_status} • Conf: {consensus_conf})")
 
-            # 7. Escalate Risk Engine if Watchlist Match
+            # 7. Capture Forensic Evidence & Escalate Risk Engine if Watchlist Match
+            evd = None
+            if frame is not None and frame.size > 0:
+                try:
+                    from app.services.evidence.evidence_manager import evidence_manager
+                    evd = evidence_manager.capture_and_save_frame(
+                        camera_id=camera_id,
+                        frame=frame,
+                        track=track,
+                        event_type="VEHICLE_PLATE_IDENTIFIED"
+                    )
+                except Exception as ee:
+                    logger.warning(f"ANPR evidence save failed: {ee}")
+
             if match_status in ["WATCHLIST_MATCH", "MONITOR"]:
                 security_event_manager.dispatch_security_event(
                     camera_id=camera_id,
@@ -136,7 +149,9 @@ class ANPRService:
                     bbox=track.bbox,
                     direction=track.direction,
                     speed=track.speed,
-                    timeline_message=f"ANPR Match: Vehicle #{track.track_id} identified with Plate {consensus_plate} ({match_status})"
+                    timeline_message=f"ANPR Match: Vehicle #{track.track_id} identified with Plate {consensus_plate} ({match_status})",
+                    evidence_id=evd.evidence_id if evd else None,
+                    evidence_path=evd.file_path if evd else None
                 )
 
             return ANPRRecognitionResult(

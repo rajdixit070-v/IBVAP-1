@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.database import get_db
 from app.api.deps import get_current_user
@@ -10,6 +10,24 @@ from app.schemas.evidence import EvidenceResponse
 from app.services.evidence.evidence_manager import evidence_manager
 
 router = APIRouter()
+
+@router.get("/", response_model=List[EvidenceResponse])
+def list_all_evidence(
+    camera_id: Optional[str] = Query(None),
+    evidence_type: Optional[str] = Query(None),
+    limit: int = Query(60, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List all cryptographic forensic evidence snapshots captured across all cameras and AI detections.
+    """
+    query = db.query(Evidence)
+    if camera_id and camera_id != "ALL":
+        query = query.filter(Evidence.camera_id == camera_id)
+    if evidence_type and evidence_type != "ALL":
+        query = query.filter(Evidence.evidence_type == evidence_type)
+    return query.order_by(Evidence.created_at.desc()).limit(limit).all()
 
 @router.get("/{evidence_id}", response_model=EvidenceResponse)
 def get_evidence_detail(

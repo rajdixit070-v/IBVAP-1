@@ -30,6 +30,7 @@ class CameraZoneStateTracker:
         self._occupancy: Dict[str, Dict[str, Any]] = {}
         self._cached_zones: List[Dict[str, Any]] = []
         self._last_zone_fetch = datetime.min
+        self._fov_last_triggered: Dict[int, datetime] = {}
 
     def refresh_zones_if_needed(self):
         """Reloads active security zones from DB every 5 seconds."""
@@ -74,7 +75,11 @@ class CameraZoneStateTracker:
             # When no explicit virtual boundary polygon is drawn yet, treat detected persons,
             # vehicles, or animals in frame as active surveillance detections!
             for track in tracks:
-                if track.frame_count >= 2:
+                if track.frame_count >= 1:
+                    last_time = self._fov_last_triggered.get(track.track_id)
+                    if last_time and (now - last_time).total_seconds() < 20.0:
+                        continue
+                    self._fov_last_triggered[track.track_id] = now
                     evd = None
                     if frame is not None:
                         try:
@@ -253,6 +258,18 @@ class CameraZoneStateTracker:
                         if not state.get("loitering_triggered"):
                             if check_loitering(track, entry_time, min_duration_sec=10.0):
                                 state["loitering_triggered"] = True
+                                evd = None
+                                if frame is not None:
+                                    try:
+                                        from app.services.evidence.evidence_manager import evidence_manager
+                                        evd = evidence_manager.capture_and_save_frame(
+                                            camera_id=self.camera_id,
+                                            frame=frame,
+                                            track=track,
+                                            event_type="LOITERING"
+                                        )
+                                    except Exception:
+                                        pass
                                 security_event_manager.dispatch_security_event(
                                     camera_id=self.camera_id,
                                     track_id=track.track_id,
@@ -267,13 +284,27 @@ class CameraZoneStateTracker:
                                     bbox=track.bbox,
                                     direction=track.direction,
                                     speed=track.speed,
-                                    timeline_message=f"{track.object_type.capitalize()} #{track.track_id} loitering in {zone_name} exceeding 10s dwell limit"
+                                    timeline_message=f"{track.object_type.capitalize()} #{track.track_id} loitering in {zone_name} exceeding 10s dwell limit",
+                                    evidence_id=evd.evidence_id if evd else None,
+                                    evidence_path=evd.file_path if evd else None
                                 )
 
                         # Check Stationary Vehicle
                         if not state.get("stationary_triggered") and track.category == "vehicle":
                             if check_stationary_vehicle(track, entry_time, min_duration_sec=12.0):
                                 state["stationary_triggered"] = True
+                                evd = None
+                                if frame is not None:
+                                    try:
+                                        from app.services.evidence.evidence_manager import evidence_manager
+                                        evd = evidence_manager.capture_and_save_frame(
+                                            camera_id=self.camera_id,
+                                            frame=frame,
+                                            track=track,
+                                            event_type="STATIONARY_VEHICLE"
+                                        )
+                                    except Exception:
+                                        pass
                                 security_event_manager.dispatch_security_event(
                                     camera_id=self.camera_id,
                                     track_id=track.track_id,
@@ -288,13 +319,27 @@ class CameraZoneStateTracker:
                                     bbox=track.bbox,
                                     direction=track.direction,
                                     speed=track.speed,
-                                    timeline_message=f"Suspicious stationary vehicle #{track.track_id} stopped in {zone_name} (>12s)"
+                                    timeline_message=f"Suspicious stationary vehicle #{track.track_id} stopped in {zone_name} (>12s)",
+                                    evidence_id=evd.evidence_id if evd else None,
+                                    evidence_path=evd.file_path if evd else None
                                 )
 
                         # Check Wrong Direction Breach
                         if not state.get("direction_triggered") and direction_rule != "NONE":
                             if is_direction_forbidden(track.direction, direction_rule):
                                 state["direction_triggered"] = True
+                                evd = None
+                                if frame is not None:
+                                    try:
+                                        from app.services.evidence.evidence_manager import evidence_manager
+                                        evd = evidence_manager.capture_and_save_frame(
+                                            camera_id=self.camera_id,
+                                            frame=frame,
+                                            track=track,
+                                            event_type="WRONG_DIRECTION"
+                                        )
+                                    except Exception:
+                                        pass
                                 security_event_manager.dispatch_security_event(
                                     camera_id=self.camera_id,
                                     track_id=track.track_id,
@@ -309,7 +354,9 @@ class CameraZoneStateTracker:
                                     bbox=track.bbox,
                                     direction=track.direction,
                                     speed=track.speed,
-                                    timeline_message=f"{track.object_type.capitalize()} #{track.track_id} moving in forbidden direction ({track.direction}) in {zone_name}"
+                                    timeline_message=f"{track.object_type.capitalize()} #{track.track_id} moving in forbidden direction ({track.direction}) in {zone_name}",
+                                    evidence_id=evd.evidence_id if evd else None,
+                                    evidence_path=evd.file_path if evd else None
                                 )
 
                         # Check Rapid Movement

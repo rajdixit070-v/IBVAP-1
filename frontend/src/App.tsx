@@ -21,6 +21,7 @@ import { SecurityEventsPage } from './pages/SecurityEventsPage';
 import { MultiSiteCommandPage } from './pages/MultiSiteCommandPage';
 import { MultimodalIntelligencePage } from './pages/MultimodalIntelligencePage';
 import { EnterpriseSecurityPage } from './pages/EnterpriseSecurityPage';
+import { ForensicEvidencePage } from './pages/ForensicEvidencePage';
 import { CameraDetailsModal } from './components/cameras/CameraDetailsModal';
 import { CameraModal } from './components/cameras/CameraModal';
 import { SituationalMapModal } from './components/incidents/SituationalMapModal';
@@ -95,6 +96,7 @@ const MainLayout: React.FC = () => {
           {activeTab === 'face' && <FaceIntelligencePage />}
           {activeTab === 'edge' && <EdgeInfrastructurePage />}
           {activeTab === 'events' && <SecurityEventsPage />}
+          {activeTab === 'evidence' && <ForensicEvidencePage />}
         </main>
       </div>
 

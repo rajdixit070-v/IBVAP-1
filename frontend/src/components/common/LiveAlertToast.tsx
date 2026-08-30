@@ -16,7 +16,10 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
   useEffect(() => {
     const checkAlerts = async () => {
       try {
-        const notifs = await incidentService.getNotifications(true);
+        let notifs = await incidentService.getNotifications({ unread_only: true, limit: 10 });
+        if (!notifs || notifs.length === 0) {
+          notifs = await incidentService.getNotifications({ limit: 5 });
+        }
         if (notifs && notifs.length > 0) {
           const newest = notifs[0];
           // If newest notification has not been displayed yet
@@ -42,9 +45,19 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
       }
     };
 
-    const interval = setInterval(checkAlerts, 3000);
+    checkAlerts();
+    const interval = setInterval(checkAlerts, 2500);
     return () => clearInterval(interval);
   }, [lastSeenId]);
+
+  // Auto-dismiss alert toast after 14 seconds
+  useEffect(() => {
+    if (!activeAlert) return;
+    const timer = setTimeout(() => {
+      setActiveAlert(null);
+    }, 14000);
+    return () => clearTimeout(timer);
+  }, [activeAlert]);
 
   if (!activeAlert) return null;
 
