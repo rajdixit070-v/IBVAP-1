@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import { Camera, CameraCreateInput, CameraUpdateInput, CameraTestResponse } from '../../types/camera';
+import { Camera, CameraCreateInput, CameraTestResponse } from '../../types/camera';
 import { cameraService } from '../../services/cameraService';
+import { edgeService } from '../../services/edgeService';
+import { EdgeNode } from '../../types/edge';
 import { RTSPTestModal } from './RTSPTestModal';
 import {
   Activity,
@@ -14,7 +16,9 @@ import {
   Plane,
   Smartphone,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Server,
+  Lock
 } from 'lucide-react';
 
 interface CameraModalProps {
@@ -66,8 +70,28 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [testResult, setTestResult] = useState<CameraTestResponse | null>(null);
   const [testModalOpen, setTestModalOpen] = useState(false);
 
+  // Edge Management state
+  const [edgeNodes, setEdgeNodes] = useState<EdgeNode[]>([]);
+  const [isEdgeManaged, setIsEdgeManaged] = useState(false);
+  const [selectedEdgeNodeId, setSelectedEdgeNodeId] = useState('');
+
   useEffect(() => {
+    edgeService.getNodes().then(nodes => {
+      setEdgeNodes(nodes);
+      if (!cameraToEdit && nodes.length > 0) {
+        setSelectedEdgeNodeId(nodes[0].node_id);
+      }
+    }).catch(console.error);
+
     if (cameraToEdit) {
+      const edgeId = (cameraToEdit as any).edge_node_id;
+      if (edgeId && edgeId !== 'CENTRAL' && edgeId !== 'LOCAL' && edgeId !== 'NONE') {
+        setIsEdgeManaged(true);
+        setSelectedEdgeNodeId(edgeId);
+      } else {
+        setIsEdgeManaged(false);
+      }
+
       const url = cameraToEdit.rtsp_url || '';
       const st = cameraToEdit.stream_type || 'main';
 
@@ -241,8 +265,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     setSaving(true);
 
     try {
+      const chosenEdgeId = isEdgeManaged ? (selectedEdgeNodeId || (edgeNodes[0]?.node_id || 'EDGE-BOP-001')) : 'CENTRAL';
       if (isEditing) {
-        const updatePayload: CameraUpdateInput = {
+        const updatePayload: any = {
           camera_name: formData.camera_name,
           description: formData.description,
           bop_site: formData.bop_site,
@@ -253,14 +278,19 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           rtsp_url: formData.rtsp_url,
           username: formData.username,
           stream_type: formData.stream_type,
-          enabled: formData.enabled
+          enabled: formData.enabled,
+          edge_node_id: chosenEdgeId
         };
         if (formData.password?.trim()) {
           updatePayload.password = formData.password;
         }
         await cameraService.updateCamera(cameraToEdit!.camera_id, updatePayload);
       } else {
-        await cameraService.createCamera(formData);
+        const createPayload: any = {
+          ...formData,
+          edge_node_id: chosenEdgeId
+        };
+        await cameraService.createCamera(createPayload);
       }
       onSuccess();
       onClose();
@@ -292,6 +322,74 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             <h4 className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800 pb-2">
               <Cctv className="w-4 h-4" /> 1. CAMERA IDENTIFICATION & SITE
             </h4>
+
+            {/* Deployment Architecture Toggle */}
+            <div className="p-3.5 bg-[#090d16] border border-[#1e293b] rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Server className="w-4 h-4 text-sky-400" />
+                  <span className="text-white font-bold text-xs font-mono">Deployment Architecture</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEdgeManaged(false)}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition ${
+                      !isEdgeManaged
+                        ? 'bg-sky-600 text-white shadow'
+                        : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Direct HQ Stream
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEdgeManaged(true)}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition ${
+                      isEdgeManaged
+                        ? 'bg-sky-600 text-white shadow'
+                        : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Remote Edge Managed
+                  </button>
+                </div>
+              </div>
+
+              {isEdgeManaged ? (
+                <div className="space-y-2 pt-2 border-t border-slate-800/80 text-xs font-mono">
+                  <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                    <Server className="w-3.5 h-3.5 text-sky-400" />
+                    Managing Edge Appliance Node *
+                  </label>
+                  {edgeNodes.length === 0 ? (
+                    <div className="p-2.5 bg-amber-950/40 border border-amber-500/40 rounded-lg text-amber-300 text-[11px]">
+                      No Edge Nodes registered yet. Go to <strong className="text-white">Edge Infrastructure</strong> to provision an Edge Node first.
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedEdgeNodeId}
+                      onChange={(e) => setSelectedEdgeNodeId(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#0d131f] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-sky-500"
+                    >
+                      {edgeNodes.map((n) => (
+                        <option key={n.node_id} value={n.node_id}>
+                          {n.node_id} — {n.name} ({n.bop_site}) [{n.status}]
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-[11px]">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Secure Outpost: Camera RTSP is ingested locally on Outpost LAN. Central direct RTSP bypassed.</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] font-mono text-slate-400">
+                  Central IBVAP connects directly to this camera over the headquarters local network.
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

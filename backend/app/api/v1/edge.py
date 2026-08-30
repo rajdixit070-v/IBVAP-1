@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
+import os
+import shutil
+import uuid
 
 from app.database import get_db
 from app.api.deps import get_current_user, require_admin
@@ -9,6 +12,10 @@ from app.models.user import User
 from app.models.edge_node import EdgeNode
 from app.models.edge_event_buffer import EdgeEventBuffer
 from app.models.audit_log import SecurityAuditLog
+from app.models.camera import Camera
+from app.models.evidence import Evidence
+from app.models.security_event import SecurityEvent
+from app.services.security.edge_auth_service import EdgeAuthService
 from app.schemas.edge import (
     EdgeNodeCreate,
     EdgeNodeUpdate,
@@ -17,7 +24,9 @@ from app.schemas.edge import (
     EdgeSyncBatchRequest,
     EdgeSyncBatchResponse,
     EdgeRemoteConfig,
-    EdgeSyncStatsResponse
+    EdgeSyncStatsResponse,
+    EdgeTokenResponse,
+    EdgeAssignedCamera
 )
 from app.services.edge.node_manager import edge_node_manager
 from app.services.edge.sync_engine import edge_sync_engine
@@ -81,7 +90,95 @@ def register_edge_node(
     db.commit()
     db.refresh(node)
 
-    return node
+    # Issue 256-bit Edge Token using EdgeAuthService
+    plaintext_key, cred = EdgeAuthService.issue_edge_key(
+        node_id=nid,
+        actor=current_user.username,
+        db=db
+    )
+
+    config_template = {
+        "node_id": nid,
+        "node_name": node.name,
+        "bop_site": node.bop_site,
+        "central_url": "http://10.8.0.1:8000",
+        "api_key": plaintext_key,
+        "heartbeat_interval_sec": 10,
+        "sync_interval_sec": 5,
+        "sync_batch_size": 25,
+        "low_bandwidth_mode": node.low_bandwidth_mode,
+        "cameras": []
+    }
+
+    resp = EdgeNodeResponse.model_validate(node)
+    resp.api_key = plaintext_key
+    resp.config_template = config_template
+    return resp
+
+@router.post("/nodes/{node_id}/token", response_model=EdgeTokenResponse)
+def issue_or_rotate_edge_token(
+    node_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """
+    Issue or rotate a 256-bit authentication token for an Edge Node (Admin only).
+    """
+    node = db.query(EdgeNode).filter(EdgeNode.node_id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Edge Node not found.")
+
+    plaintext_key, cred = EdgeAuthService.issue_edge_key(
+        node_id=node_id,
+        actor=current_user.username,
+        db=db
+    )
+    return EdgeTokenResponse(
+        node_id=node_id,
+        api_key=plaintext_key,
+        status=cred.status,
+        expires_at=cred.expires_at,
+        created_at=cred.updated_at or cred.created_at
+    )
+
+@router.get("/nodes/{node_id}/cameras", response_model=List[EdgeAssignedCamera])
+def get_edge_assigned_cameras(
+    node_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lists cameras managed by this Edge Node.
+    """
+    cams = db.query(Camera).filter(Camera.edge_node_id == node_id).all()
+    return [
+        EdgeAssignedCamera(
+            camera_id=c.camera_id,
+            camera_name=c.camera_name,
+            stream_type=c.stream_type or "main",
+            status=c.status or "OFFLINE",
+            fps=c.fps or 0.0
+        )
+        for c in cams
+    ]
+
+@router.post("/nodes/{node_id}/reconnect")
+def trigger_edge_reconnect(
+    node_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """
+    Commands an Edge Node to re-test connection and flush its offline buffer immediately.
+    """
+    node = db.query(EdgeNode).filter(EdgeNode.node_id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Edge Node not found.")
+    
+    node.sync_status = "SYNCING"
+    node.updated_at = datetime.utcnow()
+    db.commit()
+    return {"status": "SUCCESS", "message": f"Reconnect signal sent to {node_id}"}
 
 @router.get("/nodes/{node_id}", response_model=EdgeNodeResponse)
 def get_edge_node(
@@ -196,6 +293,54 @@ def sync_edge_events(
     """
     response = edge_sync_engine.ingest_sync_batch(batch)
     return response
+
+@router.post("/sync-evidence")
+async def sync_edge_evidence(
+    file: UploadFile = File(...),
+    node_id: str = Form(...),
+    event_id: str = Form(...),
+    camera_id: str = Form(...),
+    checksum_sha256: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    """
+    Receives forensic snapshot images captured on Edge during offline or live detection.
+    Stores permanently in Central Evidence Locker and links to Central SecurityEvent.
+    """
+    evidence_dir = f"./storage/evidence/{camera_id}"
+    os.makedirs(evidence_dir, exist_ok=True)
+    
+    filename = f"EVD-{event_id}-{file.filename}"
+    file_path = os.path.join(evidence_dir, filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    evd_id = f"EVD-{uuid.uuid4().hex[:8].upper()}"
+    evd_record = db.query(Evidence).filter(Evidence.file_path == file_path).first()
+    if not evd_record:
+        evd_record = Evidence(
+            evidence_id=evd_id,
+            source_event_id=event_id,
+            camera_id=camera_id,
+            evidence_type="SNAPSHOT",
+            file_path=file_path,
+            file_size_bytes=os.path.getsize(file_path),
+            checksum_sha256=checksum_sha256,
+            mime_type="image/jpeg",
+            created_at=datetime.utcnow()
+        )
+        db.add(evd_record)
+        
+        # Link to SecurityEvent if present
+        sec_evt = db.query(SecurityEvent).filter(SecurityEvent.event_id == event_id).first()
+        if sec_evt:
+            sec_evt.evidence_id = evd_id
+            sec_evt.evidence_path = file_path
+
+        db.commit()
+
+    return {"status": "SUCCESS", "evidence_id": evd_record.evidence_id, "file_path": file_path}
 
 @router.get("/sync/stats", response_model=EdgeSyncStatsResponse)
 def get_sync_stats(

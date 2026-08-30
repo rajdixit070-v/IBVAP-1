@@ -39,9 +39,25 @@ class EdgeNodeResponse(EdgeNodeBase):
     last_heartbeat: datetime
     created_at: datetime
     updated_at: datetime
+    api_key: Optional[str] = None
+    config_template: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
+
+class EdgeTokenResponse(BaseModel):
+    node_id: str
+    api_key: str
+    status: str = "ACTIVE"
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+
+class EdgeAssignedCamera(BaseModel):
+    camera_id: str
+    camera_name: str
+    stream_type: str = "main"
+    status: str = "OFFLINE"
+    fps: float = 0.0
 
 class EdgeHeartbeatRequest(BaseModel):
     node_id: str

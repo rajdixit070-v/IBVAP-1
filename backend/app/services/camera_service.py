@@ -115,16 +115,23 @@ def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
     db.refresh(db_camera)
 
     # Start live stream ingestion if enabled
+    is_edge_managed = bool(db_camera.edge_node_id and db_camera.edge_node_id not in ["CENTRAL", "LOCAL", "NONE", ""])
     if db_camera.enabled:
-        decrypted_pw = camera_in.password
-        stream_manager.start_camera(
-            camera_id=db_camera.camera_id,
-            camera_name=db_camera.camera_name,
-            bop_site=db_camera.bop_site,
-            rtsp_url=db_camera.rtsp_url,
-            username=db_camera.username,
-            password=decrypted_pw
-        )
+        if is_edge_managed:
+            db_camera.status = "EDGE_MANAGED"
+            db.commit()
+            db.refresh(db_camera)
+            logger.info(f"Camera {db_camera.camera_id} assigned to Edge Node {db_camera.edge_node_id}. Central direct RTSP bypassed.")
+        else:
+            decrypted_pw = camera_in.password
+            stream_manager.start_camera(
+                camera_id=db_camera.camera_id,
+                camera_name=db_camera.camera_name,
+                bop_site=db_camera.bop_site,
+                rtsp_url=db_camera.rtsp_url,
+                username=db_camera.username,
+                password=decrypted_pw
+            )
 
     return format_camera_response(db_camera)
 
@@ -152,10 +159,16 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
     db.refresh(db_camera)
 
     # Manage streamer state
+    is_edge_managed = bool(db_camera.edge_node_id and db_camera.edge_node_id not in ["CENTRAL", "LOCAL", "NONE", ""])
     stream_running = db_camera.camera_id in stream_manager._streamers
     if not db_camera.enabled:
         stream_manager.stop_camera(db_camera.camera_id)
         db_camera.status = "OFFLINE"
+        db.commit()
+    elif is_edge_managed:
+        if stream_running:
+            stream_manager.stop_camera(db_camera.camera_id)
+        db_camera.status = "EDGE_MANAGED"
         db.commit()
     elif reconnect_needed or not stream_running:
         decrypted_pw = decrypt_credential(db_camera.encrypted_password)

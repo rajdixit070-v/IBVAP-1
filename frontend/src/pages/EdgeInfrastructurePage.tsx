@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { EdgeNode, EdgeSyncStats } from '../types/edge';
 import { edgeService } from '../services/edgeService';
 import { RemoteConfigModal } from '../components/edge/RemoteConfigModal';
+import { RegisterEdgeNodeModal } from '../components/edge/RegisterEdgeNodeModal';
+import { AssignedCamerasModal } from '../components/edge/AssignedCamerasModal';
 import {
   Server,
   Activity,
@@ -10,7 +12,10 @@ import {
   Clock,
   ShieldCheck,
   Layers,
-  CheckCircle2
+  CheckCircle2,
+  Plus,
+  Trash2,
+  Camera
 } from 'lucide-react';
 
 export const EdgeInfrastructurePage: React.FC = () => {
@@ -21,9 +26,12 @@ export const EdgeInfrastructurePage: React.FC = () => {
   // Filter
   const [selectedStatus, setSelectedStatus] = useState<string>('');
 
-  // Modal
+  // Modals
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<EdgeNode | null>(null);
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
+  const [camerasModalOpen, setCamerasModalOpen] = useState(false);
+  const [nodeForCameras, setNodeForCameras] = useState<EdgeNode | null>(null);
 
   useEffect(() => {
     loadData();
@@ -51,6 +59,31 @@ export const EdgeInfrastructurePage: React.FC = () => {
     setConfigModalOpen(true);
   };
 
+  const handleDeleteNode = async (nodeId: string) => {
+    if (window.confirm(`Are you sure you want to decommission and delete Edge Node ${nodeId}?`)) {
+      try {
+        await edgeService.deleteNode(nodeId);
+        setNodes((prev) => prev.filter((n) => n.node_id !== nodeId));
+      } catch (e) {
+        console.error('Failed to delete edge node', e);
+      }
+    }
+  };
+
+  const handleReconnectNode = async (nodeId: string) => {
+    try {
+      await edgeService.reconnectNode(nodeId);
+      loadData();
+    } catch (e) {
+      console.error('Failed to signal reconnect', e);
+    }
+  };
+
+  const handleOpenCameras = (node: EdgeNode) => {
+    setNodeForCameras(node);
+    setCamerasModalOpen(true);
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Top Banner */}
@@ -71,6 +104,14 @@ export const EdgeInfrastructurePage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setRegisterModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            REGISTER EDGE NODE
+          </button>
+
           <button
             onClick={loadData}
             className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-mono font-bold transition border border-slate-700"
@@ -185,13 +226,41 @@ export const EdgeInfrastructurePage: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleOpenConfig(node)}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono transition border border-slate-700"
-                >
-                  <Sliders className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Config v{node.config_version}</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleOpenCameras(node)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono transition border border-slate-700"
+                    title="View local cameras streaming through this edge node"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{node.active_cameras_count} Cams</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleReconnectNode(node.node_id)}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono transition border border-slate-700"
+                    title="Send reconnect signal and flush store-and-forward queue"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenConfig(node)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono transition border border-slate-700"
+                    title="Edit remote edge configuration"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Config v{node.config_version}</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleDeleteNode(node.node_id)}
+                    className="p-1.5 bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 rounded-lg text-xs font-mono transition border border-slate-700 hover:border-rose-500/30"
+                    title={`Decommission Edge Node ${node.node_id}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Hardware Telemetry Progress Bars */}
@@ -282,6 +351,20 @@ export const EdgeInfrastructurePage: React.FC = () => {
         onClose={() => setConfigModalOpen(false)}
         node={selectedNode}
         onSuccess={loadData}
+      />
+
+      {/* Register New Edge Appliance Modal */}
+      <RegisterEdgeNodeModal
+        isOpen={registerModalOpen}
+        onClose={() => setRegisterModalOpen(false)}
+        onSuccess={loadData}
+      />
+
+      {/* Assigned Local Cameras Modal */}
+      <AssignedCamerasModal
+        isOpen={camerasModalOpen}
+        onClose={() => setCamerasModalOpen(false)}
+        node={nodeForCameras}
       />
     </div>
   );

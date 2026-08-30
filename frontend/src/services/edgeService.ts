@@ -44,5 +44,21 @@ export const edgeService = {
   async getSyncStats(): Promise<EdgeSyncStats> {
     const response = await api.get<EdgeSyncStats>('/edge/sync/stats');
     return response.data;
+  },
+
+  // Remote Management
+  async reconnectNode(nodeId: string): Promise<any> {
+    const response = await api.post(`/edge/nodes/${nodeId}/reconnect`);
+    return response.data;
+  },
+
+  async getNodeCameras(nodeId: string): Promise<any[]> {
+    const response = await api.get(`/edge/nodes/${nodeId}/cameras`);
+    return response.data;
+  },
+
+  async issueOrRotateToken(nodeId: string): Promise<any> {
+    const response = await api.post(`/edge/nodes/${nodeId}/token`);
+    return response.data;
   }
 };

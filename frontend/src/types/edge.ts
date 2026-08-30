@@ -25,6 +25,8 @@ export interface EdgeNode {
   last_heartbeat: string;
   created_at: string;
   updated_at: string;
+  api_key?: string;
+  config_template?: any;
 }
 
 export interface EdgeNodeCreate {
@@ -63,4 +65,20 @@ export interface EdgeSyncStats {
   nodes_online: number;
   nodes_offline: number;
   nodes_degraded: number;
+}
+
+export interface EdgeAssignedCamera {
+  camera_id: string;
+  camera_name: string;
+  stream_type: string;
+  status: string;
+  fps: number;
+}
+
+export interface EdgeTokenResponse {
+  node_id: string;
+  api_key: string;
+  status: string;
+  expires_at?: string;
+  created_at: string;
 }
