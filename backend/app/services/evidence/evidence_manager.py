@@ -169,10 +169,8 @@ class EvidenceManager:
                 x1, y1 = max(0, min(w - 1, x1)), max(0, min(h - 1, y1))
                 x2, y2 = max(0, min(w - 1, x2)), max(0, min(h - 1, y2))
 
-                # Color: Red for person, Amber for vehicle, Green for animal
-                cat = str(getattr(track, 'category', getattr(track, 'object_type', 'object'))).lower()
-                color = (0, 0, 255) if cat in ["person", "human", "intruder"] else (0, 165, 255) if cat in ["vehicle", "car", "truck"] else (0, 255, 120)
-
+                # Color: Bright Alert Red (0, 0, 255 in BGR) for all detected targets
+                color = (0, 0, 255)
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
 
                 # Label tag

@@ -51,6 +51,7 @@ class StreamManager:
         password: Optional[str] = None
     ) -> RTSPStreamer:
         """Starts video ingestion for a given camera with thread-safe duplicate protection."""
+        old_streamer = None
         with self._lock:
             if camera_id in self._streamers:
                 streamer = self._streamers[camera_id]
@@ -59,24 +60,31 @@ class StreamManager:
                     streamer.username != username or 
                     streamer.password != password):
                     logger.info(f"[{camera_id}] Updating stream configuration...")
-                    streamer.stop()
+                    old_streamer = self._streamers.pop(camera_id, None)
                 else:
                     if not streamer._running:
                         streamer.start()
                     return streamer
 
-            streamer = RTSPStreamer(
-                camera_id=camera_id,
-                camera_name=camera_name,
-                bop_site=bop_site,
-                rtsp_url=rtsp_url,
-                username=username,
-                password=password,
-                on_status_change=self._on_camera_status_change
-            )
+        if old_streamer:
+            try:
+                old_streamer.stop()
+            except Exception as e:
+                logger.debug(f"Error stopping old streamer: {e}")
+
+        streamer = RTSPStreamer(
+            camera_id=camera_id,
+            camera_name=camera_name,
+            bop_site=bop_site,
+            rtsp_url=rtsp_url,
+            username=username,
+            password=password,
+            on_status_change=self._on_camera_status_change
+        )
+        with self._lock:
             self._streamers[camera_id] = streamer
-            streamer.start()
-            return streamer
+        streamer.start()
+        return streamer
 
     def stop_camera(self, camera_id: str):
         """Stops and removes an active streamer."""
@@ -123,13 +131,12 @@ class StreamManager:
         Used for native browser <img> or <video> live preview.
         """
         frame_interval = 1.0 / max(1.0, fps_limit)
-        streamer = self.get_streamer(camera_id)
         
         while True:
+            streamer = self.get_streamer(camera_id)
             if not streamer or not getattr(streamer, "_running", False):
                 # Stream not running or offline
-                await asyncio.sleep(0.5)
-                streamer = self.get_streamer(camera_id)
+                await asyncio.sleep(0.1)
                 continue
 
             jpeg_bytes = streamer.get_latest_jpeg()

@@ -338,14 +338,30 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             db.commit()
             logger.info("Seeded initial behaviour detection rules.")
 
-        # Seed synthetic demo data only if seed_demo is explicitly True
+        # Seed operational/demo data only if explicitly requested
         if seed_demo:
             from app.services.demo.demo_seeder import seed_demo_data
             seed_demo_data(db)
 
-        # Initialize AI configs and auto-register active cameras
+        # Initialize AI configs, start RTSP/synthetic streamers, and auto-register active cameras
+        from app.core.security import decrypt_credential
         cameras = db.query(Camera).filter(Camera.enabled == True).all()
         for cam in cameras:
+            # Start camera in stream_manager so live video feed is immediately working
+            try:
+                decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
+                stream_manager.start_camera(
+                    camera_id=cam.camera_id,
+                    camera_name=cam.camera_name,
+                    bop_site=cam.bop_site,
+                    rtsp_url=cam.rtsp_url,
+                    username=cam.username,
+                    password=decrypted_pw
+                )
+                logger.info(f"Started video stream for camera {cam.camera_id} ({cam.rtsp_url})")
+            except Exception as se:
+                logger.warning(f"Could not auto-start streamer for {cam.camera_id}: {se}")
+
             config = db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == cam.camera_id).first()
             if not config:
                 config = CameraAIConfig(

@@ -150,7 +150,21 @@ class FaceAnalyticsService:
                     bbox=track.bbox,
                     direction=track.direction,
                     speed=track.speed,
-                    timeline_message=f"Facial Match: Potential Watchlist Match for Person #{track.track_id} (Identity: {matched_name} • Similarity: {round(best_similarity * 100)}%)",
+                    timeline_message=f"Facial Watchlist Alert: High-confidence match for Person #{track.track_id} (Identity: {matched_name} • Match Confidence: {round(best_similarity * 100)}%)",
+                    evidence_id=evd.evidence_id if evd else None,
+                    evidence_path=evd.file_path if evd else None
+                )
+            elif match_status != "AUTHORIZED_MATCH":
+                security_event_manager.dispatch_security_event(
+                    camera_id=camera_id,
+                    track_id=track.track_id,
+                    object_type="person",
+                    event_type="FACE_DETECTED",
+                    confidence=quality_score,
+                    bbox=track.bbox,
+                    direction=track.direction,
+                    speed=track.speed,
+                    timeline_message=f"Facial Identification: Face detected for Person #{track.track_id} on camera {camera_id} (Quality: {int(quality_score * 100)}%)",
                     evidence_id=evd.evidence_id if evd else None,
                     evidence_path=evd.file_path if evd else None
                 )

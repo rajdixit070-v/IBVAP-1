@@ -57,7 +57,12 @@ def serialize_event(evt: SecurityEvent) -> SecurityEventResponse:
             ) if isinstance(t, dict) else EventTimelineEntry(timestamp=evt.started_at.isoformat(), message=str(t), risk_score=evt.risk_score)
             for t in timeline_raw
         ],
-        last_bbox=BoundingBox(**bbox_raw) if bbox_raw else None,
+        last_bbox=BoundingBox(
+            x=bbox_raw.get("x", 0.0),
+            y=bbox_raw.get("y", 0.0),
+            width=bbox_raw.get("width", bbox_raw.get("w", 0.0)),
+            height=bbox_raw.get("height", bbox_raw.get("h", 0.0))
+        ) if bbox_raw else None,
         last_direction=evt.last_direction,
         last_speed=evt.last_speed,
         evidence_id=getattr(evt, 'evidence_id', None),

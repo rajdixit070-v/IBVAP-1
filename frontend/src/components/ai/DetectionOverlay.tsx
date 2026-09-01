@@ -22,53 +22,21 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   const VIEW_HEIGHT = 1080;
 
   const getCategoryColor = (category: string) => {
-    switch (category.toLowerCase()) {
-      case 'person':
-        return {
-          stroke: '#ef4444', // High-Alert Tactical Red
-          fill: 'rgba(239, 68, 68, 0.22)',
-          badgeBg: '#dc2626',
-          badgeText: '#ffffff',
-          isThreat: true,
-          labelPrefix: '🔴 UNKNOWN PERSON'
-        };
-      case 'vehicle':
-        return {
-          stroke: '#f59e0b', // High-Visibility Amber
-          fill: 'rgba(245, 158, 11, 0.20)',
-          badgeBg: '#d97706',
-          badgeText: '#ffffff',
-          isThreat: false,
-          labelPrefix: '🟡 VEHICLE'
-        };
-      case 'animal':
-        return {
-          stroke: '#10b981', // Natural Emerald
-          fill: 'rgba(16, 185, 129, 0.18)',
-          badgeBg: '#059669',
-          badgeText: '#ffffff',
-          isThreat: false,
-          labelPrefix: '🟢 ANIMAL'
-        };
-      case 'drone':
-        return {
-          stroke: '#06b6d4', // Aerial Cyan
-          fill: 'rgba(6, 182, 212, 0.22)',
-          badgeBg: '#0891b2',
-          badgeText: '#ffffff',
-          isThreat: true,
-          labelPrefix: '🔵 AERIAL DRONE'
-        };
-      default:
-        return {
-          stroke: '#94a3b8', // Slate 400
-          fill: 'rgba(148, 163, 184, 0.15)',
-          badgeBg: '#475569',
-          badgeText: '#ffffff',
-          isThreat: false,
-          labelPrefix: 'TARGET'
-        };
-    }
+    const cat = (category || '').toLowerCase();
+    let prefix = '🔴 DETECTED TARGET';
+    if (cat.includes('person') || cat.includes('human')) prefix = '🔴 PERSON / HUMAN';
+    else if (cat.includes('vehicle') || cat.includes('car') || cat.includes('truck')) prefix = '🔴 VEHICLE';
+    else if (cat.includes('animal')) prefix = '🔴 ANIMAL / TARGET';
+    else if (cat.includes('drone') || cat.includes('uav')) prefix = '🔴 DRONE / AERIAL';
+
+    return {
+      stroke: '#ff0033', // Vivid Military Alert Red
+      fill: 'rgba(255, 0, 51, 0.22)',
+      badgeBg: '#dc2626',
+      badgeText: '#ffffff',
+      isThreat: true,
+      labelPrefix: prefix
+    };
   };
 
   const getZoneStyle = (zoneType: string) => {
@@ -194,7 +162,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
               />
             )}
 
-            {/* Bounding Box Transparent Fill */}
+            {/* Bounding Box Transparent Fill & Vivid Solid Red Border */}
             <rect
               x={left}
               y={top}
@@ -202,8 +170,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
               height={height}
               fill={colors.fill}
               stroke={colors.stroke}
-              strokeWidth="2"
-              strokeDasharray={colors.isThreat ? 'none' : '4, 2'}
+              strokeWidth="3.5"
             />
 
             {/* Tactical Corner Reticles */}

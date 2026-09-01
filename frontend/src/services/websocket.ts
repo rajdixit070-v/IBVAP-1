@@ -110,3 +110,53 @@ export class HealthWebSocket {
     }
   }
 }
+
+export class AlertsWebSocket {
+  private ws: WebSocket | null = null;
+  private onAlert: (data: any) => void;
+  private isDestroyed = false;
+
+  constructor(onAlert: (data: any) => void) {
+    this.onAlert = onAlert;
+    this.connect();
+  }
+
+  private connect() {
+    if (this.isDestroyed) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/api/v1/ws/alerts`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          this.onAlert(parsed);
+        } catch (e) {
+          // ignore
+        }
+      };
+
+      this.ws.onclose = () => {
+        if (!this.isDestroyed) {
+          setTimeout(() => this.connect(), 2500);
+        }
+      };
+    } catch (e) {
+      if (!this.isDestroyed) {
+        setTimeout(() => this.connect(), 3000);
+      }
+    }
+  }
+
+  public close() {
+    this.isDestroyed = true;
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
+

@@ -70,50 +70,58 @@ class CameraZoneStateTracker:
         now = datetime.utcnow()
         is_night = is_night_hour(20, 6)
 
-        if not self._cached_zones:
-            # Default Field-of-View Monitoring:
-            # When no explicit virtual boundary polygon is drawn yet, treat detected persons,
-            # vehicles, or animals in frame as active surveillance detections!
-            for track in tracks:
-                if track.frame_count >= 1:
-                    last_time = self._fov_last_triggered.get(track.track_id)
-                    if last_time and (now - last_time).total_seconds() < 20.0:
-                        continue
+        # 1. Universal Real-Time Field of View (FOV) Detection & Evidence Capture
+        for track in tracks:
+            if track.frame_count >= 2:
+                last_time = self._fov_last_triggered.get(track.track_id)
+                if not last_time or (now - last_time).total_seconds() > 20.0:
                     self._fov_last_triggered[track.track_id] = now
+                    
+                    obj_cat = track.category.lower()
+                    event_type = (
+                        "PERSON_DETECTED" if obj_cat in ["person", "human"]
+                        else "VEHICLE_DETECTED" if obj_cat in ["vehicle", "car", "truck", "motorcycle", "bus"]
+                        else "ANIMAL_INTRUSION" if obj_cat in ["animal", "dog", "horse", "cow", "cat"]
+                        else "DRONE_DETECTED" if obj_cat in ["drone", "uav", "aircraft"]
+                        else "SUSPICIOUS_OBJECT_DETECTED"
+                    )
+
                     evd = None
-                    if frame is not None:
+                    if frame is not None and frame.size > 0:
                         try:
                             from app.services.evidence.evidence_manager import evidence_manager
                             evd = evidence_manager.capture_and_save_frame(
                                 camera_id=self.camera_id,
                                 frame=frame,
                                 track=track,
-                                event_type=f"{track.object_type.upper()}_DETECTED"
+                                event_type=event_type
                             )
-                        except Exception as ee:
-                            logger.warning(f"Evidence snapshot save failed: {ee}")
+                        except Exception as fe_err:
+                            logger.warning(f"FOV evidence capture error on {self.camera_id}: {fe_err}")
 
-                    is_unauth_person = (track.category == "person")
-                    ev_type = "UNAUTHORIZED_INTRUSION" if is_unauth_person else f"{track.object_type.upper()}_ACTIVITY"
                     security_event_manager.dispatch_security_event(
                         camera_id=self.camera_id,
                         track_id=track.track_id,
                         object_type=track.object_type,
-                        event_type=ev_type,
-                        zone_name="Perimeter Surveillance Sector",
-                        zone_type="RESTRICTED" if is_unauth_person else "MONITORING",
+                        event_type=event_type,
+                        zone_id=None,
+                        zone_name="Camera Field of View",
+                        zone_type="MONITORED",
                         is_night=is_night,
                         confidence=track.confidence,
                         bbox=track.bbox,
                         direction=track.direction,
                         speed=track.speed,
-                        timeline_message=f"{track.object_type.capitalize()} #{track.track_id} detected in camera field of view",
+                        timeline_message=f"Live Detection: {track.object_type.capitalize()} #{track.track_id} confirmed in camera field of view (Confidence: {int(track.confidence * 100)}%)",
                         evidence_id=evd.evidence_id if evd else None,
                         evidence_path=evd.file_path if evd else None
                     )
+
+        if not self._cached_zones:
+            # If no virtual boundary polygons are configured on this camera, polygon analysis is complete.
             return
 
-        # 1. Group Movement Evaluation
+        # 2. Group Movement Evaluation
         groups = check_group_movement(tracks, max_distance_px=140.0)
         for group in groups:
             sample_track = next((t for t in tracks if t.track_id == group[0]), None)
@@ -146,7 +154,7 @@ class CameraZoneStateTracker:
                     evidence_path=evd.file_path if evd else None
                 )
 
-        # 1b. Crowd Gathering Evaluation
+        # 2b. Crowd Gathering Evaluation
         person_tracks_in_cam = [t for t in tracks if t.category == "person" and t.frame_count >= 2]
         if len(person_tracks_in_cam) >= 4:
             sample_track = person_tracks_in_cam[0]
@@ -178,7 +186,7 @@ class CameraZoneStateTracker:
                 evidence_path=evd.file_path if evd else None
             )
 
-        # 2. Per-Track Per-Zone Analysis
+        # 3. Per-Track Per-Zone Analysis
         for track in tracks:
             # Calculate ground plane normalized bottom-center point
             gp_norm = get_ground_plane_point_normalized(track.bbox, frame_width, frame_height)

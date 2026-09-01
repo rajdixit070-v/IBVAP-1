@@ -139,17 +139,31 @@ class ANPRService:
                 except Exception as ee:
                     logger.warning(f"ANPR evidence save failed: {ee}")
 
-            if match_status in ["WATCHLIST_MATCH", "MONITOR"]:
+            if match_status == "WATCHLIST_MATCH":
                 security_event_manager.dispatch_security_event(
                     camera_id=camera_id,
                     track_id=track.track_id,
                     object_type=track.object_type,
-                    event_type="ANPR_WATCHLIST_MATCH" if match_status == "WATCHLIST_MATCH" else "MONITOR_VEHICLE_DETECTED",
+                    event_type="ANPR_WATCHLIST_MATCH",
                     confidence=consensus_conf,
                     bbox=track.bbox,
                     direction=track.direction,
                     speed=track.speed,
-                    timeline_message=f"ANPR Match: Vehicle #{track.track_id} identified with Plate {consensus_plate} ({match_status})",
+                    timeline_message=f"ANPR Watchlist Alert: High-risk vehicle matched with Plate {consensus_plate} ({matched_owner or 'Unknown Owner'})",
+                    evidence_id=evd.evidence_id if evd else None,
+                    evidence_path=evd.file_path if evd else None
+                )
+            elif match_status != "AUTHORIZED":
+                security_event_manager.dispatch_security_event(
+                    camera_id=camera_id,
+                    track_id=track.track_id,
+                    object_type=track.object_type,
+                    event_type="ANPR_PLATE_DETECTED",
+                    confidence=consensus_conf,
+                    bbox=track.bbox,
+                    direction=track.direction,
+                    speed=track.speed,
+                    timeline_message=f"Vehicle Identification: License plate {consensus_plate} registered on camera {camera_id} (Confidence: {int(consensus_conf * 100)}%)",
                     evidence_id=evd.evidence_id if evd else None,
                     evidence_path=evd.file_path if evd else None
                 )

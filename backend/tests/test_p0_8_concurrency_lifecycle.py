@@ -72,7 +72,12 @@ def test_p0_8_4_multi_camera_concurrent_streaming():
         )
         streamers.append(s)
 
-    time.sleep(0.3)
+    # Poll up to 2.0s for all streamers to produce frames
+    for _ in range(20):
+        if all(s.get_latest_frame() is not None and s.status == "HEALTHY" for s in streamers):
+            break
+        time.sleep(0.1)
+
     for s in streamers:
         assert s._running is True
         assert s.status == "HEALTHY"

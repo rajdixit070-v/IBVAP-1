@@ -23,11 +23,12 @@ def list_all_evidence(
     List all cryptographic forensic evidence snapshots captured across all cameras and AI detections.
     """
     query = db.query(Evidence)
-    if camera_id and camera_id != "ALL":
+    if camera_id and isinstance(camera_id, str) and camera_id != "ALL":
         query = query.filter(Evidence.camera_id == camera_id)
-    if evidence_type and evidence_type != "ALL":
+    if evidence_type and isinstance(evidence_type, str) and evidence_type != "ALL":
         query = query.filter(Evidence.evidence_type == evidence_type)
-    return query.order_by(Evidence.created_at.desc()).limit(limit).all()
+    num_limit = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 60
+    return query.order_by(Evidence.created_at.desc()).limit(num_limit).all()
 
 @router.get("/{evidence_id}", response_model=EvidenceResponse)
 def get_evidence_detail(

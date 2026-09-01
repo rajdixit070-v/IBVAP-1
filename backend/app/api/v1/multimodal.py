@@ -60,9 +60,9 @@ def get_multimodal_overview(
     events_q = db.query(MultimodalSecurityEvent)
     if auth_sites is not None:
         events_q = events_q.filter(MultimodalSecurityEvent.site_id.in_(auth_sites))
-    if site_id:
+    if site_id and isinstance(site_id, str):
         events_q = events_q.filter(MultimodalSecurityEvent.site_id == site_id)
-    if bop_id:
+    if bop_id and isinstance(bop_id, str):
         events_q = events_q.filter(MultimodalSecurityEvent.bop_id == bop_id)
 
     total_events = events_q.count()
@@ -73,7 +73,7 @@ def get_multimodal_overview(
     obs_q = db.query(AIObservation)
     if auth_sites is not None:
         obs_q = obs_q.filter(AIObservation.site_id.in_(auth_sites))
-    if site_id:
+    if site_id and isinstance(site_id, str):
         obs_q = obs_q.filter(AIObservation.site_id == site_id)
     
     total_obs = obs_q.count()

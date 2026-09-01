@@ -181,8 +181,8 @@ class AlertEngine:
                 logger.info(f"Generated Alert {new_alert_id} ({priority}) for Event {event.event_id}")
                 self._broadcast_alert("ALERT_CREATED", alert)
 
-                # Connect to Incident pipeline for CRITICAL alerts
-                if priority == "CRITICAL":
+                # Connect to Incident pipeline for CRITICAL and HIGH priority alerts
+                if priority in ["CRITICAL", "HIGH"] or event.risk_score >= 60:
                     try:
                         from app.services.incident.incident_service import incident_service
                         incident_service.create_incident_from_event(event)

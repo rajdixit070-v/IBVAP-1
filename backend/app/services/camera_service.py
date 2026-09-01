@@ -88,7 +88,7 @@ def get_camera_by_id(db: Session, camera_id: str) -> Optional[Camera]:
     return db.query(Camera).filter(Camera.camera_id == camera_id).first()
 
 def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
-    """Creates a new camera, encrypts credentials, and starts stream if enabled."""
+    """Creates a new camera, encrypts credentials, and starts stream + AI pipeline if enabled."""
     encrypted_pw = encrypt_credential(camera_in.password) if camera_in.password else None
     
     db_camera = Camera(
@@ -98,7 +98,7 @@ def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
         bop_site=camera_in.bop_site.strip(),
         site_id=camera_in.site_id or "SITE-BORDER-NORTH",
         bop_id=camera_in.bop_id,
-        edge_node_id=camera_in.edge_node_id or "EDGE-BOP-001",
+        edge_node_id=camera_in.edge_node_id,
         sector=camera_in.sector.strip(),
         location=camera_in.location,
         latitude=camera_in.latitude,
@@ -114,29 +114,54 @@ def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
     db.commit()
     db.refresh(db_camera)
 
-    # Start live stream ingestion if enabled
-    is_edge_managed = bool(db_camera.edge_node_id and db_camera.edge_node_id not in ["CENTRAL", "LOCAL", "NONE", ""])
+    # Start live stream ingestion & AI Pipeline if enabled
     if db_camera.enabled:
-        if is_edge_managed:
-            db_camera.status = "EDGE_MANAGED"
-            db.commit()
-            db.refresh(db_camera)
-            logger.info(f"Camera {db_camera.camera_id} assigned to Edge Node {db_camera.edge_node_id}. Central direct RTSP bypassed.")
-        else:
-            decrypted_pw = camera_in.password
-            stream_manager.start_camera(
-                camera_id=db_camera.camera_id,
-                camera_name=db_camera.camera_name,
-                bop_site=db_camera.bop_site,
-                rtsp_url=db_camera.rtsp_url,
-                username=db_camera.username,
-                password=decrypted_pw
-            )
+        decrypted_pw = camera_in.password
+        stream_manager.start_camera(
+            camera_id=db_camera.camera_id,
+            camera_name=db_camera.camera_name,
+            bop_site=db_camera.bop_site,
+            rtsp_url=db_camera.rtsp_url,
+            username=db_camera.username,
+            password=decrypted_pw
+        )
+
+        # Initialize AI Pipeline Configuration and start worker
+        try:
+            from app.models.ai_config import CameraAIConfig
+            from app.services.ai.pipeline import ai_pipeline_manager
+
+            config = db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == db_camera.camera_id).first()
+            if not config:
+                config = CameraAIConfig(
+                    camera_id=db_camera.camera_id,
+                    enabled=True,
+                    model_name="yolov8n",
+                    target_fps=10.0,
+                    input_size=640,
+                    conf_person=0.30,
+                    conf_vehicle=0.35,
+                    conf_animal=0.30,
+                    conf_drone=0.25,
+                    conf_other=0.35
+                )
+                db.add(config)
+                db.commit()
+
+            if config.enabled:
+                ai_pipeline_manager.register_camera(
+                    camera_id=db_camera.camera_id,
+                    target_fps=config.target_fps,
+                    auto_start=True
+                )
+                logger.info(f"Auto-started AI Detection Pipeline for Camera {db_camera.camera_id}")
+        except Exception as aie:
+            logger.warning(f"Could not auto-start AI pipeline for {db_camera.camera_id}: {aie}")
 
     return format_camera_response(db_camera)
 
 def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> CameraResponse:
-    """Updates camera attributes and refreshes streamer if configuration changed."""
+    """Updates camera attributes and refreshes streamer and AI worker if configuration changed."""
     update_data = camera_in.model_dump(exclude_unset=True)
     
     reconnect_needed = False
@@ -158,17 +183,14 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
     db.commit()
     db.refresh(db_camera)
 
-    # Manage streamer state
-    is_edge_managed = bool(db_camera.edge_node_id and db_camera.edge_node_id not in ["CENTRAL", "LOCAL", "NONE", ""])
+    # Manage streamer state & AI worker
+    from app.services.ai.pipeline import ai_pipeline_manager
     stream_running = db_camera.camera_id in stream_manager._streamers
+
     if not db_camera.enabled:
         stream_manager.stop_camera(db_camera.camera_id)
+        ai_pipeline_manager.unregister_camera(db_camera.camera_id)
         db_camera.status = "OFFLINE"
-        db.commit()
-    elif is_edge_managed:
-        if stream_running:
-            stream_manager.stop_camera(db_camera.camera_id)
-        db_camera.status = "EDGE_MANAGED"
         db.commit()
     elif reconnect_needed or not stream_running:
         decrypted_pw = decrypt_credential(db_camera.encrypted_password)
@@ -180,6 +202,11 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
             username=db_camera.username,
             password=decrypted_pw
         )
+        ai_pipeline_manager.register_camera(
+            camera_id=db_camera.camera_id,
+            target_fps=10.0,
+            auto_start=True
+        )
 
     return format_camera_response(db_camera)
 
@@ -190,8 +217,8 @@ def delete_camera(db: Session, db_camera: Camera):
     # 1. Stop streamer and AI worker
     stream_manager.stop_camera(cam_id)
     try:
-        from app.services.ai.pipeline import ai_pipeline
-        ai_pipeline.unregister_camera(cam_id)
+        from app.services.ai.pipeline import ai_pipeline_manager
+        ai_pipeline_manager.unregister_camera(cam_id)
     except Exception as e:
         logger.debug(f"AI pipeline unregister notice for {cam_id}: {e}")
 

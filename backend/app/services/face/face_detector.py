@@ -49,8 +49,8 @@ def evaluate_face_quality(face_crop: np.ndarray) -> Tuple[float, bool]:
 
     h, w = face_crop.shape[:2]
     
-    # Size check (must be at least 32x32)
-    if h < 32 or w < 32:
+    # Size check (must be at least 20x20)
+    if h < 20 or w < 20:
         return 0.2, False
 
     if len(face_crop.shape) == 3:
@@ -60,17 +60,17 @@ def evaluate_face_quality(face_crop: np.ndarray) -> Tuple[float, bool]:
 
     # Sharpness / Blur check
     lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-    if lap_var < 35.0: # Too blurry
+    if lap_var < 15.0: # Extreme blur filter
         return round(min(0.4, lap_var / 100.0), 2), False
 
     # Illumination check
     mean_bright = np.mean(gray)
-    if mean_bright < 35 or mean_bright > 230: # Under/Over exposed
+    if mean_bright < 20 or mean_bright > 245: # Extreme under/over exposed
         return 0.35, False
 
-    sharpness_score = min(1.0, lap_var / 200.0)
-    size_score = min(1.0, (h * w) / (80.0 * 80.0))
+    sharpness_score = min(1.0, lap_var / 150.0)
+    size_score = min(1.0, (h * w) / (60.0 * 60.0))
     quality = (sharpness_score * 0.6) + (size_score * 0.4)
 
-    is_acceptable = bool(quality >= 0.45)
+    is_acceptable = bool(quality >= 0.25)
     return round(float(quality), 2), is_acceptable

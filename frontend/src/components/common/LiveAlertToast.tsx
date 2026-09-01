@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { incidentService } from '../../services/incidentService';
 import { alertSoundService } from '../../services/alertSoundService';
+import { AlertsWebSocket } from '../../services/websocket';
 import { Notification } from '../../types/incident';
 import { ShieldAlert, User, Car, PawPrint, Plane, X, ExternalLink, MapPin } from 'lucide-react';
 
@@ -12,6 +13,36 @@ interface LiveAlertToastProps {
 export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpenIncident }) => {
   const [activeAlert, setActiveAlert] = useState<Notification | null>(null);
   const [lastSeenId, setLastSeenId] = useState<number | null>(null);
+
+  // Real-time WebSocket Alert Push
+  useEffect(() => {
+    const ws = new AlertsWebSocket((msg) => {
+      if (msg && msg.data) {
+        const d = msg.data;
+        const notif: Notification = {
+          id: d.id || Date.now(),
+          notification_id: d.alert_id || `ALT-${Date.now()}`,
+          title: d.title || 'Security Breach Detected',
+          message: `${d.title || 'Live Alert'} (Risk: ${d.risk_score || 80}/100)`,
+          priority: d.priority || 'HIGH',
+          severity: d.priority || 'HIGH',
+          channel: 'WEBSOCKET',
+          alert_id: d.alert_id,
+          evidence_id: d.evidence_id,
+          evidence_url: d.evidence_url,
+          camera_id: d.camera_id,
+          created_at: d.created_at || new Date().toISOString()
+        };
+        setActiveAlert(notif);
+        const sev = d.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
+        alertSoundService.playAlarm(sev);
+      }
+    });
+
+    return () => {
+      ws.close();
+    };
+  }, []);
 
   useEffect(() => {
     const checkAlerts = async () => {

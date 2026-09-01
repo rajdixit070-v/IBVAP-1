@@ -120,26 +120,29 @@ def list_incidents(
     """List operational incidents with situational filtering."""
     query = db.query(Incident)
 
-    if status:
+    if status and isinstance(status, str):
         query = query.filter(Incident.status == status.upper())
-    if priority:
+    if priority and isinstance(priority, str):
         query = query.filter(Incident.priority == priority.upper())
-    if incident_type:
+    if incident_type and isinstance(incident_type, str):
         query = query.filter(Incident.incident_type == incident_type.upper())
-    if camera_id:
+    if camera_id and isinstance(camera_id, str):
         query = query.filter(Incident.camera_id == camera_id)
-    if bop_site:
+    if bop_site and isinstance(bop_site, str):
         query = query.filter(Incident.bop_site == bop_site)
-    if assigned_to:
+    if assigned_to and isinstance(assigned_to, str):
         query = query.filter(Incident.assigned_to.ilike(f"%{assigned_to}%"))
-    if search:
+    if search and isinstance(search, str):
         query = query.filter(
             (Incident.title.ilike(f"%{search}%")) |
             (Incident.incident_id.ilike(f"%{search}%")) |
             (Incident.description.ilike(f"%{search}%"))
         )
 
-    incidents = query.order_by(desc(Incident.created_at)).offset(skip).limit(limit).all()
+    num_skip = int(skip) if isinstance(skip, (int, str)) and str(skip).isdigit() else 0
+    num_limit = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 50
+
+    incidents = query.order_by(desc(Incident.created_at)).offset(num_skip).limit(num_limit).all()
     return [serialize_incident(inc) for inc in incidents]
 
 @router.post("", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)

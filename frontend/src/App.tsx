@@ -27,7 +27,6 @@ import { CameraModal } from './components/cameras/CameraModal';
 import { SituationalMapModal } from './components/incidents/SituationalMapModal';
 import { AIAssistantModal } from './components/multimodal/AIAssistantModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { DemoModeBanner } from './components/common/DemoModeBanner';
 import { LiveAlertToast } from './components/common/LiveAlertToast';
 import { Camera } from './types/camera';
 import { Bot } from 'lucide-react';
@@ -173,7 +172,6 @@ const AuthenticatedApp: React.FC = () => {
   return (
     <CameraProvider>
       <MainLayout />
-      <DemoModeBanner />
     </CameraProvider>
   );
 };

@@ -64,20 +64,22 @@ def test_p0_5_3_live_unauthorized_camera_idor(client, db_session):
     resp = client.get("/api/v1/cameras/CAM-UNAUTHORIZED-999/live", headers=headers)
     assert resp.status_code in [403, 404]
 
-@pytest.mark.anyio
-async def test_p0_5_4_live_authorized_camera(admin_headers):
+def test_p0_5_4_live_authorized_camera():
     """Test 4: Valid authorized user can connect to live streaming generator."""
+    import asyncio
     stream_manager.start_camera(
         camera_id="CAM-001",
         camera_name="Perimeter Gate Alpha",
         bop_site="BOP Alpha",
         rtsp_url="synthetic://test/cam-001"
     )
-    gen = stream_manager.generate_mjpeg_stream("CAM-001", fps_limit=25.0)
-    async for chunk in gen:
-        assert b"--frame" in chunk
-        assert b"Content-Type: image/jpeg" in chunk
-        break
+    async def get_first_chunk():
+        gen = stream_manager.generate_mjpeg_stream("CAM-001", fps_limit=25.0)
+        async for chunk in gen:
+            return chunk
+    chunk = asyncio.run(get_first_chunk())
+    assert b"--frame" in chunk
+    assert b"Content-Type: image/jpeg" in chunk
 
 def test_p0_5_5_snapshot_no_token(client):
     """Test 5: GET /cameras/{id}/snapshot without authentication returns 401 Unauthorized."""

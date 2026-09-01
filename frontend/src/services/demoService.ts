@@ -1,47 +1,50 @@
 import api from './api';
 
-export interface DemoScenario {
-  id: string;
-  name: string;
-  steps_count: number;
-  description: string;
-}
-
 export interface DemoStatus {
   demo_active: boolean;
-  current_scenario: string | null;
-  current_step: number;
-  step_history: Array<{
-    scenario: string;
-    step: number;
-    timestamp: string;
-    action: string;
-    title: string;
-    details: Record<string, any>;
-    status: string;
-  }>;
-  artifacts: Record<string, string>;
-  demo_mode_enabled?: boolean;
+  total_records: number;
+  counts: {
+    cameras: number;
+    edge_nodes: number;
+    alerts: number;
+    security_events: number;
+    incidents: number;
+    anpr_events: number;
+    face_events: number;
+    evidence_snapshots: number;
+    global_tracks: number;
+  };
+}
+
+export interface ThreatSimulatedResponse {
+  status: string;
+  event_id: string;
+  alert_id: string;
+  camera_id: string;
+  title: string;
+  priority: string;
+  risk_score: number;
+  timestamp: string;
 }
 
 export const demoService = {
-  getStatus: async (): Promise<DemoStatus> => {
-    const res = await api.get<DemoStatus>('/demo/status');
-    return res.data;
+  async getStatus(): Promise<DemoStatus> {
+    const response = await api.get<DemoStatus>('/demo/status');
+    return response.data;
   },
 
-  listScenarios: async (): Promise<DemoScenario[]> => {
-    const res = await api.get<DemoScenario[]>('/demo/scenarios');
-    return res.data;
+  async loadDemo(): Promise<DemoStatus> {
+    const response = await api.post<DemoStatus>('/demo/load');
+    return response.data;
   },
 
-  runScenario: async (data: { scenario_id: string; step_index?: number; auto_run_all?: boolean }) => {
-    const res = await api.post('/demo/run-scenario', data);
-    return res.data;
+  async cleanDemo(): Promise<DemoStatus> {
+    const response = await api.post<DemoStatus>('/demo/clean');
+    return response.data;
   },
 
-  resetDemo: async () => {
-    const res = await api.post('/demo/reset');
-    return res.data;
+  async simulateThreat(): Promise<ThreatSimulatedResponse> {
+    const response = await api.post<ThreatSimulatedResponse>('/demo/simulate-threat');
+    return response.data;
   }
 };

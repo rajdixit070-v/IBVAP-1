@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX } from 'lucide-react';
+import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Zap, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
 import { incidentService } from '../../services/incidentService';
 import { alertSoundService } from '../../services/alertSoundService';
+import { demoService, DemoStatus } from '../../services/demoService';
 
 interface HeaderProps {
   onOpenMap?: () => void;
@@ -19,12 +20,60 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onTo
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMuted, setIsMuted] = useState(alertSoundService.isMuted());
+  const [demoStatus, setDemoStatus] = useState<DemoStatus | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [purging, setPurging] = useState(false);
 
   useEffect(() => {
     loadUnread();
-    const interval = setInterval(loadUnread, 4000);
+    checkDemoStatus();
+    const interval = setInterval(() => {
+      loadUnread();
+      checkDemoStatus();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const checkDemoStatus = async () => {
+    try {
+      const res = await demoService.getStatus();
+      setDemoStatus(res);
+    } catch (e) {
+      // quiet fail
+    }
+  };
+
+  const handleSimulateThreat = async () => {
+    try {
+      setSimulating(true);
+      alertSoundService.playAlarm('CRITICAL');
+      await demoService.simulateThreat();
+      await loadUnread();
+      refreshCameras();
+      checkDemoStatus();
+    } catch (e) {
+      console.error('Failed to simulate threat', e);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const handleCleanDemo = async () => {
+    if (window.confirm("Are you sure you want to purge all demo data and reset the system to clean 0-row state?")) {
+      try {
+        setPurging(true);
+        const res = await demoService.cleanDemo();
+        setDemoStatus(res);
+        refreshCameras();
+        loadUnread();
+        window.location.reload();
+      } catch (e) {
+        console.error('Failed to purge demo data', e);
+      } finally {
+        setPurging(false);
+      }
+    }
+  };
 
   const loadUnread = async () => {
     try {
@@ -81,6 +130,36 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onTo
             <span className="text-emerald-400 font-semibold">BUS ONLINE</span>
           </div>
         </div>
+
+        {/* Conditional Demo Mode Tactical Banner & Controls */}
+        {demoStatus?.demo_active && (
+          <div className="flex items-center gap-2 bg-gradient-to-r from-amber-950/40 via-[#131b2e] to-amber-950/40 border border-amber-500/40 px-3 py-1 rounded-xl shadow-lg">
+            <span className="hidden md:flex items-center gap-1 text-[10px] font-mono font-bold text-amber-300 tracking-wider">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+              </span>
+              DEMO ACTIVE ({demoStatus.total_records})
+            </span>
+            <button
+              onClick={handleSimulateThreat}
+              disabled={simulating}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-mono font-bold transition shadow-md cursor-pointer disabled:opacity-50"
+              title="Execute Live Intruder Threat Simulation with Sound & Alert"
+            >
+              <Zap className={`w-3.5 h-3.5 ${simulating ? 'animate-spin' : 'text-amber-300'}`} />
+              <span>{simulating ? 'SIMULATING...' : 'SIMULATE LIVE THREAT'}</span>
+            </button>
+            <button
+              onClick={handleCleanDemo}
+              disabled={purging}
+              className="p-1 bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 rounded-lg text-xs font-mono transition border border-slate-700 hover:border-rose-500/40 cursor-pointer disabled:opacity-50"
+              title="Purge Demo Data back to clean 0-row state"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Right Telemetry & Action Controls */}
         <div className="flex items-center gap-2 sm:gap-2.5">

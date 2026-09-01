@@ -160,6 +160,7 @@ class RTSPStreamer:
                         cap = cv2.VideoCapture(dev_idx)
                     if not cap.isOpened():
                         raise ConnectionError(f"Unable to open local webcam device #{dev_idx}. Ensure camera is connected and not locked by another app.")
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 elif url_str.startswith("udp://"):
                     self._update_status("CONNECTING", "Connecting to Drone UDP video stream...")
                     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp|stimeout;5000000"
@@ -169,14 +170,28 @@ class RTSPStreamer:
                         cap = cv2.VideoCapture(url_str)
                     if not cap.isOpened():
                         raise ConnectionError("Unable to open Drone UDP video stream.")
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 elif url_str.startswith(("http://", "https://")):
                     self._update_status("CONNECTING", "Connecting to Mobile / HTTP video stream...")
-                    cap = cv2.VideoCapture(url_str)
-                    if not cap.isOpened():
+                    test_urls = [url_str]
+                    clean_base = url_str.rstrip("/")
+                    if not any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
+                        test_urls.extend([f"{clean_base}/video", f"{clean_base}/mjpegfeed", f"{clean_base}/videofeed"])
+
+                    cap = None
+                    for u in test_urls:
+                        cap = cv2.VideoCapture(u)
+                        if cap.isOpened():
+                            break
                         cap.release()
-                        cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
-                    if not cap.isOpened():
-                        raise ConnectionError("Unable to open HTTP/Mobile camera video stream.")
+                        cap = cv2.VideoCapture(u, cv2.CAP_FFMPEG)
+                        if cap.isOpened():
+                            break
+                        cap.release()
+
+                    if not cap or not cap.isOpened():
+                        raise ConnectionError(f"Unable to open Mobile / HTTP video stream at '{url_str}'. Ensure phone is on same Wi-Fi and IP Webcam broadcast is started.")
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 else:
                     self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
                     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
@@ -186,6 +201,7 @@ class RTSPStreamer:
                         cap = cv2.VideoCapture(url_str)
                     if not cap.isOpened():
                         raise ConnectionError("Unable to open RTSP stream connection.")
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
                 # Retrieve stream parameters
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -206,7 +222,7 @@ class RTSPStreamer:
 
                     if not ret or frame is None:
                         consecutive_failures += 1
-                        if consecutive_failures > 5:
+                        if consecutive_failures > 30:
                             raise ConnectionError("Lost frame stream from camera.")
                         time.sleep(0.04)
                         continue
@@ -230,12 +246,14 @@ class RTSPStreamer:
                 # Interruptible sleep
                 sleep_end = time.time() + delay
                 while self._running and time.time() < sleep_end:
-                    time.sleep(0.5)
+                    time.sleep(0.2)
 
     def calculate_reconnect_delay(self, attempt: Optional[int] = None) -> float:
         """Calculates exponential backoff delay in seconds bounded by RECONNECT_MAX_DELAY_SEC."""
+        if self.rtsp_url.startswith(("webcam://", "device://")) or self.rtsp_url.isdigit():
+            return 0.3 # Instant reconnect for local webcams
         att = attempt if attempt is not None else self.reconnect_attempts
-        return float(min(settings.RECONNECT_MAX_DELAY_SEC, settings.RECONNECT_BACKOFF_BASE ** min(att, 6)))
+        return float(min(10.0, max(1.0, 1.5 ** min(att, 5))))
 
     def _process_new_frame(self, frame: np.ndarray, timestamp: float):
         """Processes received frame, computes FPS, and updates JPEG buffer."""

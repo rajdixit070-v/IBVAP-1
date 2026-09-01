@@ -1,16 +1,17 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from app.schemas.ai import BoundingBox
 
 class RiskFactor(BaseModel):
     factor: str
-    weight: int
+    weight: Union[int, float]
     description: str
 
 class EventTimelineEntry(BaseModel):
     timestamp: str
     message: str
+    risk_score: Optional[Union[int, float]] = None
 
 class SecurityEventResponse(BaseModel):
     id: int
@@ -22,7 +23,7 @@ class SecurityEventResponse(BaseModel):
     object_type: str
     event_type: str
     severity: str
-    risk_score: int
+    risk_score: Union[int, float]
     risk_level: str
     status: str
     environment: str

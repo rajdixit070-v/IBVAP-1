@@ -35,7 +35,10 @@ def test_synthetic_streamer_lifecycle():
     )
     
     streamer.start()
-    time.sleep(0.3)  # Allow worker to generate frames
+    for _ in range(20):
+        if streamer.get_latest_frame() is not None and streamer.status == "HEALTHY":
+            break
+        time.sleep(0.1)
     
     assert streamer._running is True
     assert streamer.status == "HEALTHY"

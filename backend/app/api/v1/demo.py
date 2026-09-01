@@ -1,100 +1,114 @@
-import logging
-from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Optional, Dict, Any, List
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
-
-from app.config import settings
 from app.database import get_db
-from app.models.user import User
 from app.api.deps import get_current_user
+from app.models.user import User
 from app.services.demo.demo_service import DemoService
+from app.services.demo.demo_seeder import (
+    seed_demo_data,
+    purge_demo_data,
+    simulate_live_threat,
+    get_demo_status
+)
 
-logger = logging.getLogger("ibvap.api.demo")
-
-router = APIRouter(prefix="/demo", tags=["Demo Mode & Evaluation Engine"])
+router = APIRouter(prefix="/demo", tags=["Demo & Threat Simulation"])
 
 class RunScenarioRequest(BaseModel):
-    scenario_id: str = Field(default="HACKATHON_MASTER_FLOW", description="Scenario ID to execute")
-    step_index: Optional[int] = Field(default=None, description="Specific step to execute (1-16) or None for auto-advance")
-    auto_run_all: bool = Field(default=False, description="Run all steps in the scenario sequentially")
+    scenario_id: str
+    step_index: Optional[int] = 1
+    auto_run_all: Optional[bool] = False
 
 @router.get("/status")
-def get_demo_status():
-    """Returns current active demonstration state, history, and generated artifacts."""
-    st = dict(DemoService.get_status())
-    st["demo_mode_enabled"] = bool(settings.DEMO_MODE)
-    return st
+def get_status(db: Session = Depends(get_db)):
+    """Returns whether demo mode is currently active and database row counts."""
+    service_status = DemoService.get_status()
+    seeder_status = get_demo_status(db)
+    return {
+        "demo_active": service_status["demo_active"] or seeder_status["demo_active"],
+        **service_status,
+        "counts": seeder_status.get("counts", {})
+    }
 
 @router.get("/scenarios")
-def list_available_scenarios():
-    """Lists available deterministic demonstration flows."""
+def get_scenarios():
+    """Requirement 87: Returns list of pre-packaged deterministic demo scenarios."""
     return [
         {
             "id": "HACKATHON_MASTER_FLOW",
             "name": "16-Step Master Intrusion & Incident Workflow",
-            "steps_count": 16,
-            "description": "Deterministic end-to-end chain: Camera -> AI Person Detection -> Track -> Virtual Fence Breach -> Multimodal Risk -> Alert Broadcast -> Evidence -> Incident Playbook -> Operator Resolution -> Audit."
+            "total_steps": 16,
+            "description": "Complete end-to-end tactical intrusion, AI detection, polygon breach, multi-factor risk scoring, alert dispatch, and incident resolution."
         },
         {
             "id": "VEHICLE_ANPR_FLOW",
-            "name": "Vehicle Classification & Speed ANPR",
-            "steps_count": 5,
-            "description": "Truck detection, plate OCR character voting, tactical zone speed threshold breach."
+            "name": "Vehicle ANPR & Tactical Speeding Workflow",
+            "total_steps": 1,
+            "description": "High-confidence OCR license plate extraction and watchlist cross-matching at checkpoint."
         },
         {
             "id": "MULTI_CAMERA_HANDOVER",
-            "name": "Cross-Camera Re-Identification & Handover",
-            "steps_count": 4,
-            "description": "Subject moving from Camera 1 to Camera 2 with global track ID continuity."
+            "name": "Multi-Camera Handover & Re-Identification",
+            "total_steps": 1,
+            "description": "Seamless zero-line cross-camera tracking handoff and global track continuity."
         },
         {
             "id": "SYSTEM_FAILURE_RECOVERY",
-            "name": "Stream Loss & Self-Healing Diagnostics",
-            "steps_count": 3,
-            "description": "Camera disconnection, self-diagnostic alert, exponential backoff reconnection."
+            "name": "Camera Failure & Automatic Self-Healing",
+            "total_steps": 3,
+            "description": "Simulated hardware link failure, exponential backoff, and transparent stream restoration."
         }
     ]
 
+@router.post("/reset")
+def reset_demo(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Resets demonstration state to initial baseline."""
+    return DemoService.reset_demo(db)
+
 @router.post("/run-scenario")
-def run_demo_scenario(
+def run_scenario(
     req: RunScenarioRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Executes a step or entire scenario in the isolated demonstration engine."""
-    if settings.ENV_MODE == "production" and not settings.DEMO_MODE:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Demo scenario execution is disabled in production environment."
-        )
-
+    """Executes a single step or full sequence of a deterministic demonstration scenario."""
     if req.auto_run_all:
         results = []
-        max_steps = 16 if req.scenario_id == "HACKATHON_MASTER_FLOW" else 5
-        for s in range(1, max_steps + 1):
-            res = DemoService.execute_step(req.scenario_id, s, db)
-            results.append(res)
-        return {
-            "status": "COMPLETED",
-            "scenario_id": req.scenario_id,
-            "total_steps": len(results),
-            "results": results
-        }
-    else:
-        current_step = req.step_index or (DemoService.get_status()["current_step"] + 1)
-        res = DemoService.execute_step(req.scenario_id, current_step, db)
-        return res
+        if req.scenario_id == "HACKATHON_MASTER_FLOW":
+            total_steps = 16
+            for s in range(1, total_steps + 1):
+                results.append(DemoService.execute_step(req.scenario_id, s, db))
+            return {
+                "status": "COMPLETED",
+                "scenario_id": req.scenario_id,
+                "total_steps": total_steps,
+                "results": results
+            }
+        else:
+            step_res = DemoService.execute_step(req.scenario_id, 1, db)
+            return {
+                "status": "COMPLETED",
+                "scenario_id": req.scenario_id,
+                "total_steps": 1,
+                "results": [step_res]
+            }
 
-@router.post("/reset")
-def reset_demo_state(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Resets demo mode state and clears ephemeral demonstration artifacts."""
-    if settings.ENV_MODE == "production" and not settings.DEMO_MODE:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Demo reset is disabled in production environment."
-        )
-    return DemoService.reset_demo(db)
+    step_res = DemoService.execute_step(req.scenario_id, req.step_index or 1, db)
+    return step_res
+
+@router.post("/load", status_code=status.HTTP_201_CREATED)
+def load_demo(db: Session = Depends(get_db)):
+    """Seeds rich border surveillance demonstration data across all modules."""
+    return seed_demo_data(db)
+
+@router.post("/clean")
+def clean_demo(db: Session = Depends(get_db)):
+    """Purges all operational demo data back to clean 0-row state."""
+    return purge_demo_data(db)
+
+@router.post("/simulate-threat")
+def simulate_threat(db: Session = Depends(get_db)):
+    """Injects an immediate live high-priority border intruder event with sound and alert."""
+    return simulate_live_threat(db)
+

@@ -91,17 +91,18 @@ def list_early_warnings(
     current_user: User = Depends(get_current_user)
 ):
     """
-    List early warnings with status and severity filters.
+    Lists generated early warnings and emerging threat indicators.
     """
     query = db.query(EarlyWarning)
-    if warning_level:
+    if warning_level and isinstance(warning_level, str):
         query = query.filter(EarlyWarning.warning_level == warning_level)
-    if lifecycle_status:
+    if lifecycle_status and isinstance(lifecycle_status, str):
         query = query.filter(EarlyWarning.lifecycle_status == lifecycle_status)
-    if camera_id:
+    if camera_id and isinstance(camera_id, str):
         query = query.filter(EarlyWarning.camera_id == camera_id)
 
-    records = query.order_by(EarlyWarning.created_at.desc()).limit(limit).all()
+    num_limit = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 50
+    records = query.order_by(EarlyWarning.created_at.desc()).limit(num_limit).all()
     results = []
     for r in records:
         reasons = json.loads(r.reasons_json or "[]")
