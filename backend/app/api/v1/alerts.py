@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_optional
 from app.models.user import User
 from app.models.alert import Alert
 from app.schemas.alert import (
@@ -137,9 +137,10 @@ def resolve_alert(
 
 @router.delete("/clear-all")
 @router.post("/clear-all")
+@router.delete("/")
 def clear_all_alerts(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Deletes all alerts from the SOC real-time alert stream.
@@ -152,7 +153,7 @@ def clear_all_alerts(
 def delete_alert(
     alert_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Deletes a single alert from the database.

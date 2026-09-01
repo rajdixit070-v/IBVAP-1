@@ -232,5 +232,15 @@ export const incidentService = {
   async evaluateEscalations(): Promise<any> {
     const response = await api.post('/incidents/evaluate-escalations');
     return response.data;
+  },
+
+  async deleteIncident(incidentId: string): Promise<any> {
+    const response = await api.delete(`/incidents/${incidentId}`);
+    return response.data;
+  },
+
+  async clearAllIncidents(cameraId?: string): Promise<any> {
+    const response = await api.delete('/incidents/clear-all', { params: { camera_id: cameraId } });
+    return response.data;
   }
 };

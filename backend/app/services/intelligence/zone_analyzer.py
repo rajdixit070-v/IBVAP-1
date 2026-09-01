@@ -72,9 +72,9 @@ class CameraZoneStateTracker:
 
         # 1. Universal Real-Time Field of View (FOV) Detection & Evidence Capture
         for track in tracks:
-            if track.frame_count >= 2:
+            if track.frame_count >= 1:
                 last_time = self._fov_last_triggered.get(track.track_id)
-                if not last_time or (now - last_time).total_seconds() > 20.0:
+                if not last_time or (now - last_time).total_seconds() > 8.0:
                     self._fov_last_triggered[track.track_id] = now
                     
                     obj_cat = track.category.lower()
@@ -116,6 +116,25 @@ class CameraZoneStateTracker:
                         evidence_id=evd.evidence_id if evd else None,
                         evidence_path=evd.file_path if evd else None
                     )
+
+                    # Feed observation to Multimodal Tactical AI Engine
+                    try:
+                        from app.services.multimodal.multimodal_engine import MultimodalEngine
+                        from app.database import SessionLocal
+                        db_mm = SessionLocal()
+                        try:
+                            MultimodalEngine.record_observation({
+                                "camera_id": self.camera_id,
+                                "track_id": track.track_id,
+                                "observation_type": "PERSON" if obj_cat in ["person", "human"] else "VEHICLE" if obj_cat in ["vehicle", "car", "truck", "motorcycle", "bus"] else "ANIMAL" if obj_cat in ["animal", "dog", "horse", "cow", "cat"] else "DRONE" if obj_cat in ["drone", "uav"] else "OTHER",
+                                "confidence": track.confidence,
+                                "bbox": track.bbox,
+                                "speed": track.speed
+                            }, db=db_mm, auto_fuse=True)
+                        finally:
+                            db_mm.close()
+                    except Exception as mm_err:
+                        logger.debug(f"Multimodal observation feed notice: {mm_err}")
 
         if not self._cached_zones:
             # If no virtual boundary polygons are configured on this camera, polygon analysis is complete.

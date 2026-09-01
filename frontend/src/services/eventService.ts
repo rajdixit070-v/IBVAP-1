@@ -37,6 +37,16 @@ export const eventService = {
   async updateRiskConfig(data: Partial<SystemRiskConfig>): Promise<SystemRiskConfig> {
     const response = await api.put<SystemRiskConfig>('/risk-config/', data);
     return response.data;
+  },
+
+  async deleteEvent(eventId: string): Promise<any> {
+    const response = await api.delete(`/events/${eventId}`);
+    return response.data;
+  },
+
+  async clearAllEvents(cameraId?: string): Promise<any> {
+    const response = await api.delete('/events/clear-all', { params: { camera_id: cameraId } });
+    return response.data;
   }
 };
 

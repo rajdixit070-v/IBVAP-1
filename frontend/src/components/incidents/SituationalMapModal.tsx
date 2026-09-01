@@ -37,12 +37,14 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       loadLiveIncidents();
+      const interval = setInterval(loadLiveIncidents, 3000);
+      return () => clearInterval(interval);
     }
   }, [isOpen]);
 
   const loadLiveIncidents = async () => {
     try {
-      const data = await incidentService.getIncidents({ limit: 30 });
+      const data = await incidentService.getIncidents({ limit: 40 });
       setLiveIncidents(data);
     } catch (e) {
       console.error('Failed to load map incidents', e);
@@ -50,7 +52,7 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
   };
 
   const filteredCameras = cameras.filter((cam) => {
-    const hasInc = liveIncidents.some((i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED');
+    const hasInc = liveIncidents.some((i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED' && i.status !== 'RESOLVED');
     if (activeFilter === 'INCIDENT') return hasInc;
     if (activeFilter === 'ONLINE') return cam.status === 'ONLINE' || cam.status === 'HEALTHY';
     return true;
@@ -120,7 +122,7 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
           <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 my-2">
             {filteredCameras.map((cam: Camera) => {
               const activeInc = liveIncidents.find(
-                (i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED' && i.status !== 'FALSE_ALARM'
+                (i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED' && i.status !== 'RESOLVED' && i.status !== 'FALSE_ALARM'
               );
               const isSelected = selectedCam?.camera_id === cam.camera_id;
 
@@ -147,7 +149,7 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
                     isSelected
                       ? 'bg-sky-950/60 border-sky-400 shadow-xl shadow-sky-500/20'
                       : activeInc
-                      ? 'bg-rose-950/50 border-rose-500 shadow-lg shadow-rose-500/20 animate-pulse'
+                      ? 'bg-rose-950/70 border-rose-500 shadow-xl shadow-rose-500/30 ring-1 ring-rose-500'
                       : 'bg-[#0f172a]/80 border-slate-800 hover:border-slate-700 hover:bg-[#131d35]'
                   }`}
                 >
@@ -163,9 +165,9 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
                           e.stopPropagation();
                           onSelectIncident(activeInc);
                         }}
-                        className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-bold font-mono tracking-wider shadow"
+                        className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-black font-mono tracking-wider shadow-lg animate-pulse"
                       >
-                        THREAT
+                        🚨 THREAT
                       </button>
                     ) : (
                       <span
@@ -184,14 +186,25 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
                   </div>
 
                   <div className="text-xs font-semibold text-white truncate">{cam.camera_name}</div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-1 flex items-center justify-between">
+                  
+                  {activeInc && (
+                    <div className="mt-1.5 p-1.5 bg-rose-900/50 border border-rose-500/40 rounded-lg text-[10px] font-mono text-rose-200">
+                      <div className="font-bold flex items-center justify-between">
+                        <span>{activeInc.title || 'Target Detected'}</span>
+                        <span className="text-rose-300 font-black">Score: {activeInc.risk_score}/100</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-[10px] text-slate-400 font-mono mt-1.5 flex items-center justify-between">
                     <span>{cam.bop_site || 'BOP Alpha'}</span>
-                    <span className="text-slate-500">{cam.fps || 25} FPS</span>
+                    <span className="text-slate-500">{cam.sector || 'Sector Alpha'}</span>
                   </div>
 
                   {/* Lat / Long Coordinates */}
-                  <div className="text-[9px] text-slate-500 font-mono mt-1 truncate">
-                    LOC: {cam.latitude ? cam.latitude.toFixed(4) : '32.7241'}° N, {cam.longitude ? cam.longitude.toFixed(4) : '74.8512'}° E
+                  <div className="text-[9px] text-cyan-400 font-mono mt-1 flex items-center gap-1 font-semibold truncate">
+                    <span>📍 GPS:</span>
+                    <span>{cam.latitude ? cam.latitude.toFixed(4) : '32.7241'}° N, {cam.longitude ? cam.longitude.toFixed(4) : '74.8512'}° E</span>
                   </div>
                 </div>
               );

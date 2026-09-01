@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Zap, Trash2 } from 'lucide-react';
+import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Zap, Trash2, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
 import { incidentService } from '../../services/incidentService';
 import { alertSoundService } from '../../services/alertSoundService';
 import { demoService, DemoStatus } from '../../services/demoService';
+import { AlertsWebSocket } from '../../services/websocket';
 
 interface HeaderProps {
   onOpenMap?: () => void;
@@ -23,15 +24,34 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onTo
   const [demoStatus, setDemoStatus] = useState<DemoStatus | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [purging, setPurging] = useState(false);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   useEffect(() => {
     loadUnread();
     checkDemoStatus();
+
+    // Clock ticker every 1 second
+    const clockTimer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    // Listen to real-time alerts WebSocket for instant notification badge updates
+    const ws = new AlertsWebSocket((msg) => {
+      if (msg && (msg.event === 'ALERT_CREATED' || msg.event === 'ALERT_UPDATED')) {
+        loadUnread();
+      }
+    });
+
     const interval = setInterval(() => {
       loadUnread();
       checkDemoStatus();
-    }, 5000);
-    return () => clearInterval(interval);
+    }, 4000);
+
+    return () => {
+      clearInterval(clockTimer);
+      ws.close();
+      clearInterval(interval);
+    };
   }, []);
 
   const checkDemoStatus = async () => {
@@ -128,6 +148,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onTo
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
             </span>
             <span className="text-emerald-400 font-semibold">BUS ONLINE</span>
+          </div>
+
+          {/* Real-time Tactical Digital Clock HUD */}
+          <div className="hidden md:flex items-center gap-2 bg-[#0c1424] px-3 py-1 rounded-lg border border-cyan-500/30 text-xs font-mono shadow-inner">
+            <Clock className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="text-slate-300 font-semibold uppercase">
+              {currentTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+            </span>
+            <span className="text-cyan-600">|</span>
+            <span className="text-cyan-300 font-bold tracking-wider">
+              {currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+            </span>
+            <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-700 font-bold">
+              IST
+            </span>
           </div>
         </div>
 

@@ -64,8 +64,8 @@ export const ZoneModal: React.FC<ZoneModalProps> = ({
       return;
     }
 
-    const activePolygon = zoneToEdit ? zoneToEdit.polygon : polygon;
-    if (activePolygon.length < 3) {
+    const activePolygon = (polygon && polygon.length >= 3) ? polygon : (zoneToEdit ? zoneToEdit.polygon : []);
+    if (!activePolygon || activePolygon.length < 3) {
       setError('A security zone must contain at least 3 vertices.');
       return;
     }

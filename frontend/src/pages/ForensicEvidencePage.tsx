@@ -10,7 +10,8 @@ import {
   X,
   FolderLock,
   Copy,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 import { Evidence } from '../types/incident';
 import { evidenceService } from '../services/evidenceService';
@@ -52,6 +53,33 @@ export const ForensicEvidencePage: React.FC = () => {
     setTimeout(() => setCopiedHash(false), 2000);
   };
 
+  const handleDeleteEvidence = async (e: React.MouseEvent, evidenceId: string) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to permanently delete evidence snapshot '${evidenceId}'?`)) {
+      try {
+        await evidenceService.deleteEvidence(evidenceId);
+        setEvidenceList((prev) => prev.filter((item) => item.evidence_id !== evidenceId));
+        if (selectedEvidence?.evidence_id === evidenceId) {
+          setSelectedEvidence(null);
+        }
+      } catch (err) {
+        console.error('Failed to delete evidence item', err);
+      }
+    }
+  };
+
+  const handleClearAllEvidence = async () => {
+    const scope = selectedCamera === 'ALL' ? 'all cameras' : `camera '${selectedCamera}'`;
+    if (window.confirm(`Are you sure you want to permanently delete all archived evidence snapshots for ${scope}?`)) {
+      try {
+        await evidenceService.clearAllEvidence(selectedCamera === 'ALL' ? undefined : selectedCamera);
+        loadEvidence();
+      } catch (err) {
+        console.error('Failed to clear evidence vault', err);
+      }
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 min-h-screen bg-[#070b14] text-slate-100 font-sans">
       {/* Top Banner */}
@@ -72,7 +100,17 @@ export const ForensicEvidencePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {evidenceList.length > 0 && (
+            <button
+              onClick={handleClearAllEvidence}
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white rounded-xl text-xs font-mono border border-rose-500/40 transition cursor-pointer"
+              title="Delete All Evidence Records"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              CLEAR VAULT
+            </button>
+          )}
           <button
             onClick={loadEvidence}
             disabled={loading}
@@ -216,11 +254,18 @@ export const ForensicEvidencePage: React.FC = () => {
                       download={`${ev.evidence_id}.jpg`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition"
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                       title="Download Evidence Snapshot"
                     >
                       <Download className="w-3.5 h-3.5" />
                     </a>
+                    <button
+                      onClick={(e) => handleDeleteEvidence(e, ev.evidence_id)}
+                      className="p-1.5 bg-rose-950/40 hover:bg-rose-900/70 text-rose-300 hover:text-white rounded-lg border border-rose-500/30 transition cursor-pointer"
+                      title="Delete Evidence Snapshot"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -268,7 +313,7 @@ export const ForensicEvidencePage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-[#070b14] p-3.5 rounded-xl border border-slate-800">
                 <div className="space-y-1">
                   <span className="text-[10px] text-slate-500 block uppercase">CAPTURE TIMESTAMP</span>
-                  <span className="text-slate-200 font-bold">{new Date(selectedEvidence.created_at).toUTCString()}</span>
+                  <span className="text-slate-200 font-bold">{new Date(selectedEvidence.created_at).toLocaleString()}</span>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] text-slate-500 block uppercase">ORIGINATING SENSOR</span>
@@ -294,22 +339,30 @@ export const ForensicEvidencePage: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-between gap-3 pt-2">
                 <button
-                  onClick={() => setSelectedEvidence(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800 transition"
+                  onClick={(e) => handleDeleteEvidence(e, selectedEvidence.evidence_id)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-rose-300 hover:text-white bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  CLOSE
+                  <Trash2 className="w-4 h-4" /> DELETE EVIDENCE
                 </button>
-                <a
-                  href={`/api/v1/evidence/${selectedEvidence.evidence_id}/file`}
-                  download={`${selectedEvidence.evidence_id}.jpg`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 transition shadow-lg shadow-cyan-600/20 flex items-center gap-1.5"
-                >
-                  <Download className="w-4 h-4" /> DOWNLOAD EVIDENCE PROOF
-                </a>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSelectedEvidence(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800 transition cursor-pointer"
+                  >
+                    CLOSE
+                  </button>
+                  <a
+                    href={`/api/v1/evidence/${selectedEvidence.evidence_id}/file`}
+                    download={`${selectedEvidence.evidence_id}.jpg`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 transition shadow-lg shadow-cyan-600/20 flex items-center gap-1.5"
+                  >
+                    <Download className="w-4 h-4" /> DOWNLOAD EVIDENCE PROOF
+                  </a>
+                </div>
               </div>
             </div>
           </div>

@@ -144,7 +144,7 @@ class EvidenceManager:
             return None
 
         try:
-            now = datetime.utcnow()
+            now = datetime.now()
             evd_id = f"EVD-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
             camera_dir = os.path.join(settings.EVIDENCE_STORAGE_PATH, camera_id)
             os.makedirs(camera_dir, exist_ok=True)
@@ -181,9 +181,9 @@ class EvidenceManager:
                 cv2.rectangle(annotated, (x1, max(0, y1 - 25)), (x1 + len(label) * 11, y1), color, -1)
                 cv2.putText(annotated, label, (x1 + 4, max(18, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
-            # Forensic HUD Top Banner
+            # Forensic HUD Top Banner with Local Time
             cv2.rectangle(annotated, (0, 0), (w, 38), (10, 14, 20), -1)
-            hud_text = f"IBVAP FORENSIC EVIDENCE // {camera_id} // {event_type.upper()} // {now.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            hud_text = f"IBVAP FORENSIC EVIDENCE // {camera_id} // {event_type.upper()} // {now.strftime('%d-%b-%Y %I:%M:%S %p')}"
             cv2.putText(annotated, hud_text, (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 220, 255), 2)
 
             filename = f"{evd_id}.jpg"

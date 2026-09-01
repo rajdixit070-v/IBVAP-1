@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_optional
 from app.models.user import User
 from app.models.notification import Notification
 from app.schemas.notification import NotificationResponse
@@ -16,7 +16,7 @@ def list_notifications(
     is_read: Optional[bool] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     List SOC in-app notifications.
@@ -32,7 +32,7 @@ def list_notifications(
 def mark_notification_read(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Mark a notification as read.
@@ -48,7 +48,7 @@ def mark_notification_read(
 @router.post("/read-all")
 def mark_all_notifications_read(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Mark all unread notifications as read.
@@ -59,9 +59,10 @@ def mark_all_notifications_read(
 
 @router.delete("/clear-all")
 @router.post("/clear-all")
+@router.delete("/")
 def clear_all_notifications(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Deletes all notifications from the SOC notification feed.
@@ -74,7 +75,7 @@ def clear_all_notifications(
 def delete_notification(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Deletes a single notification.

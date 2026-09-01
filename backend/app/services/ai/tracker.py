@@ -98,12 +98,25 @@ class STrack:
         self.speed = 0.0
         self.direction = "UNKNOWN"
 
-    def _calculate_centers(self, box: Dict[str, float]) -> Tuple[float, float, float, float]:
-        cx = box["x"] + box["width"] / 2.0
-        cy = box["y"] + box["height"] / 2.0
-        bcx = cx
-        bcy = box["y"] + box["height"]
-        return cx, cy, bcx, bcy
+    def _calculate_centers(self, box: Any) -> Tuple[float, float, float, float]:
+        if isinstance(box, dict):
+            x = float(box.get("x", 0.0))
+            y = float(box.get("y", 0.0))
+            w = float(box.get("width", box.get("w", 50.0)))
+            h = float(box.get("height", box.get("h", 50.0)))
+            cx = x + w / 2.0
+            cy = y + h / 2.0
+            bcx = cx
+            bcy = y + h
+            return cx, cy, bcx, bcy
+        elif isinstance(box, (list, tuple)) and len(box) >= 4:
+            x1, y1, x2, y2 = float(box[0]), float(box[1]), float(box[2]), float(box[3])
+            cx = (x1 + x2) / 2.0
+            cy = (y1 + y2) / 2.0
+            bcx = cx
+            bcy = y2
+            return cx, cy, bcx, bcy
+        return 0.0, 0.0, 0.0, 0.0
 
     def update(self, detection: Dict[str, Any]):
         """Updates track with a matched detection in the current frame."""

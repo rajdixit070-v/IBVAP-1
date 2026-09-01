@@ -53,26 +53,34 @@ class ThreatRiskEngine:
         w_monitor = 15
         p_low_conf = self._get_val("penalty_low_confidence", -10)
 
-        # 1. Zone & Intrusion Factor
-        if event_type in ["ZONE_INTRUSION", "UNAUTHORIZED_INTRUSION", "PERIMETER_HUMAN_DETECTED"]:
-            if event_type in ["UNAUTHORIZED_INTRUSION", "PERIMETER_HUMAN_DETECTED"]:
-                # High-priority intrusion on perimeter camera sensor
-                score += 70
-                factors.append({"factor": "UNAUTHORIZED_HUMAN_DETECTED", "weight": 70, "description": "Unauthorized human subject detected on perimeter camera sensor."})
-            elif zone_type == "RESTRICTED":
+        # 1. Target Detection & Intrusion Factors
+        if event_type in ["PERSON_DETECTED", "PERIMETER_HUMAN_DETECTED", "UNAUTHORIZED_INTRUSION", "HUMAN_DETECTED"]:
+            score += 75
+            factors.append({"factor": "HUMAN_TARGET_DETECTED", "weight": 75, "description": "Human subject detected on perimeter camera sensor."})
+        elif event_type in ["DRONE_DETECTED", "AERIAL_THREAT"]:
+            score += 85
+            factors.append({"factor": "AERIAL_DRONE_DETECTED", "weight": 85, "description": "Unmanned aerial vehicle/drone detected in airspace."})
+        elif event_type in ["VEHICLE_DETECTED", "VEHICLE_APPROACH"]:
+            score += 65
+            factors.append({"factor": "VEHICLE_DETECTED", "weight": 65, "description": "Motorized vehicle detected in camera sector."})
+        elif event_type in ["ANIMAL_INTRUSION"]:
+            score += 50
+            factors.append({"factor": "ANIMAL_INTRUSION", "weight": 50, "description": "Wildlife / animal presence detected near perimeter."})
+        elif event_type in ["ZONE_INTRUSION"]:
+            if zone_type == "RESTRICTED":
                 score += w_restricted
                 factors.append({"factor": "RESTRICTED_ZONE_INTRUSION", "weight": w_restricted, "description": "Subject penetrated a designated restricted perimeter zone."})
             elif zone_type == "HIGH_SECURITY":
-                w = w_restricted + 10
+                w = w_restricted + 15
                 score += w
                 factors.append({"factor": "HIGH_SECURITY_BREACH", "weight": w, "description": "Subject penetrated a high-security critical asset perimeter."})
             elif zone_type == "BUFFER":
-                w = max(5, w_restricted - 10)
+                w = max(10, w_restricted - 5)
                 score += w
                 factors.append({"factor": "BUFFER_ZONE_ENTRY", "weight": w, "description": "Subject entered buffer observation perimeter."})
             else:
-                score += 15
-                factors.append({"factor": "MONITORED_ZONE_ENTRY", "weight": 15, "description": "Subject detected entering a monitored surveillance sector."})
+                score += 25
+                factors.append({"factor": "MONITORED_ZONE_ENTRY", "weight": 25, "description": "Subject detected entering a monitored surveillance sector."})
 
         # 2. ANPR Watchlist Factor
         if event_type == "ANPR_WATCHLIST_MATCH" or is_anpr_watchlist:

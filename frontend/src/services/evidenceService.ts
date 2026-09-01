@@ -15,5 +15,15 @@ export const evidenceService = {
   async verifyEvidence(evidenceId: string, content: string): Promise<any> {
     const res = await api.post(`/evidence/${evidenceId}/verify`, { content });
     return res.data;
+  },
+
+  async deleteEvidence(evidenceId: string): Promise<any> {
+    const res = await api.delete(`/evidence/${evidenceId}`);
+    return res.data;
+  },
+
+  async clearAllEvidence(cameraId?: string): Promise<any> {
+    const res = await api.delete('/evidence/clear-all', { params: { camera_id: cameraId } });
+    return res.data;
   }
 };

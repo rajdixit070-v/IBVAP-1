@@ -16,7 +16,8 @@ import {
   FileText,
   Flame,
   Sparkles,
-  Maximize2
+  Maximize2,
+  Trash2
 } from 'lucide-react';
 
 export const IncidentsPage: React.FC = () => {
@@ -83,6 +84,36 @@ export const IncidentsPage: React.FC = () => {
     setWorkspaceIncident(inc);
   };
 
+  const handleDeleteIncident = async (e: React.MouseEvent, incidentId: string) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to permanently delete incident '${incidentId}'?`)) {
+      try {
+        await incidentService.deleteIncident(incidentId);
+        setIncidents((prev) => prev.filter((item) => item.incident_id !== incidentId));
+        if (selectedIncidentId === incidentId) {
+          setDetailModalOpen(false);
+          setSelectedIncidentId(null);
+        }
+        if (workspaceIncident?.incident_id === incidentId) {
+          setWorkspaceIncident(null);
+        }
+      } catch (err) {
+        console.error('Failed to delete incident', err);
+      }
+    }
+  };
+
+  const handleClearAllIncidents = async () => {
+    if (window.confirm('Are you sure you want to delete all operational incidents from the database?')) {
+      try {
+        await incidentService.clearAllIncidents();
+        loadIncidents();
+      } catch (err) {
+        console.error('Failed to clear all incidents', err);
+      }
+    }
+  };
+
   const myIncidents = incidents.filter(
     (i) => i.assigned_to && i.assigned_to.toLowerCase().includes('operator')
   );
@@ -107,10 +138,20 @@ export const IncidentsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {incidents.length > 0 && (
+            <button
+              onClick={handleClearAllIncidents}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white rounded-xl text-xs font-mono font-bold border border-rose-500/40 transition cursor-pointer"
+              title="Delete All Incidents"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              CLEAR ALL
+            </button>
+          )}
           <button
             onClick={() => setCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg"
+            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             CREATE INCIDENT
@@ -314,13 +355,22 @@ export const IncidentsPage: React.FC = () => {
                       {inc.assigned_to || 'Unassigned'}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={(e) => handleOpenWorkspace(inc, e)}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold transition shadow"
-                      >
-                        <Maximize2 className="w-3 h-3 text-cyan-400" />
-                        WORKSPACE
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => handleOpenWorkspace(inc, e)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold transition shadow cursor-pointer"
+                        >
+                          <Maximize2 className="w-3 h-3 text-cyan-400" />
+                          WORKSPACE
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteIncident(e, inc.incident_id)}
+                          className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded border border-transparent hover:border-rose-500/30 transition cursor-pointer"
+                          title="Delete Incident Record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

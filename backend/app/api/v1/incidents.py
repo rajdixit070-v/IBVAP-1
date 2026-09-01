@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.database import get_db, SessionLocal
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_optional
 from app.models.user import User
 from app.models.incident import Incident
 from app.models.playbook import IncidentPlaybook
@@ -460,3 +460,39 @@ def record_post_incident_review(
         return review
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/clear-all")
+@router.post("/clear-all")
+@router.delete("/")
+def clear_all_incidents(
+    camera_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Purge all or camera-filtered operational incidents."""
+    query = db.query(Incident)
+    if camera_id and camera_id != "ALL":
+        query = query.filter(Incident.camera_id == camera_id)
+
+    records = query.all()
+    count = len(records)
+    for inc in records:
+        db.delete(inc)
+
+    db.commit()
+    return {"message": f"Successfully deleted {count} incidents.", "count": count}
+
+@router.delete("/{incident_id}")
+def delete_incident(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Deletes an operational incident record."""
+    inc = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found.")
+
+    db.delete(inc)
+    db.commit()
+    return {"message": f"Incident '{incident_id}' successfully deleted."}

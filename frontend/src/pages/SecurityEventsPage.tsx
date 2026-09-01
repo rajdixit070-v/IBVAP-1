@@ -9,7 +9,8 @@ import {
   Filter,
   RefreshCw,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Trash2
 } from 'lucide-react';
 
 export const SecurityEventsPage: React.FC = () => {
@@ -63,6 +64,33 @@ export const SecurityEventsPage: React.FC = () => {
     }
   };
 
+  const handleDeleteEvent = async (e: React.MouseEvent, eventId: string) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to permanently delete security threat '${eventId}'?`)) {
+      try {
+        await eventService.deleteEvent(eventId);
+        setEvents((prev) => prev.filter((item) => item.event_id !== eventId));
+        if (selectedEvent?.event_id === eventId) {
+          setSelectedEvent(null);
+        }
+      } catch (err) {
+        console.error('Failed to delete security event', err);
+      }
+    }
+  };
+
+  const handleClearAllEvents = async () => {
+    const scope = selectedCamera ? `camera '${selectedCamera}'` : 'all cameras';
+    if (window.confirm(`Are you sure you want to delete all logged security threat events for ${scope}?`)) {
+      try {
+        await eventService.clearAllEvents(selectedCamera || undefined);
+        loadData();
+      } catch (err) {
+        console.error('Failed to clear security events', err);
+      }
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Top Banner */}
@@ -82,13 +110,25 @@ export const SecurityEventsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={loadData}
-          className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-sky-400' : ''}`} />
-          Refresh Feed
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {events.length > 0 && (
+            <button
+              onClick={handleClearAllEvents}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white rounded-xl text-xs font-semibold border border-rose-500/40 transition cursor-pointer"
+              title="Delete All Security Events"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear Events
+            </button>
+          )}
+          <button
+            onClick={loadData}
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-sky-400' : ''}`} />
+            Refresh Feed
+          </button>
+        </div>
       </div>
 
       {/* Threat Summary Metric Pills */}
@@ -259,7 +299,7 @@ export const SecurityEventsPage: React.FC = () => {
                       {evt.zone_name || 'Restricted Wire'}
                     </td>
                     <td className="px-4 py-3 text-slate-400 text-[11px]">
-                      {new Date(evt.started_at).toLocaleTimeString()}
+                      {new Date(evt.started_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -275,15 +315,24 @@ export const SecurityEventsPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedEvent(evt);
-                        }}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-[11px] font-semibold transition"
-                      >
-                        Inspect
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEvent(evt);
+                          }}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-[11px] font-semibold transition cursor-pointer"
+                        >
+                          Inspect
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteEvent(e, evt.event_id)}
+                          className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded border border-transparent hover:border-rose-500/30 transition cursor-pointer"
+                          title="Delete Security Event"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

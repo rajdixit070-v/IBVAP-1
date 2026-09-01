@@ -211,13 +211,13 @@ export const CameraGraphModal: React.FC<CameraGraphModalProps> = ({
                 {cameras.map((cam, idx) => {
                   const total = cameras.length;
                   let x = 380;
-                  let y = 110;
+                  let y = 100;
                   if (total > 1) {
                     const angle = (2 * Math.PI * idx) / total - Math.PI / 2;
                     const rX = Math.min(260, (total - 1) * 75 + 100);
-                    const rY = 65;
+                    const rY = 55;
                     x = 380 + Math.cos(angle) * rX;
-                    y = 110 + Math.sin(angle) * rY;
+                    y = 100 + Math.sin(angle) * rY;
                   }
                   const isOnline = cam.status === 'HEALTHY' || cam.status === 'ONLINE';
 
@@ -241,24 +241,35 @@ export const CameraGraphModal: React.FC<CameraGraphModalProps> = ({
                       />
                       <circle cx="0" cy="-3" r="3.5" fill={isOnline ? '#10b981' : '#f59e0b'} />
                       <rect
-                        x="-38"
+                        x="-60"
                         y="22"
-                        width="76"
-                        height="16"
-                        rx="3"
+                        width="120"
+                        height="28"
+                        rx="4"
                         fill="#090d16"
                         stroke="#1e293b"
+                        className="group-hover:stroke-sky-500/50"
                       />
                       <text
                         x="0"
-                        y="33"
+                        y="34"
                         textAnchor="middle"
                         fill="#f1f5f9"
                         fontSize="9"
                         fontFamily="monospace"
                         fontWeight="bold"
                       >
-                        {cam.camera_id}
+                        {cam.camera_id} • {cam.camera_name.substring(0, 10)}
+                      </text>
+                      <text
+                        x="0"
+                        y="46"
+                        textAnchor="middle"
+                        fill="#38bdf8"
+                        fontSize="7.5"
+                        fontFamily="monospace"
+                      >
+                        📍 {cam.latitude ? cam.latitude.toFixed(4) : '32.7241'}°N, {cam.longitude ? cam.longitude.toFixed(4) : '74.8512'}°E
                       </text>
                     </g>
                   );

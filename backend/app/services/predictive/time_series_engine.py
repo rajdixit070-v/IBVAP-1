@@ -43,26 +43,43 @@ class TimeSeriesEngine:
             values = []
 
             if not snapshots:
+                # Query actual real observations and security events for this camera/zone
+                from app.models.security_event import SecurityEvent
+                from app.models.multimodal_models import AIObservation
                 for i in range(history_points):
-                    pt_time = now - timedelta(minutes=(history_points - 1 - i) * window_minutes)
-                    hr = pt_time.hour
-                    is_night = hr >= 22 or hr <= 5
-                    base = 2.0 if is_night else 12.0
-                    actual = int(round(base + math.sin(i * 0.5) * 3.0))
-                    std = max(1.5, base * 0.25)
+                    pt_start = now - timedelta(minutes=(history_points - i) * window_minutes)
+                    pt_end = now - timedelta(minutes=(history_points - 1 - i) * window_minutes)
+
+                    evt_query = db.query(SecurityEvent).filter(
+                        SecurityEvent.started_at >= pt_start,
+                        SecurityEvent.started_at < pt_end
+                    )
+                    obs_query = db.query(AIObservation).filter(
+                        AIObservation.timestamp >= pt_start,
+                        AIObservation.timestamp < pt_end
+                    )
+
+                    if target_type == "camera":
+                        evt_query = evt_query.filter(SecurityEvent.camera_id == target_id)
+                        obs_query = obs_query.filter(AIObservation.camera_id == target_id)
+
+                    evt_count = evt_query.count()
+                    obs_count = obs_query.count()
+                    actual = evt_count + obs_count
+
+                    base = max(1.0, float(actual))
+                    std = max(1.0, base * 0.2)
                     lower = max(0.0, base - 1.96 * std)
                     upper = base + 1.96 * std
-                    is_spike = actual > upper
-                    is_drop = actual < lower and actual < 2
 
                     points.append({
-                        "timestamp": pt_time,
+                        "timestamp": pt_end,
                         "actual_count": actual,
                         "expected_count": round(base, 1),
                         "lower_bound": round(lower, 1),
                         "upper_bound": round(upper, 1),
-                        "is_spike": is_spike,
-                        "is_drop": is_drop
+                        "is_spike": actual > 5,
+                        "is_drop": False
                     })
                     values.append(actual)
             else:

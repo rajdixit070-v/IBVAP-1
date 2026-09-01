@@ -64,7 +64,7 @@ class SecurityEventManager:
         temporal deduplication, and real-time WebSocket distribution.
         """
         key = f"{camera_id}:{zone_id or 'none'}:{track_id}:{event_type}"
-        now = datetime.utcnow()
+        now = datetime.now()
 
         # Calculate Risk Score & Breakdown
         risk_score, risk_level, factors = risk_engine.calculate_risk(
@@ -94,7 +94,7 @@ class SecurityEventManager:
                         timeline = json.loads(event_record.timeline_json or '[]')
                         if timeline_message:
                             timeline.append({
-                                "timestamp": now.strftime("%H:%M:%S"),
+                                "timestamp": now.strftime("%I:%M:%S %p"),
                                 "message": timeline_message
                             })
                             event_record.timeline_json = json.dumps(timeline[-20:]) # Keep last 20 entries
@@ -126,6 +126,15 @@ class SecurityEventManager:
                     }
                 ]
 
+                # Determine exact outpost GPS coordinates and location description
+                from app.models.camera import Camera
+                cam = db.query(Camera).filter(Camera.camera_id == camera_id).first()
+                if cam:
+                    coords_str = f" (GPS: {cam.latitude:.4f}° N, {cam.longitude:.4f}° E)" if cam.latitude and cam.longitude else ""
+                    loc_desc = f"{cam.bop_site or 'BOP Site'} // {cam.sector or 'Perimeter Sector'} // {cam.camera_name}{coords_str}".strip()
+                else:
+                    loc_desc = f"Perimeter Outpost // {camera_id}"
+
                 event_record = SecurityEvent(
                     event_id=new_event_id,
                     camera_id=camera_id,
@@ -139,6 +148,7 @@ class SecurityEventManager:
                     risk_level=risk_level,
                     status="ACTIVE",
                     environment="NIGHT" if is_night else "DAY",
+                    location_description=loc_desc,
                     factors_json=json.dumps(factors),
                     timeline_json=json.dumps(initial_timeline),
                     last_bbox_json=json.dumps(bbox) if bbox else None,

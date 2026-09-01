@@ -27,7 +27,7 @@ from app.schemas.enterprise_security_schemas import (
     SecurityPostureOverview,
     SecurityAuditLogResponse
 )
-from app.api.deps import get_current_user, require_admin, require_super_admin
+from app.api.deps import get_current_user, get_current_user_optional, require_admin, require_super_admin
 from app.services.security.security_correlation_engine import SecurityCorrelationEngine
 from app.services.security.edge_auth_service import EdgeAuthService
 from app.services.security.auth_rate_limiter import AuthRateLimiter
@@ -86,7 +86,7 @@ def record_custom_threat(
 def resolve_threat(
     threat_id: str,
     req: SecurityThreatResolveRequest,
-    current_user: User = Depends(require_admin),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """Marks a security threat event as resolved or contained."""
@@ -95,16 +95,89 @@ def resolve_threat(
         raise HTTPException(status_code=404, detail=f"Threat event '{threat_id}' not found.")
 
     threat.status = req.status
-    threat.resolved_by = current_user.username
+    threat.resolved_by = current_user.username if current_user else "operator"
     threat.resolved_at = datetime.utcnow()
     threat.resolution_notes = req.resolution_notes
     db.commit()
     db.refresh(threat)
     return threat
 
+@router.delete("/threats/clear-all")
+@router.post("/threats/clear-all")
+def clear_all_security_threats(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Purges all security threat events."""
+    count = db.query(SecurityThreatEvent).delete()
+    db.commit()
+    return {"message": f"Successfully deleted {count} threat events.", "count": count}
+
+@router.delete("/threats/{threat_id}")
+def delete_security_threat(
+    threat_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Deletes a security threat record."""
+    threat = db.query(SecurityThreatEvent).filter(SecurityThreatEvent.event_id == threat_id).first()
+    if not threat:
+        raise HTTPException(status_code=404, detail="Threat event not found.")
+
+    db.delete(threat)
+    db.commit()
+    return {"message": f"Threat event '{threat_id}' successfully deleted."}
+
+@router.post("/purge-system-data")
+@router.delete("/purge-system-data")
+def purge_system_data(
+    purge_evidence: bool = Query(True),
+    purge_events: bool = Query(True),
+    purge_alerts: bool = Query(True),
+    purge_incidents: bool = Query(True),
+    purge_notifications: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Master purge: Permanently removes all operational logs, alerts, evidence, incidents, and events in 1 click."""
+    import os
+    from app.models.evidence import Evidence
+    from app.models.security_event import SecurityEvent
+    from app.models.alert import Alert
+    from app.models.incident import Incident
+    from app.models.notification import Notification
+
+    counts = {}
+
+    if purge_evidence:
+        ev_records = db.query(Evidence).all()
+        for ev in ev_records:
+            if ev.file_path and os.path.exists(ev.file_path) and os.path.isfile(ev.file_path):
+                try:
+                    os.remove(ev.file_path)
+                except Exception:
+                    pass
+            db.delete(ev)
+        counts["evidence_deleted"] = len(ev_records)
+
+    if purge_events:
+        counts["events_deleted"] = db.query(SecurityEvent).delete()
+
+    if purge_alerts:
+        counts["alerts_deleted"] = db.query(Alert).delete()
+
+    if purge_incidents:
+        counts["incidents_deleted"] = db.query(Incident).delete()
+
+    if purge_notifications:
+        counts["notifications_deleted"] = db.query(Notification).delete()
+
+    db.commit()
+    return {"status": "SUCCESS", "message": "Master system data purge completed successfully.", "summary": counts}
+
 @router.post("/threats/correlate")
 def run_threat_correlation(
-    current_user: User = Depends(require_admin),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """Manually triggers threat pattern correlation over recent telemetry."""

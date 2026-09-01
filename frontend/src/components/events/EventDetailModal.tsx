@@ -81,7 +81,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 </span>
               </div>
               <div className="text-xs text-slate-400 font-mono mt-0.5">
-                First Detected: {new Date(event.started_at).toLocaleTimeString()} • Status: <strong className="text-white">{event.status}</strong>
+                First Detected: {new Date(event.started_at).toLocaleString()} • Status: <strong className="text-white">{event.status}</strong>
               </div>
             </div>
           </div>

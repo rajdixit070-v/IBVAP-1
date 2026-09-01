@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, get_current_user_optional, require_admin
 from app.models.user import User
 from app.models.security_event import SecurityEvent
 from app.models.audit_log import SecurityAuditLog
@@ -170,3 +170,39 @@ def update_event_status(
     db.commit()
     db.refresh(evt)
     return serialize_event(evt)
+
+@router.delete("/clear-all")
+@router.post("/clear-all")
+@router.delete("/")
+def clear_all_security_events(
+    camera_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Purges all or camera-filtered security threat events."""
+    query = db.query(SecurityEvent)
+    if camera_id and camera_id != "ALL":
+        query = query.filter(SecurityEvent.camera_id == camera_id)
+
+    evts = query.all()
+    count = len(evts)
+    for evt in evts:
+        db.delete(evt)
+
+    db.commit()
+    return {"message": f"Successfully deleted {count} security events.", "count": count}
+
+@router.delete("/{event_id}")
+def delete_security_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Deletes a security threat event record."""
+    evt = db.query(SecurityEvent).filter(SecurityEvent.event_id == event_id).first()
+    if not evt:
+        raise HTTPException(status_code=404, detail="Security event not found.")
+
+    db.delete(evt)
+    db.commit()
+    return {"message": f"Security event '{event_id}' successfully deleted."}

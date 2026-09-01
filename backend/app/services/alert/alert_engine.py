@@ -104,7 +104,7 @@ class AlertEngine:
 
             # Deduplication key for continuing tracks
             dedup_key = f"{event.camera_id}:{event.track_id}:{event.event_type}"
-            now = datetime.utcnow()
+            now = datetime.now()
 
             with self._lock:
                 existing_alert_id = self._active_alert_map.get(dedup_key)
@@ -128,7 +128,7 @@ class AlertEngine:
                     deadline = now + timedelta(seconds=600)
 
                 # Generate new Alert
-                new_alert_id = f"ALT-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+                new_alert_id = f"ALT-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
                 title = f"{priority} Threat: {event.event_type.replace('_', ' ').title()} on {event.camera_id}"
                 
                 alert = Alert(

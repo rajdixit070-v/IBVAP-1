@@ -63,7 +63,7 @@ def get_zone(
 def create_zone(
     zone_in: SecurityZoneCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Creates a new virtual perimeter zone with normalized polygon coordinates."""
     # Verify camera exists
@@ -107,7 +107,7 @@ def update_zone(
     zone_id: str,
     zone_in: SecurityZoneUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Updates an existing virtual security zone."""
     zone = db.query(SecurityZone).filter(SecurityZone.zone_id == zone_id).first()
@@ -148,7 +148,7 @@ def update_zone(
 def delete_zone(
     zone_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Deletes a virtual security zone."""
     zone = db.query(SecurityZone).filter(SecurityZone.zone_id == zone_id).first()

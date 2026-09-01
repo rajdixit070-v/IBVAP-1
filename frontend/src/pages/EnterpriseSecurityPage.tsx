@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   Search,
   Plus,
-  Play
+  Play,
+  Trash2
 } from 'lucide-react';
 import { securityService } from '../services/securityService';
 import {
@@ -105,7 +106,7 @@ export const EnterpriseSecurityPage: React.FC = () => {
 
   const handleBlockIP = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBlockIP.trim() || !newBlockReason.trim()) return;
+    if (!newBlockIP.trim()) return;
     try {
       await securityService.blockIP({ ip_address: newBlockIP.trim(), reason: newBlockReason.trim() });
       setNewBlockIP('');
@@ -132,6 +133,21 @@ export const EnterpriseSecurityPage: React.FC = () => {
       loadData();
     } catch (err) {
       console.error('Failed to trigger correlation:', err);
+    }
+  };
+
+  const handlePurgeAllData = async () => {
+    const confirmation = window.prompt(
+      '⚠️ CRITICAL ACTION: This will permanently delete ALL evidence snapshots, security threat events, alerts, notifications, and operational incidents across all cameras.\n\nType "CONFIRM PURGE" to proceed:'
+    );
+    if (confirmation === 'CONFIRM PURGE') {
+      try {
+        const res = await securityService.purgeSystemData();
+        alert(`Master Data Purge Successful!\n\n${res.message}`);
+        loadData();
+      } catch (err: any) {
+        alert(`Failed to purge system data: ${err.response?.data?.detail || err.message}`);
+      }
     }
   };
 
@@ -175,10 +191,18 @@ export const EnterpriseSecurityPage: React.FC = () => {
         </div>
 
         {/* Global Actions */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={handlePurgeAllData}
+            className="px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white border border-rose-500/40 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-rose-950/50"
+            title="Master 1-Click Purge of All System Logs, Alerts, Evidence, and Incidents"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            Purge All Data
+          </button>
           <button
             onClick={handleTriggerCorrelation}
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Play className="w-3.5 h-3.5 text-cyan-400" />
             Run Correlation
@@ -186,14 +210,14 @@ export const EnterpriseSecurityPage: React.FC = () => {
           <a
             href={securityService.exportReportUrl('csv')}
             download
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             Export Posture Report
           </a>
           <button
             onClick={loadData}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors"
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors cursor-pointer"
             title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />

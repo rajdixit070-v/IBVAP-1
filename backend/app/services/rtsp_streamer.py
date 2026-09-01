@@ -313,7 +313,7 @@ class RTSPStreamer:
 
         while self._running:
             loop_start = time.time()
-            now_dt = datetime.utcnow()
+            now_dt = datetime.now()
 
             # Create synthetic CCTV background (Dark border outpost scene)
             frame = np.zeros((height, width, 3), dtype=np.uint8)
@@ -344,8 +344,8 @@ class RTSPStreamer:
             cv2.putText(frame, f"IBVAP LIVE // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
             cv2.putText(frame, f"LOC: {self.bop_site}", (650, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2)
             
-            timestamp_str = now_dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-4] + " UTC"
-            cv2.putText(frame, timestamp_str, (width - 450, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+            timestamp_str = now_dt.strftime("%d-%b-%Y %I:%M:%S %p")
+            cv2.putText(frame, timestamp_str, (width - 430, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
 
             # Bottom Status HUD
             cv2.rectangle(frame, (0, height - 50), (width, height), (10, 12, 16), -1)

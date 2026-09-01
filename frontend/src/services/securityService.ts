@@ -84,6 +84,29 @@ export const securityService = {
     return res.data;
   },
 
+  // Threat Deletion
+  deleteThreat: async (threatId: string): Promise<any> => {
+    const res = await api.delete(`/security/threats/${threatId}`);
+    return res.data;
+  },
+
+  clearAllThreats: async (): Promise<any> => {
+    const res = await api.delete('/security/threats/clear-all');
+    return res.data;
+  },
+
+  // Master Purge Data (1-Click Purge All Logged Data)
+  purgeSystemData: async (options?: {
+    purge_evidence?: boolean;
+    purge_events?: boolean;
+    purge_alerts?: boolean;
+    purge_incidents?: boolean;
+    purge_notifications?: boolean;
+  }): Promise<any> => {
+    const res = await api.post('/security/purge-system-data', null, { params: options });
+    return res.data;
+  },
+
   // Export
   exportReportUrl: (format: 'json' | 'csv' = 'csv'): string => {
     return `/api/v1/security/export-report?format=${format}`;
