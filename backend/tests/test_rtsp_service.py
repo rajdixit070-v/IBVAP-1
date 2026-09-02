@@ -15,7 +15,7 @@ def test_url_masking():
 def test_build_authenticated_url():
     base_url = "rtsp://192.168.1.100:554/h264"
     auth_url = build_authenticated_rtsp_url(base_url, "operator1", "P@ss123")
-    assert "operator1:P@ss123@192.168.1.100:554/h264" in auth_url
+    assert "operator1:P%40ss123@192.168.1.100:554/h264" in auth_url
 
 def test_probe_rtsp_synthetic():
     res = probe_rtsp("synthetic://cam/live")

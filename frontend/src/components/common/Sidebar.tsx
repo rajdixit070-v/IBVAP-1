@@ -18,7 +18,11 @@ import {
   Globe,
   ShieldCheck,
   Activity,
-  FolderLock
+  FolderLock,
+  Radio,
+  Crosshair,
+  Plane,
+  Map
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -138,6 +142,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
           label: 'Predictive Intelligence',
           icon: TrendingUp,
           badge: null
+        }
+      ]
+    },
+    {
+      title: 'NEXT-GEN CAPABILITIES',
+      items: [
+        {
+          id: 'sensor-fusion',
+          label: 'Multi-Sensor Fusion',
+          icon: Radio,
+          badge: 'BAYESIAN'
+        },
+        {
+          id: 'thermal-fusion',
+          label: 'Thermal + RGB Fusion',
+          icon: Flame,
+          badge: 'HOMOGRAPHY'
+        },
+        {
+          id: 'ptz-control',
+          label: 'PTZ & ONVIF Control',
+          icon: Crosshair,
+          badge: 'AUTOTRACK'
+        },
+        {
+          id: 'drone-operations',
+          label: 'Drone Fleet & Handoff',
+          icon: Plane,
+          badge: 'UAV'
+        },
+        {
+          id: 'gis-intelligence',
+          label: 'GIS & Blind-Spot Intelligence',
+          icon: Map,
+          badge: 'FOV/TERRAIN'
         }
       ]
     },

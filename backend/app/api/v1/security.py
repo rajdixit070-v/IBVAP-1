@@ -177,7 +177,7 @@ def purge_system_data(
 
 @router.post("/threats/correlate")
 def run_threat_correlation(
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """Manually triggers threat pattern correlation over recent telemetry."""

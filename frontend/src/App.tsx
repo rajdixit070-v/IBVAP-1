@@ -22,6 +22,11 @@ import { MultiSiteCommandPage } from './pages/MultiSiteCommandPage';
 import { MultimodalIntelligencePage } from './pages/MultimodalIntelligencePage';
 import { EnterpriseSecurityPage } from './pages/EnterpriseSecurityPage';
 import { ForensicEvidencePage } from './pages/ForensicEvidencePage';
+import { SensorFusionPage } from './pages/SensorFusionPage';
+import { ThermalFusionPage } from './pages/ThermalFusionPage';
+import { PTZControlPage } from './pages/PTZControlPage';
+import { DroneOperationsPage } from './pages/DroneOperationsPage';
+import { GISIntelligencePage } from './pages/GISIntelligencePage';
 import { CameraDetailsModal } from './components/cameras/CameraDetailsModal';
 import { CameraModal } from './components/cameras/CameraModal';
 import { SituationalMapModal } from './components/incidents/SituationalMapModal';
@@ -96,6 +101,11 @@ const MainLayout: React.FC = () => {
           {activeTab === 'edge' && <EdgeInfrastructurePage />}
           {activeTab === 'events' && <SecurityEventsPage />}
           {activeTab === 'evidence' && <ForensicEvidencePage />}
+          {activeTab === 'sensor-fusion' && <SensorFusionPage />}
+          {activeTab === 'thermal-fusion' && <ThermalFusionPage />}
+          {activeTab === 'ptz-control' && <PTZControlPage />}
+          {activeTab === 'drone-operations' && <DroneOperationsPage />}
+          {activeTab === 'gis-intelligence' && <GISIntelligencePage />}
         </main>
       </div>
 

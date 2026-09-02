@@ -65,9 +65,10 @@ export class SecurityEventsWebSocket {
     if (this.isClosedExplicitly) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname;
-    const port = '8000';
-    const url = `${protocol}//${host}:${port}/api/v1/ws/security-events`;
+    const host = window.location.host;
+    const token = localStorage.getItem('ibvap_token');
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    const url = `${protocol}//${host}/api/v1/ws/security-events${tokenParam}`;
 
     try {
       this.ws = new WebSocket(url);

@@ -1,23 +1,55 @@
 import asyncio
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from typing import Optional
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 from app.services.stream_manager import stream_manager
 from app.services.health_monitor import health_monitor
 from app.services.ai.pipeline import ai_pipeline_manager
 from app.services.intelligence.event_manager import security_event_manager
 from app.services.alert.alert_engine import alert_engine
+from app.services.security.ws_ticket_service import WSTicketService
 
 logger = logging.getLogger("ibvap.ws")
 router = APIRouter(prefix="/ws", tags=["WebSockets"])
 
+async def _authenticate_and_accept(
+    websocket: WebSocket,
+    ticket: Optional[str],
+    token: Optional[str],
+    expected_scope: str,
+    expected_camera_id: Optional[str] = None
+) -> bool:
+    """
+    Validates single-use ticket or token and enforces camera/role scope before accepting WebSocket.
+    """
+    auth_data = WSTicketService.validate_and_consume_ticket(
+        ticket=ticket,
+        expected_scope=expected_scope,
+        expected_camera_id=expected_camera_id,
+        jwt_token_fallback=token
+    )
+    if not auth_data:
+        logger.warning(f"Rejected unauthenticated WebSocket attempt to {expected_scope} (cam={expected_camera_id})")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return False
+
+    await websocket.accept()
+    logger.info(f"WebSocket client authorized for {expected_scope} (user={auth_data.get('username')}, cam={expected_camera_id})")
+    return True
+
 @router.websocket("/live-feed/{camera_id}")
-async def live_video_feed_ws(websocket: WebSocket, camera_id: str):
+async def live_video_feed_ws(
+    websocket: WebSocket,
+    camera_id: str,
+    ticket: Optional[str] = Query(None),
+    token: Optional[str] = Query(None)
+):
     """
     Ultra low-latency WebSocket video frame broadcaster.
     Streams binary JPEG frames directly into client Canvas/Image player.
     """
-    await websocket.accept()
-    logger.info(f"WebSocket client connected to live-feed for {camera_id}")
+    if not await _authenticate_and_accept(websocket, ticket, token, "live_feed", camera_id):
+        return
     
     try:
         frame_interval = 1.0 / 25.0  # Max 25 FPS over WebSocket
@@ -36,14 +68,19 @@ async def live_video_feed_ws(websocket: WebSocket, camera_id: str):
             pass
 
 @router.websocket("/ai-feed/{camera_id}")
-async def camera_ai_telemetry_ws(websocket: WebSocket, camera_id: str):
+async def camera_ai_telemetry_ws(
+    websocket: WebSocket,
+    camera_id: str,
+    ticket: Optional[str] = Query(None),
+    token: Optional[str] = Query(None)
+):
     """
     Real-time AI Detection, Tracking & Telemetry broadcaster.
     Streams bounding boxes, persistent track IDs, image-space direction, speed,
     trajectories, and live object counts to frontend HUD overlays.
     """
-    await websocket.accept()
-    logger.info(f"WebSocket client connected to AI feed for {camera_id}")
+    if not await _authenticate_and_accept(websocket, ticket, token, "ai_feed", camera_id):
+        return
 
     queue = asyncio.Queue(maxsize=10)
     loop = asyncio.get_running_loop()
@@ -84,13 +121,17 @@ async def camera_ai_telemetry_ws(websocket: WebSocket, camera_id: str):
         logger.error(f"Error on AI feed WebSocket for {camera_id}: {e}")
 
 @router.websocket("/security-events")
-async def security_events_ws(websocket: WebSocket):
+async def security_events_ws(
+    websocket: WebSocket,
+    ticket: Optional[str] = Query(None),
+    token: Optional[str] = Query(None)
+):
     """
     Real-time Security Events & Threat Intelligence broadcaster.
     Pushes new intrusions, loitering, and threat events directly to dashboard operations.
     """
-    await websocket.accept()
-    logger.info("WebSocket client connected to security events feed.")
+    if not await _authenticate_and_accept(websocket, ticket, token, "security_events"):
+        return
 
     queue = asyncio.Queue(maxsize=20)
     loop = asyncio.get_running_loop()
@@ -117,12 +158,17 @@ async def security_events_ws(websocket: WebSocket):
         logger.error(f"Error on security events WebSocket: {e}")
 
 @router.websocket("/health")
-async def camera_health_ws(websocket: WebSocket):
+async def camera_health_ws(
+    websocket: WebSocket,
+    ticket: Optional[str] = Query(None),
+    token: Optional[str] = Query(None)
+):
     """
     Real-time health status broadcaster.
     Sends full camera fleet health status on connection and pushes updates.
     """
-    await websocket.accept()
+    if not await _authenticate_and_accept(websocket, ticket, token, "health"):
+        return
     health_monitor.register_ws_client(websocket)
     logger.info("WebSocket client registered for health telemetry.")
 
@@ -147,12 +193,17 @@ async def camera_health_ws(websocket: WebSocket):
         logger.error(f"Error on health telemetry WebSocket: {e}")
 
 @router.websocket("/alerts")
-async def live_alerts_ws(websocket: WebSocket):
+async def live_alerts_ws(
+    websocket: WebSocket,
+    ticket: Optional[str] = Query(None),
+    token: Optional[str] = Query(None)
+):
     """
     Real-time Live Alert & Notification broadcaster.
     Streams new alerts, acknowledgements, escalations, and resolutions.
     """
-    await websocket.accept()
+    if not await _authenticate_and_accept(websocket, ticket, token, "alerts"):
+        return
     logger.info("WebSocket client connected to live alerts feed.")
 
     queue = asyncio.Queue(maxsize=25)
@@ -178,4 +229,5 @@ async def live_alerts_ws(websocket: WebSocket):
     except Exception as e:
         alert_engine.unregister_ws_client(sync_send_alert)
         logger.error(f"Error on alerts WebSocket: {e}")
+
 

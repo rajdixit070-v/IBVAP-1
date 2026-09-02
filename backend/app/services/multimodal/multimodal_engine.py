@@ -754,7 +754,7 @@ class MultimodalEngine:
                 "**3. Browser Access**:\n"
                 "• Open: `http://localhost:5173`\n"
                 "• Username: `admin`\n"
-                "• Password: `Admin@IBVAP2026`\n\n"
+                "• Password: Configured administrative password\n\n"
                 "**4. Add Real Cameras**:\n"
                 "Go to **Camera Management** ➔ Click **+ Add Camera** ➔ Enter RTSP URL (`rtsp://ip:554/stream`)."
             )

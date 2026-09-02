@@ -1,3 +1,4 @@
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -13,6 +14,7 @@ from app.core.security import verify_password, create_access_token, get_password
 from app.api.deps import get_current_user, oauth2_scheme
 from app.services.security.auth_rate_limiter import AuthRateLimiter
 from app.services.security.password_policy import PasswordPolicyService
+from app.services.security.ws_ticket_service import WSTicketService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -206,3 +208,29 @@ def validate_password_policy(
 def read_current_user_profile(current_user: User = Depends(get_current_user)):
     """Retrieves profile of currently logged-in user."""
     return current_user
+
+@router.post("/ws-ticket")
+def issue_websocket_ticket(
+    scope: str = "general",
+    camera_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Issues a short-lived, single-use ticket for secure WebSocket connection authentication.
+    Enforces user identity, role, and camera scope constraints.
+    """
+    ticket = WSTicketService.generate_ticket(
+        username=current_user.username,
+        role=current_user.role,
+        scope=scope,
+        camera_id=camera_id
+    )
+    return {
+        "ticket": ticket,
+        "expires_in_sec": WSTicketService.TICKET_TTL_SECONDS,
+        "username": current_user.username,
+        "role": current_user.role,
+        "scope": scope,
+        "camera_id": camera_id
+    }
+

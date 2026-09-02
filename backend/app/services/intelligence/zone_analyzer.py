@@ -67,11 +67,26 @@ class CameraZoneStateTracker:
         Captures cryptographic forensic evidence snapshots on every confirmed detection.
         """
         self.refresh_zones_if_needed()
+        if not self._cached_zones:
+            # If no virtual boundary polygons are configured on this camera, zone analysis is skipped.
+            return
+
         now = datetime.utcnow()
         is_night = is_night_hour(20, 6)
 
-        # 1. Universal Real-Time Field of View (FOV) Detection & Evidence Capture
+        # Pre-compute tracks that fall inside configured virtual zones
+        tracks_in_zones = set()
         for track in tracks:
+            gp_norm = get_ground_plane_point_normalized(track.bbox, frame_width, frame_height)
+            for zone in self._cached_zones:
+                if is_point_in_polygon(gp_norm["x"], gp_norm["y"], zone["polygon"]):
+                    tracks_in_zones.add(track.track_id)
+                    break
+
+        # 1. Real-Time Field of View (FOV) Detection for tracks outside configured zones
+        for track in tracks:
+            if track.track_id in tracks_in_zones:
+                continue  # Handled with high-priority zone boundary crossing below
             if track.frame_count >= 1:
                 last_time = self._fov_last_triggered.get(track.track_id)
                 if not last_time or (now - last_time).total_seconds() > 8.0:

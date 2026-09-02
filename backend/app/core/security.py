@@ -63,8 +63,10 @@ def mask_rtsp_url(rtsp_url: str) -> str:
     pattern = r'(rtsp://)([^:]+):([^@]+)@'
     return re.sub(pattern, r'\1***:***@', rtsp_url)
 
+import urllib.parse
+
 def build_authenticated_rtsp_url(base_rtsp_url: str, username: Optional[str], password: Optional[str]) -> str:
-    """Safely builds full RTSP URL injecting username and password if provided."""
+    """Safely builds full RTSP URL injecting URL-encoded username and password if provided."""
     if not base_rtsp_url:
         return ""
     if not username or not password or base_rtsp_url.startswith(("webcam://", "device://")) or base_rtsp_url.isdigit():
@@ -73,5 +75,7 @@ def build_authenticated_rtsp_url(base_rtsp_url: str, username: Optional[str], pa
         proto, host_path = base_rtsp_url.split("://", 1)
         if "@" in host_path:
             _, host_path = host_path.split("@", 1)
-        return f"{proto}://{username}:{password}@{host_path}"
+        safe_user = urllib.parse.quote(str(username), safe="")
+        safe_pass = urllib.parse.quote(str(password), safe="")
+        return f"{proto}://{safe_user}:{safe_pass}@{host_path}"
     return base_rtsp_url

@@ -33,6 +33,7 @@ class RTSPStreamer:
         self.camera_id = camera_id
         self.camera_name = camera_name
         self.bop_site = bop_site
+        self.rtsp_url = rtsp_url
         self.base_rtsp_url = rtsp_url
         self.username = username
         self.password = password

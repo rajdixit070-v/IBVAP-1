@@ -17,7 +17,9 @@ export class LiveFeedWebSocket {
     if (this.isDestroyed) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/v1/ws/live-feed/${this.cameraId}`;
+    const token = localStorage.getItem('ibvap_token');
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    const wsUrl = `${protocol}//${host}/api/v1/ws/live-feed/${this.cameraId}${tokenParam}`;
 
     this.ws = new WebSocket(wsUrl);
     this.ws.binaryType = 'blob';
@@ -71,7 +73,9 @@ export class HealthWebSocket {
     if (this.isDestroyed) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/v1/ws/health`;
+    const token = localStorage.getItem('ibvap_token');
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    const wsUrl = `${protocol}//${host}/api/v1/ws/health${tokenParam}`;
 
     this.ws = new WebSocket(wsUrl);
 
@@ -125,7 +129,9 @@ export class AlertsWebSocket {
     if (this.isDestroyed) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/v1/ws/alerts`;
+    const token = localStorage.getItem('ibvap_token');
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    const wsUrl = `${protocol}//${host}/api/v1/ws/alerts${tokenParam}`;
 
     try {
       this.ws = new WebSocket(wsUrl);

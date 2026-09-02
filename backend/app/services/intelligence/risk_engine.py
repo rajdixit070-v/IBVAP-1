@@ -30,11 +30,13 @@ class ThreatRiskEngine:
         is_face_watchlist: bool = False,
         is_monitor_target: bool = False,
         detection_confidence: float = 0.90,
-        confidence: float = None
+        confidence: float = None,
+        in_blind_spot: bool = False,
+        terrain_factor: str = None
     ) -> Tuple[int, str, List[Dict[str, Any]]]:
         """
-        Computes composite risk score and returns:
-        (risk_score, risk_level, [factors])
+        Computes composite risk score with terrain, blind spot, and multi-sensor intelligence.
+        Returns: (risk_score, risk_level, [factors])
         """
         det_conf = confidence if confidence is not None else detection_confidence
         score = 0
@@ -71,7 +73,7 @@ class ThreatRiskEngine:
                 score += w_restricted
                 factors.append({"factor": "RESTRICTED_ZONE_INTRUSION", "weight": w_restricted, "description": "Subject penetrated a designated restricted perimeter zone."})
             elif zone_type == "HIGH_SECURITY":
-                w = w_restricted + 15
+                w = w_restricted + 10
                 score += w
                 factors.append({"factor": "HIGH_SECURITY_BREACH", "weight": w, "description": "Subject penetrated a high-security critical asset perimeter."})
             elif zone_type == "BUFFER":
@@ -127,7 +129,18 @@ class ThreatRiskEngine:
             score += w_rapid
             factors.append({"factor": "RAPID_MOVEMENT", "weight": w_rapid, "description": "Sudden abnormal velocity observed within perimeter."})
 
-        # 11. Low Confidence Adjustment
+        # 11. Tactical Blind Spot Proximity Factor
+        if in_blind_spot:
+            score += 15
+            factors.append({"factor": "BLIND_SPOT_PROXIMITY", "weight": 15, "description": "Target detected inside or immediately adjacent to high-risk perimeter blind spot."})
+
+        # 12. Vulnerable Terrain Corridor Factor
+        if terrain_factor in ("RIVER_RAVINE", "STEEP_SLOPE", "DENSE_VEGETATION"):
+            t_weight = 12 if terrain_factor == "RIVER_RAVINE" else 8
+            score += t_weight
+            factors.append({"factor": "VULNERABLE_TERRAIN_CORRIDOR", "weight": t_weight, "description": f"Target detected utilizing {terrain_factor} topographical concealment corridor."})
+
+        # 13. Low Confidence Adjustment
         if det_conf < 0.50:
             score += p_low_conf
             factors.append({"factor": "LOW_DETECTION_CONFIDENCE", "weight": p_low_conf, "description": "Confidence penalty applied due to marginal AI detection quality."})

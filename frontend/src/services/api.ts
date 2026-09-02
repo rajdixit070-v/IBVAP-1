@@ -16,40 +16,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle unauthorized responses gracefully with automatic silent re-authentication
+// Handle unauthorized responses: clear expired session and redirect to login
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    if (
-      error.response?.status === 401 &&
-      originalRequest &&
-      !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/login')
-    ) {
-      originalRequest._retry = true;
-      try {
-        const baseUrl = import.meta.env.VITE_API_URL || '/api/v1';
-        const loginRes = await axios.post(`${baseUrl}/auth/login-json`, {
-          username: 'admin',
-          password: 'Admin@IBVAP2026'
-        });
-        if (loginRes.data?.access_token) {
-          const newToken = loginRes.data.access_token;
-          localStorage.setItem('ibvap_token', newToken);
-          localStorage.setItem(
-            'ibvap_user',
-            JSON.stringify({
-              username: loginRes.data.username,
-              role: loginRes.data.role
-            })
-          );
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          return api(originalRequest);
-        }
-      } catch (reauthErr) {
-        localStorage.removeItem('ibvap_token');
-        localStorage.removeItem('ibvap_user');
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('ibvap_token');
+      localStorage.removeItem('ibvap_user');
+      if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
@@ -57,3 +32,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+

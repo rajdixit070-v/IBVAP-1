@@ -8,8 +8,8 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   const { login } = useAuth();
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('Admin@IBVAP2026');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +61,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
+                placeholder="Enter username"
                 className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono"
               />
             </div>
@@ -93,7 +93,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
         </form>
 
         <div className="p-3 bg-[#111a2e] rounded-lg border border-[#1e293b] text-[11px] text-slate-400 font-mono text-center">
-          Default Dev Admin: <span className="text-sky-300">admin</span> / <span className="text-sky-300">Admin@IBVAP2026</span>
+          Secured Enterprise Portal • Authentication and audit logging active
         </div>
       </div>
     </div>
