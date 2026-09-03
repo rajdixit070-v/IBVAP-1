@@ -27,11 +27,13 @@ class HealthMonitor:
     def __init__(self):
         self._running = False
         self._task: asyncio.Task = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ws_subscribers: Set[WebSocket] = set()
         self._interruption_tracker = {} # camera_id -> started_at
 
         # Register listener with stream manager
         stream_manager.register_status_listener(self._handle_status_transition)
+
 
     def register_ws_client(self, websocket: WebSocket):
         """Adds a connected WebSocket client to receive health updates."""
@@ -133,6 +135,34 @@ class HealthMonitor:
                             alert_engine.process_health_event(event)
                         except Exception as aerr:
                             logger.warning(f"Health alert generation notice: {aerr}")
+
+                    # Immediate WebSocket broadcast to all connected clients
+                    try:
+                        all_cams = db.query(Camera).all()
+                        status_list = [
+                            {
+                                "camera_id": c.camera_id,
+                                "name": c.camera_name,
+                                "bop_site": c.bop_site,
+                                "status": c.status,
+                                "fps": round(c.fps or 0.0, 1),
+                                "resolution": c.resolution or "1920x1080",
+                                "last_seen": c.last_seen_at.isoformat() if c.last_seen_at else None,
+                                "priority": c.priority
+                            }
+                            for c in all_cams
+                        ]
+                        payload = {
+                            "type": "HEALTH_UPDATE",
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "camera_id": camera_id,
+                            "new_status": new_status,
+                            "cameras": status_list
+                        }
+                        if self._loop and self._loop.is_running():
+                            asyncio.run_coroutine_threadsafe(self.broadcast_health_update(payload), self._loop)
+                    except Exception as berr:
+                        logger.debug(f"Immediate health broadcast notice: {berr}")
             finally:
                 db.close()
         except Exception as e:
@@ -143,8 +173,13 @@ class HealthMonitor:
         if self._running:
             return
         self._running = True
+        try:
+            self._loop = asyncio.get_running_loop()
+        except Exception:
+            pass
         self._task = asyncio.create_task(self._monitor_loop())
         logger.info("Health Monitor service started.")
+
 
     async def stop(self):
         """Stops periodic health audit task."""
@@ -235,6 +270,21 @@ class HealthMonitor:
                     stream_manager.stop_camera(cam.camera_id)
                     cam.status = "OFFLINE"
                     cam.fps = 0.0
+                    # Include disabled cameras in broadcast so frontend shows them OFFLINE
+                    all_statuses.append({
+                        "camera_id": cam.camera_id,
+                        "camera_name": cam.camera_name,
+                        "bop_site": cam.bop_site,
+                        "status": "OFFLINE",
+                        "priority": cam.priority or "NORMAL",
+                        "fps": 0.0,
+                        "resolution": cam.resolution,
+                        "quality_score": 0.0,
+                        "tampering_detected": False,
+                        "last_seen_at": cam.last_seen_at.isoformat() if cam.last_seen_at else None,
+                        "enabled": False
+                    })
+
 
             db.commit()
 

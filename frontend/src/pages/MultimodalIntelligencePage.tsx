@@ -463,7 +463,7 @@ export const MultimodalIntelligencePage: React.FC = () => {
               </span>
             </div>
 
-            {/* Visual Heatmap Canvas Mock */}
+            {/* Spatial Activity & Anomaly Heatmap Canvas */}
             <div className="h-64 bg-[#080d1a] border border-slate-800 rounded-xl relative overflow-hidden flex items-center justify-center">
               <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#22d3ee_1px,transparent_1px)] [background-size:16px_16px]" />
 

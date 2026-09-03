@@ -125,18 +125,47 @@ class StreamManager:
             streamers_snapshot = list(self._streamers.items())
         return {cam_id: s.get_status_info() for cam_id, s in streamers_snapshot}
 
+    def _get_offline_placeholder_jpeg(self, camera_id: str) -> bytes:
+        """Generates dynamic dark tactical placeholder JPEG for offline stream."""
+        import cv2
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        frame[:] = (15, 20, 25) # Dark tactical slate
+        
+        # Grid lines
+        for y in range(0, 480, 60):
+            cv2.line(frame, (0, y), (640, y), (30, 35, 42), 1)
+        for x in range(0, 640, 80):
+            cv2.line(frame, (x, 0), (x, 480), (30, 35, 42), 1)
+            
+        cv2.rectangle(frame, (140, 180), (500, 300), (25, 30, 38), -1)
+        cv2.rectangle(frame, (140, 180), (500, 300), (50, 60, 75), 1)
+        
+        cv2.putText(frame, "STREAM OFFLINE", (195, 230), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (80, 90, 240), 2)
+        cv2.putText(frame, f"NODE: {camera_id}", (220, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 170, 185), 1)
+        cv2.putText(frame, "Awaiting Camera Signal / Reconnecting...", (175, 285), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 110, 125), 1)
+        
+        _, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        return jpeg.tobytes()
+
     async def generate_mjpeg_stream(self, camera_id: str, fps_limit: float = 25.0):
         """
         Asynchronous generator emitting multipart MJPEG frame chunks.
         Used for native browser <img> or <video> live preview.
+        When camera is offline, emits clean status placeholder.
         """
         frame_interval = 1.0 / max(1.0, fps_limit)
         
         while True:
             streamer = self.get_streamer(camera_id)
-            if not streamer or not getattr(streamer, "_running", False):
-                # Stream not running or offline
-                await asyncio.sleep(0.1)
+            if not streamer or not getattr(streamer, "_running", False) or streamer.status == "OFFLINE":
+                offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
+                    offline_jpeg + b"\r\n"
+                )
+                await asyncio.sleep(1.0)
                 continue
 
             jpeg_bytes = streamer.get_latest_jpeg()
@@ -147,7 +176,18 @@ class StreamManager:
                     b"Content-Length: " + str(len(jpeg_bytes)).encode('utf-8') + b"\r\n\r\n" +
                     jpeg_bytes + b"\r\n"
                 )
+            else:
+                offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
+                    offline_jpeg + b"\r\n"
+                )
+                await asyncio.sleep(0.5)
+                continue
             await asyncio.sleep(frame_interval)
+
 
     def shutdown_all(self):
         """Gracefully shuts down all camera streamers on application exit."""

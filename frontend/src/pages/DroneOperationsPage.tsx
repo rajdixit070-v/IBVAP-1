@@ -73,7 +73,7 @@ export const DroneOperationsPage: React.FC = () => {
     }
   };
 
-  const handleExecuteMockHandoff = async () => {
+  const handleTriggerHandoff = async () => {
     if (!selectedDrone) return;
     try {
       const hEvent = await droneService.executeHandoff({
@@ -83,8 +83,8 @@ export const DroneOperationsPage: React.FC = () => {
         destination_id: selectedDrone.drone_id,
         global_track_id: 'GTRK-98214',
         target_class: 'PERSON',
-        location_lat: 31.6245,
-        location_lng: 74.8725,
+        location_lat: selectedDrone.latitude || 31.6245,
+        location_lng: selectedDrone.longitude || 74.8725,
         reason: 'Target exiting ground camera sector toward riverbed.'
       });
       setHandoffs(prev => [hEvent, ...prev]);
@@ -118,7 +118,7 @@ export const DroneOperationsPage: React.FC = () => {
             Refresh
           </button>
           <button
-            onClick={handleExecuteMockHandoff}
+            onClick={handleTriggerHandoff}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg shadow-lg shadow-purple-900/30 text-sm transition"
           >
             <Share2 className="w-4 h-4" />

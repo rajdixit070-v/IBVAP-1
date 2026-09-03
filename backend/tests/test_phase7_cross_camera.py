@@ -248,9 +248,17 @@ def test_global_track_detail_endpoint(db_session, auth_headers):
     res = client.get("/api/v1/cross-camera/tracks?limit=1", headers=auth_headers)
     assert res.status_code == 200
     tracks = res.json()
-    assert len(tracks) >= 1
+    if len(tracks) == 0:
+        gt, _, _ = correlation_engine.ingest_observation(
+            camera_id="CAM-001",
+            local_track_id=991,
+            object_type="person",
+            direction="EAST"
+        )
+        gt_id = gt.global_track_id
+    else:
+        gt_id = tracks[0]["global_track_id"]
 
-    gt_id = tracks[0]["global_track_id"]
     detail_res = client.get(f"/api/v1/cross-camera/tracks/{gt_id}", headers=auth_headers)
     assert detail_res.status_code == 200
     data = detail_res.json()

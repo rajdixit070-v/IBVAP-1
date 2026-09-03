@@ -161,15 +161,66 @@ def test_rtsp_connection(
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp|stimeout;3000000"
             cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
         elif clean_url.startswith(("http://", "https://")):
-            cap = cv2.VideoCapture(auth_url)
-            if not cap.isOpened():
+            clean_base = auth_url.rstrip("/")
+            candidate_urls = []
+            if any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
+                candidate_urls.append(clean_base)
+            else:
+                candidate_urls.extend([
+                    f"{clean_base}/video",
+                    f"{clean_base}/mjpegfeed",
+                    f"{clean_base}/videofeed",
+                    clean_base
+                ])
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;3000000|max_delay;500000"
+            for cu in candidate_urls:
+                cap = cv2.VideoCapture(cu, cv2.CAP_FFMPEG)
+                if cap.isOpened():
+                    r, f = cap.read()
+                    if r and f is not None:
+                        break
                 cap.release()
-                cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
+                cap = cv2.VideoCapture(cu)
+                if cap.isOpened():
+                    r, f = cap.read()
+                    if r and f is not None:
+                        break
+                cap.release()
+
+            # If OpenCV failed, test direct HTTP MJPEG chunk probe
+            if not cap or not cap.isOpened():
+                for cu in candidate_urls:
+                    try:
+                        import urllib.request
+                        req = urllib.request.Request(cu, headers={"User-Agent": "IBVAP-Tester/2.0"})
+                        with urllib.request.urlopen(req, timeout=3.0) as stream:
+                            ctype = stream.headers.get("Content-Type", "")
+                            if "html" not in ctype.lower():
+                                chunk = stream.read(32768)
+                                a = chunk.find(b"\xff\xd8")
+                                b = chunk.find(b"\xff\xd9")
+                                if a != -1 and b != -1 and b > a:
+                                    f = cv2.imdecode(np.frombuffer(chunk[a:b+2], dtype=np.uint8), cv2.IMREAD_COLOR)
+                                    if f is not None:
+                                        latency = (time.time() - start_time) * 1000.0
+                                        h, w = f.shape[:2]
+                                        return CameraTestResponse(
+                                            success=True,
+                                            connected=True,
+                                            resolution=f"{w}x{h}",
+                                            fps=25.0,
+                                            codec="MJPEG / Mobile Stream",
+                                            latency_ms=round(latency, 2),
+                                            details={"source_type": "HTTP_MJPEG", "stream_url": cu, "status": "Ready"}
+                                        )
+                    except Exception:
+                        pass
         else:
             cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
             if not cap.isOpened():
                 cap.release()
                 cap = cv2.VideoCapture(auth_url)
+
             
         if not cap.isOpened():
             latency = (time.time() - start_time) * 1000.0

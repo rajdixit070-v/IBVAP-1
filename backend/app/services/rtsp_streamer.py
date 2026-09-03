@@ -92,6 +92,8 @@ class RTSPStreamer:
 
     def get_latest_frame(self) -> Optional[np.ndarray]:
         """Returns the latest BGR numpy frame."""
+        if self.status == "OFFLINE":
+            return None
         with self._lock:
             if self._latest_raw_frame is not None:
                 return self._latest_raw_frame.copy()
@@ -99,8 +101,11 @@ class RTSPStreamer:
 
     def get_latest_jpeg(self) -> Optional[bytes]:
         """Returns the latest pre-encoded JPEG bytes."""
+        if self.status == "OFFLINE":
+            return None
         with self._lock:
             return self._latest_jpeg
+
 
     def get_status_info(self) -> dict:
         """Returns current health and stream status."""
@@ -174,24 +179,45 @@ class RTSPStreamer:
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 elif url_str.startswith(("http://", "https://")):
                     self._update_status("CONNECTING", "Connecting to Mobile / HTTP video stream...")
-                    test_urls = [url_str]
                     clean_base = url_str.rstrip("/")
-                    if not any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
-                        test_urls.extend([f"{clean_base}/video", f"{clean_base}/mjpegfeed", f"{clean_base}/videofeed"])
+                    test_urls = []
+                    if any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
+                        test_urls.append(clean_base)
+                    else:
+                        test_urls.extend([
+                            f"{clean_base}/video",
+                            f"{clean_base}/mjpegfeed",
+                            f"{clean_base}/videofeed",
+                            clean_base
+                        ])
 
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;4000000|max_delay;500000"
                     cap = None
                     for u in test_urls:
-                        cap = cv2.VideoCapture(u)
-                        if cap.isOpened():
-                            break
-                        cap.release()
+                        # Try OpenCV with CAP_FFMPEG first (avoids MSMF issues on Windows)
                         cap = cv2.VideoCapture(u, cv2.CAP_FFMPEG)
                         if cap.isOpened():
-                            break
+                            ret, frame = cap.read()
+                            if ret and frame is not None:
+                                break
+                        cap.release()
+                        cap = cv2.VideoCapture(u)
+                        if cap.isOpened():
+                            ret, frame = cap.read()
+                            if ret and frame is not None:
+                                break
                         cap.release()
 
                     if not cap or not cap.isOpened():
-                        raise ConnectionError(f"Unable to open Mobile / HTTP video stream at '{url_str}'. Ensure phone is on same Wi-Fi and IP Webcam broadcast is started.")
+                        # Direct HTTP MJPEG socket reader as ultimate fallback for mobile cameras
+                        direct_ok = False
+                        for u in test_urls:
+                            if self._try_http_mjpeg_stream(u):
+                                direct_ok = True
+                                break
+                        if direct_ok:
+                            continue
+                        raise ConnectionError(f"Unable to open Mobile / HTTP video stream at '{url_str}'. Ensure phone is on same Wi-Fi and camera broadcast is active.")
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 else:
                     self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
@@ -213,7 +239,7 @@ class RTSPStreamer:
                 self.latency_ms = (time.time() - start_conn) * 1000.0
                 self.reconnect_attempts = 0
                 self._update_status("HEALTHY", None)
-                logger.info(f"[{self.camera_id}] RTSP Stream Connected ({self.resolution})")
+                logger.info(f"[{self.camera_id}] Video Stream Connected ({self.resolution})")
 
                 # Frame ingestion loop
                 consecutive_failures = 0
@@ -223,7 +249,7 @@ class RTSPStreamer:
 
                     if not ret or frame is None:
                         consecutive_failures += 1
-                        if consecutive_failures > 30:
+                        if consecutive_failures > 15:
                             raise ConnectionError("Lost frame stream from camera.")
                         time.sleep(0.04)
                         continue
@@ -256,6 +282,56 @@ class RTSPStreamer:
         att = attempt if attempt is not None else self.reconnect_attempts
         return float(min(10.0, max(1.0, 1.5 ** min(att, 5))))
 
+    def _try_http_mjpeg_stream(self, url: str) -> bool:
+        """
+        Direct socket-level HTTP MJPEG multipart stream consumer.
+        Guarantees rock-solid streaming for Android/iOS IP Webcam and browser streams on Windows.
+        """
+        import urllib.request
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "IBVAP-Ingestion/2.0 (Windows NT)"}
+            )
+            with urllib.request.urlopen(req, timeout=4.0) as stream:
+                content_type = stream.headers.get("Content-Type", "")
+                if "html" in content_type.lower():
+                    return False
+
+                logger.info(f"[{self.camera_id}] Direct HTTP MJPEG stream connected: {url}")
+                self.reconnect_attempts = 0
+                self._update_status("HEALTHY", None)
+
+                buffer = b""
+                consecutive_empty = 0
+                while self._running:
+                    chunk = stream.read(8192)
+                    if not chunk:
+                        consecutive_empty += 1
+                        if consecutive_empty > 10:
+                            raise ConnectionError("Mobile stream closed by sender.")
+                        time.sleep(0.02)
+                        continue
+
+                    consecutive_empty = 0
+                    buffer += chunk
+
+                    # Search for JPEG Start (0xFFD8) and End (0xFFD9) markers
+                    a = buffer.find(b"\xff\xd8")
+                    b = buffer.find(b"\xff\xd9")
+                    if a != -1 and b != -1 and b > a:
+                        jpg_data = buffer[a:b+2]
+                        buffer = buffer[b+2:]
+
+                        frame = cv2.imdecode(np.frombuffer(jpg_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            self._process_new_frame(frame, time.time())
+
+                return True
+        except Exception as e:
+            logger.debug(f"[{self.camera_id}] Direct HTTP MJPEG notice for {url}: {e}")
+            return False
+
     def _process_new_frame(self, frame: np.ndarray, timestamp: float):
         """Processes received frame, computes FPS, and updates JPEG buffer."""
         # Update resolution if needed
@@ -287,13 +363,14 @@ class RTSPStreamer:
             self._update_status("HEALTHY", None)
 
     def _handle_disconnect(self, err_msg: str):
-        """Handles stream failure and increments reconnection backoff."""
+        """Handles stream failure, clears cached frames, and immediately sets status to OFFLINE."""
         self.reconnect_attempts += 1
-        if self.reconnect_attempts <= 2:
-            self._update_status("DEGRADED", f"Frame drop / Reconnecting (Attempt {self.reconnect_attempts})")
-        else:
-            self._update_status("OFFLINE", f"Stream disconnected: {err_msg}")
+        with self._lock:
+            self._latest_raw_frame = None
+            self._latest_jpeg = None
+        self._update_status("OFFLINE", f"Stream disconnected: {err_msg}")
         self.fps = 0.0
+
 
     def _synthetic_stream_loop(self):
         """

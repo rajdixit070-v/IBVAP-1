@@ -151,7 +151,32 @@ export const EnterpriseSecurityPage: React.FC = () => {
     }
   };
 
+  const handleDeleteThreat = async (eventId: string) => {
+    if (window.confirm(`Delete threat event '${eventId}'?`)) {
+      try {
+        await securityService.deleteThreat(eventId);
+        setThreats((prev) => prev.filter((t) => t.event_id !== eventId));
+      } catch (err: any) {
+        alert(`Failed to delete threat: ${err.response?.data?.detail || err.message}`);
+      }
+    }
+  };
+
+
+  const handleClearAllThreats = async () => {
+    if (window.confirm('Are you sure you want to delete all recorded threat events?')) {
+      try {
+        await securityService.clearAllThreats();
+        setThreats([]);
+        loadData();
+      } catch (err: any) {
+        alert(`Failed to clear threats: ${err.response?.data?.detail || err.message}`);
+      }
+    }
+  };
+
   const filteredThreats = threats.filter((t) => {
+
     if (severityFilter !== 'ALL' && t.severity !== severityFilter) return false;
     if (threatSearch.trim()) {
       const q = threatSearch.toLowerCase();
@@ -341,8 +366,20 @@ export const EnterpriseSecurityPage: React.FC = () => {
               </select>
             </div>
 
-            <div className="text-xs font-mono text-slate-400">
-              Showing {filteredThreats.length} Recorded Threats
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono text-slate-400">
+                Showing {filteredThreats.length} Recorded Threats
+              </span>
+              {threats.length > 0 && (
+                <button
+                  onClick={handleClearAllThreats}
+                  className="px-2.5 py-1 bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-mono flex items-center gap-1 cursor-pointer transition"
+                  title="Clear all logged security threats"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  Clear All
+                </button>
+              )}
             </div>
           </div>
 
@@ -395,9 +432,17 @@ export const EnterpriseSecurityPage: React.FC = () => {
                       {t.status}
                     </span>
                   )}
+                  <button
+                    onClick={() => handleDeleteThreat(t.event_id)}
+                    className="p-1.5 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 rounded-lg transition border border-transparent hover:border-rose-500/30 cursor-pointer"
+                    title={`Delete threat ${t.event_id}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
+
           </div>
         </div>
       )}

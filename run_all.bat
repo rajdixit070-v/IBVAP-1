@@ -6,7 +6,8 @@ echo =====================================================================
 echo.
 
 echo [1/2] Launching Backend Server (FastAPI on http://127.0.0.1:8000)...
-start "IBVAP Backend" cmd /k "cd /d %~dp0 && python -m uvicorn app.main:app --app-dir backend --reload-dir backend/app --host 127.0.0.1 --port 8000"
+start "IBVAP Backend" cmd /k "cd /d %~dp0 && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --app-dir backend --reload-dir backend/app --host 0.0.0.0 --port 8000"
+
 
 echo [2/2] Launching Frontend Server (React Vite on http://localhost:5173)...
 start "IBVAP Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"

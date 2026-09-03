@@ -43,6 +43,9 @@ export const CameraManagementPage: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [cameraToDelete, setCameraToDelete] = useState<Camera | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+
 
   // RTSP Quick Test state
   const [testModalOpen, setTestModalOpen] = useState(false);
@@ -76,16 +79,20 @@ export const CameraManagementPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!cameraToDelete) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       await deleteCamera(cameraToDelete.camera_id);
       setDeleteModalOpen(false);
       setCameraToDelete(null);
-    } catch (e) {
+    } catch (e: any) {
+      const errMsg = e.response?.data?.detail || e.message || 'Failed to delete camera. Admin privileges required.';
+      setDeleteError(errMsg);
       console.error('Failed to delete camera', e);
     } finally {
       setDeleting(false);
     }
   };
+
 
   const handleQuickTest = async (cam: Camera) => {
     setTestingCamName(cam.camera_name);
@@ -266,11 +273,13 @@ export const CameraManagementPage: React.FC = () => {
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
+        onClose={() => { setDeleteModalOpen(false); setDeleteError(null); }}
         onConfirm={handleConfirmDelete}
         camera={cameraToDelete}
         loading={deleting}
+        error={deleteError}
       />
+
     </div>
   );
 };

@@ -11,8 +11,10 @@ from app.services.evidence.evidence_manager import evidence_manager
 
 router = APIRouter()
 
+@router.get("", response_model=List[EvidenceResponse])
 @router.get("/", response_model=List[EvidenceResponse])
 def list_all_evidence(
+
     camera_id: Optional[str] = Query(None),
     evidence_type: Optional[str] = Query(None),
     limit: int = Query(60, ge=1, le=200),
@@ -105,15 +107,25 @@ def get_evidence_file(
         evidence_manager.audit_evidence_access(evidence_id=evidence_id, username=username, action="EVIDENCE_VIEWED")
         return Response(content=content, media_type=evd.mime_type or "image/jpeg")
 
-    # If physical file on disk was rotated, check storage path
+    # If physical file on disk was moved or working directory shifted, check fallback paths
     from app.config import settings
-    alt_path = os.path.join(settings.EVIDENCE_STORAGE_PATH, os.path.basename(file_path))
-    if os.path.exists(alt_path) and os.path.isfile(alt_path):
-        with open(alt_path, "rb") as f:
-            content = f.read()
-        return Response(content=content, media_type="image/jpeg")
+    basename = os.path.basename(file_path)
+    base_proj = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    alt_paths = [
+        os.path.join(settings.EVIDENCE_STORAGE_PATH, getattr(evd, 'camera_id', ''), basename),
+        os.path.join(settings.EVIDENCE_STORAGE_PATH, basename),
+        os.path.join(base_proj, "storage", "evidence", getattr(evd, 'camera_id', ''), basename),
+        os.path.join(base_proj, "backend", "storage", "evidence", getattr(evd, 'camera_id', ''), basename),
+        os.path.join(base_proj, "storage", "evidence", basename),
+    ]
+    for p in alt_paths:
+        if p and os.path.exists(p) and os.path.isfile(p):
+            with open(p, "rb") as f:
+                content = f.read()
+            return Response(content=content, media_type=evd.mime_type or "image/jpeg")
 
     raise HTTPException(status_code=404, detail=f"Evidence binary file not found on disk for '{evidence_id}'.")
+
 
 @router.get("/by-event/{event_id}", response_model=List[EvidenceResponse])
 def get_event_evidence(

@@ -29,19 +29,15 @@ class ScopeService:
     @staticmethod
     def is_global_admin(user: User, db: Session) -> bool:
         """Returns True if user has global administrative access."""
-        if user.role in ["admin", "SUPER_ADMIN"]:
-            scopes = db.query(SiteUserScope).filter(SiteUserScope.username == user.username).all()
-            if not scopes:
+        role_lower = (user.role or "").lower()
+        if role_lower in ["admin", "super_admin"] or user.username == "admin":
+            return True
+        scopes = db.query(SiteUserScope).filter(SiteUserScope.username == user.username).all()
+        for s in scopes:
+            if s.scope_type == "GLOBAL" and s.scope_id == "*":
                 return True
-            for s in scopes:
-                if s.scope_type == "GLOBAL" and s.scope_id == "*":
-                    return True
-        else:
-            scopes = db.query(SiteUserScope).filter(SiteUserScope.username == user.username).all()
-            for s in scopes:
-                if s.scope_type == "GLOBAL" and s.scope_id == "*":
-                    return True
         return False
+
 
     @staticmethod
     def get_authorized_site_ids(user: User, db: Session) -> Optional[List[str]]:

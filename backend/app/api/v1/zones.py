@@ -30,8 +30,10 @@ def serialize_zone(zone: SecurityZone) -> SecurityZoneResponse:
         updated_at=zone.updated_at
     )
 
+@router.get("", response_model=List[SecurityZoneResponse])
 @router.get("/", response_model=List[SecurityZoneResponse])
 def get_zones(
+
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     enabled: Optional[bool] = Query(None, description="Filter by enabled state"),
     db: Session = Depends(get_db),

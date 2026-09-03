@@ -10,8 +10,10 @@ from app.schemas.notification import NotificationResponse
 
 router = APIRouter()
 
+@router.get("", response_model=List[NotificationResponse])
 @router.get("/", response_model=List[NotificationResponse])
 def list_notifications(
+
     unread_only: Optional[bool] = Query(None),
     is_read: Optional[bool] = Query(None),
     limit: int = Query(50, ge=1, le=100),

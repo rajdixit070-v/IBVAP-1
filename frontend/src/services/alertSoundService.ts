@@ -43,27 +43,29 @@ class AlertSoundService {
   }
 
   private getAudioContext(): AudioContext | null {
-    if (!this.audioCtx) {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        this.audioCtx = new AudioContextClass();
+    try {
+      if (!this.audioCtx || this.audioCtx.state === 'closed') {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          this.audioCtx = new AudioContextClass();
+        }
       }
+      return this.audioCtx;
+    } catch {
+      return null;
     }
-    if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
-    }
-    return this.audioCtx;
   }
 
-  public playAlarm(severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO' = 'HIGH'): void {
+  public async playAlarm(severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO' = 'HIGH'): Promise<void> {
     if (this.muted) return;
 
     try {
       const ctx = this.getAudioContext();
       if (!ctx) return;
       if (ctx.state === 'suspended') {
-        ctx.resume();
+        await ctx.resume();
       }
+
 
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();

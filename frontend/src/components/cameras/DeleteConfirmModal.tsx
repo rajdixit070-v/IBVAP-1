@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal } from '../common/Modal';
 import { Camera } from '../../types/camera';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2, XCircle } from 'lucide-react';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface DeleteConfirmModalProps {
   onConfirm: () => void;
   camera: Camera | null;
   loading: boolean;
+  error?: string | null;
 }
 
 export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
@@ -16,7 +17,8 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   onClose,
   onConfirm,
   camera,
-  loading
+  loading,
+  error
 }) => {
   if (!camera) return null;
 
@@ -41,6 +43,14 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           </div>
         </div>
 
+        {/* Error display */}
+        {error && (
+          <div className="p-3 bg-red-950/50 border border-red-500/60 rounded-lg flex items-start gap-2 text-red-300 text-xs">
+            <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
           <button
             type="button"
@@ -64,3 +74,4 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
     </Modal>
   );
 };
+

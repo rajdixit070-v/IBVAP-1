@@ -47,7 +47,8 @@ def create_watchlist_person(
 ):
     """
     Register a new person to the Authorized Personnel or Watchlist registry.
-    Requires a valid 128-dimensional biometric embedding vector.
+    Embedding vector is optional — records can be created manually and biometric
+    embeddings added later via face recognition verification events.
     """
     pid = data.person_id.strip().upper()
     existing = db.query(PersonWatchlist).filter(PersonWatchlist.person_id == pid).first()

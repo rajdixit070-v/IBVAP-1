@@ -17,8 +17,10 @@ from app.services.alert.alert_engine import alert_engine
 
 router = APIRouter()
 
+@router.get("", response_model=List[AlertResponse])
 @router.get("/", response_model=List[AlertResponse])
 def get_alerts(
+
     status: Optional[str] = Query(None, description="Filter by status (NEW, ACKNOWLEDGED, ESCALATED, RESOLVED)"),
     priority: Optional[str] = Query(None, description="Filter by priority (CRITICAL, HIGH, MEDIUM, LOW)"),
     camera_id: Optional[str] = Query(None),

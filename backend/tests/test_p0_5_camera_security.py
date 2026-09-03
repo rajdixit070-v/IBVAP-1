@@ -86,8 +86,22 @@ def test_p0_5_5_snapshot_no_token(client):
     resp = client.get("/api/v1/cameras/CAM-001/snapshot")
     assert resp.status_code == 401
 
-def test_p0_5_6_snapshot_authorized(client, admin_headers):
+def test_p0_5_6_snapshot_authorized(client, admin_headers, db_session):
     """Test 6: Valid authorized user can retrieve JPEG snapshot."""
+    cam = db_session.query(Camera).filter(Camera.camera_id == "CAM-001").first()
+    if not cam:
+        cam = Camera(
+            camera_id="CAM-001",
+            camera_name="Perimeter Gate Alpha",
+            bop_site="BOP Alpha",
+            sector="North Sector",
+            enabled=True,
+            status="ONLINE",
+            rtsp_url="synthetic://test/cam-001"
+        )
+        db_session.add(cam)
+        db_session.commit()
+
     stream_manager.start_camera(
         camera_id="CAM-001",
         camera_name="Perimeter Gate Alpha",
@@ -126,8 +140,22 @@ def test_p0_5_9_mask_rtsp_url_security():
     assert "***:***@" in masked
     assert "10.20.30.40:554/live" in masked
 
-def test_p0_5_10_camera_status_authenticated(client, admin_headers):
+def test_p0_5_10_camera_status_authenticated(client, admin_headers, db_session):
     """Test 10: Status endpoint requires authentication and returns accurate health info."""
+    cam = db_session.query(Camera).filter(Camera.camera_id == "CAM-001").first()
+    if not cam:
+        cam = Camera(
+            camera_id="CAM-001",
+            camera_name="Perimeter Gate Alpha",
+            bop_site="BOP Alpha",
+            sector="North Sector",
+            enabled=True,
+            status="ONLINE",
+            rtsp_url="synthetic://test/cam-001"
+        )
+        db_session.add(cam)
+        db_session.commit()
+
     resp_unauth = client.get("/api/v1/cameras/CAM-001/status")
     assert resp_unauth.status_code == 401
 

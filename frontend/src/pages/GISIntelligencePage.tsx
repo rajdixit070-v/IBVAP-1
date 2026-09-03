@@ -12,7 +12,8 @@ import {
   TrendingUp,
   Crosshair,
   Plane,
-  Radio
+  Radio,
+  Cctv
 } from 'lucide-react';
 import {
   gisService,
@@ -20,8 +21,11 @@ import {
   SectorCoverage,
   BlindSpot
 } from '../services/gisService';
+import { useCameras } from '../context/CameraContext';
+
 
 export const GISIntelligencePage: React.FC = () => {
+  const { cameras } = useCameras();
   const [layers, setLayers] = useState<GISLayer[]>([]);
   const [coverage, setCoverage] = useState<SectorCoverage | null>(null);
   const [blindSpots, setBlindSpots] = useState<BlindSpot[]>([]);
@@ -161,45 +165,85 @@ export const GISIntelligencePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Visual Vector Canvas Simulation */}
-            <div className="relative aspect-video bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center">
-              {/* Satellite / Topographic stylized background */}
+            {/* Real Camera FOV Projection Canvas - uses live camera data */}
+            <div className="relative aspect-video bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
+              {/* Topographic stylized background */}
               <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/30 opacity-90" />
-              
               {/* Grid overlay */}
               <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
 
-              {/* Simulated Camera FOV Wedge 1 */}
-              <div className="absolute top-1/3 left-1/4 transform -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
-                <div className="w-0 h-0 border-l-[60px] border-l-transparent border-r-[60px] border-r-transparent border-b-[140px] border-b-cyan-500/20 transform rotate-45 pointer-events-none" />
-                <div className="px-2 py-0.5 bg-slate-900 border border-cyan-500 text-cyan-300 text-[10px] font-bold rounded">
-                  CAM-001 (65° FOV)
+              {/* Real Camera FOV Wedges - dynamically placed from real camera list */}
+              {cameras.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
+                  <Cctv className="w-8 h-8 text-slate-600" />
+                  <span className="text-xs text-slate-500 font-mono">No cameras registered. Register cameras to view FOV projection.</span>
                 </div>
-              </div>
+              ) : (
+                cameras.slice(0, 6).map((cam, idx) => {
+                  // Distribute cameras across the canvas using position patterns
+                  const positions = [
+                    'top-1/4 left-1/4', 'top-1/4 right-1/4', 'top-1/2 left-1/5',
+                    'top-1/2 right-1/5', 'bottom-1/4 left-1/3', 'bottom-1/4 right-1/3'
+                  ];
+                  const rotations = ['rotate-45', '-rotate-45', 'rotate-12', '-rotate-12', 'rotate-90', '-rotate-90'];
+                  const colors = [
+                    'border-b-cyan-500/25', 'border-b-sky-500/25', 'border-b-blue-500/25',
+                    'border-b-indigo-500/25', 'border-b-violet-500/25', 'border-b-teal-500/25'
+                  ];
+                  const labelColors = [
+                    'border-cyan-500 text-cyan-300', 'border-sky-500 text-sky-300',
+                    'border-blue-500 text-blue-300', 'border-indigo-500 text-indigo-300',
+                    'border-violet-500 text-violet-300', 'border-teal-500 text-teal-300'
+                  ];
+                  const isOnline = cam.status === 'HEALTHY' || cam.status === 'ONLINE';
+                  return (
+                    <div key={cam.camera_id} className={`absolute ${positions[idx % positions.length]} transform -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center`}>
+                      <div className={`w-0 h-0 border-l-[50px] border-l-transparent border-r-[50px] border-r-transparent border-b-[120px] ${colors[idx % colors.length]} transform ${rotations[idx % rotations.length]} pointer-events-none`} />
+                      <div className={`px-2 py-0.5 bg-slate-900/90 border ${labelColors[idx % labelColors.length]} text-[10px] font-bold rounded flex items-center gap-1 mt-1`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                        {cam.camera_id} ({cam.status})
+                      </div>
+                    </div>
+                  );
+                })
+              )}
 
-              {/* Simulated Camera FOV Wedge 2 */}
-              <div className="absolute bottom-1/3 right-1/4 transform translate-x-1/2 translate-y-1/2 z-10 flex flex-col items-center">
-                <div className="w-0 h-0 border-l-[60px] border-l-transparent border-r-[60px] border-r-transparent border-b-[140px] border-b-cyan-500/20 transform -rotate-45 pointer-events-none" />
-                <div className="px-2 py-0.5 bg-slate-900 border border-cyan-500 text-cyan-300 text-[10px] font-bold rounded">
-                  CAM-002 (65° FOV)
+              {/* Real Blind Spot Hotspots from API */}
+              {blindSpots.slice(0, 2).map((bs, idx) => (
+                <div
+                  key={bs.blind_spot_id}
+                  className={`absolute z-20 flex flex-col items-center ${idx === 0 ? 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2' : 'top-1/3 right-1/4 transform translate-x-1/2 -translate-y-1/2'}`}
+                >
+                  <div className={`p-3 rounded-xl flex flex-col items-center ${bs.risk_level === 'CRITICAL' ? 'bg-red-500/20 border-2 border-dashed border-red-500 animate-pulse' : 'bg-amber-500/15 border-2 border-dashed border-amber-500'}`}>
+                    <AlertTriangle className={`w-5 h-5 ${bs.risk_level === 'CRITICAL' ? 'text-red-400' : 'text-amber-400'}`} />
+                    <span className={`text-[10px] font-bold mt-1 ${bs.risk_level === 'CRITICAL' ? 'text-red-300' : 'text-amber-300'}`}>
+                      BLIND SPOT: {bs.sector_name?.toUpperCase() || bs.blind_spot_id}
+                    </span>
+                    <span className="text-[9px] text-slate-400">Risk: {bs.risk_score}/100 ({bs.risk_level})</span>
+                  </div>
                 </div>
-              </div>
+              ))}
 
-              {/* Simulated Blind Spot Hotspot */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
-                <div className="p-3 bg-red-500/20 border-2 border-dashed border-red-500 rounded-xl animate-pulse flex flex-col items-center">
-                  <AlertTriangle className="w-6 h-6 text-red-400" />
-                  <span className="text-[10px] font-bold text-red-300 mt-1">BLIND CORRIDOR: NORTH RAVINE</span>
-                  <span className="text-[9px] text-slate-400">Risk Score: 85 (Critical)</span>
+              {/* Show placeholder blind spot if no real ones exist yet */}
+              {blindSpots.length === 0 && cameras.length > 0 && (
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
+                  <div className="p-3 bg-slate-800/60 border border-slate-600 rounded-xl flex flex-col items-center">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    <span className="text-[10px] font-bold text-emerald-300 mt-1">NO BLIND SPOTS DETECTED</span>
+                    <span className="text-[9px] text-slate-400">Full coverage active</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Layer Stack HUD Badge */}
-              <div className="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-mono text-slate-300">
+              <div className="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-mono text-slate-300 z-30">
                 ACTIVE PROJECTION: <span className="text-emerald-400 font-bold">WGS-84 / EPSG:4326</span>
+                <span className="ml-3 text-slate-500">Cameras: <span className="text-white">{cameras.length}</span></span>
               </div>
             </div>
           </div>
+
+
 
           {/* Tactical Recommendations & Prioritized Blind Spots Table */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">

@@ -14,12 +14,14 @@ from app.models.activity_baseline import ActivityBaseline
 from app.models.model_health import ModelHealth
 from app.models.prediction_feedback import PredictionFeedback
 from app.models.audit_log import SecurityAuditLog
+from app.models.zone import SecurityZone
 from app.services.predictive.time_series_engine import time_series_engine
 from app.services.predictive.forecasting_engine import forecasting_engine
 from app.services.predictive.infrastructure_correlator import infrastructure_correlator
 from app.services.predictive.early_warning_service import early_warning_service
 from app.services.predictive.predictive_service import predictive_service
 from app.services.predictive.hotspot_analyzer import hotspot_analyzer
+
 
 client = TestClient(app)
 
@@ -219,8 +221,24 @@ def test_baseline_shift_detection_and_approval(db_session, auth_headers):
     assert baseline.expected_person_count == 26.0
     assert baseline.version == 2
 
-def test_spatial_hotspot_analysis(auth_headers):
+def test_spatial_hotspot_analysis(db_session, auth_headers):
     """Test spatial security hotspot calculation across zones."""
+    zone = db_session.query(SecurityZone).first()
+    if not zone:
+        test_zone = SecurityZone(
+            zone_id="ZONE-HOTSPOT-01",
+            camera_id="CAM-001",
+            name="Hotspot Test Perimeter",
+            zone_type="RESTRICTED",
+            polygon_json="[[0.1, 0.1], [0.5, 0.1], [0.5, 0.5], [0.1, 0.5]]",
+            monitored_classes_json='["person", "vehicle"]',
+            direction_rule="NONE",
+            severity="HIGH",
+            enabled=True
+        )
+        db_session.add(test_zone)
+        db_session.commit()
+
     res = client.get("/api/v1/predictive/hotspots", headers=auth_headers)
     assert res.status_code == 200
     hotspots = res.json()

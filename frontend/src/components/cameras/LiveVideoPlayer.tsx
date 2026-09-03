@@ -70,7 +70,16 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     }
   }, [camera.camera_id]);
 
+  // Clear frame buffer when camera transitions to OFFLINE
+  useEffect(() => {
+    if (camera.status === 'OFFLINE') {
+      setFrameSrc(null);
+      setFps(0);
+    }
+  }, [camera.status]);
+
   // Video Streaming WebSocket
+
   useEffect(() => {
     if (!autoPlay || !camera.enabled) {
       return;

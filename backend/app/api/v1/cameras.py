@@ -29,7 +29,9 @@ from app.core.security import decrypt_credential
 router = APIRouter(prefix="/cameras", tags=["Camera Management"])
 
 @router.get("", response_model=List[CameraResponse])
+@router.get("/", response_model=List[CameraResponse])
 def get_cameras(
+
     search: Optional[str] = None,
     bop_site: Optional[str] = None,
     sector: Optional[str] = None,
@@ -269,17 +271,43 @@ def get_camera_snapshot(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Returns single current JPEG snapshot frame with authentication and authorization check."""
+    """Returns single current JPEG snapshot frame. If stream is offline, returns a placeholder JPEG."""
     verify_camera_access(camera_id, current_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
     
     jpeg_bytes = stream_manager.get_latest_jpeg(cam.camera_id)
-    if not jpeg_bytes:
+    if jpeg_bytes:
+        return Response(content=jpeg_bytes, media_type="image/jpeg")
+
+    # No live frame available — generate offline placeholder JPEG
+    try:
+        import numpy as np
+        import cv2
+        h, w = 360, 640
+        frame = np.zeros((h, w, 3), dtype=np.uint8)
+        frame[:] = (18, 22, 28)  # Dark slate background
+        # Grid lines
+        for y in range(0, h, 60):
+            cv2.line(frame, (0, y), (w, y), (35, 40, 48), 1)
+        for x in range(0, w, 80):
+            cv2.line(frame, (x, 0), (x, h), (35, 40, 48), 1)
+        # Status text
+        cv2.putText(frame, f"CAMERA OFFLINE", (w//2 - 120, h//2 - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (80, 80, 95), 2)
+        cv2.putText(frame, f"{cam.camera_id} | {cam.camera_name}", (w//2 - 140, h//2 + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (60, 65, 75), 1)
+        cv2.putText(frame, f"BOP: {cam.bop_site or 'N/A'} | Status: {cam.status}",
+                    (w//2 - 140, h//2 + 48), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (50, 55, 65), 1)
+        # Red border
+        cv2.rectangle(frame, (4, 4), (w - 4, h - 4), (40, 40, 80), 2)
+        _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        return Response(content=jpeg_buf.tobytes(), media_type="image/jpeg",
+                        headers={"X-Camera-Status": cam.status or "OFFLINE"})
+    except Exception:
         raise HTTPException(status_code=503, detail="No video frame available. Stream offline or initializing.")
-    
-    return Response(content=jpeg_bytes, media_type="image/jpeg")
+
 
 @router.get("/{camera_id}/logs", response_model=List[CameraDiagnosticLogResponse])
 def get_camera_diagnostic_logs(

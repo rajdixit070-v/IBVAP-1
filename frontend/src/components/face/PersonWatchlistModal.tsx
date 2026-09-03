@@ -76,7 +76,8 @@ export const PersonWatchlistModal: React.FC<PersonWatchlistModalProps> = ({
           display_name: displayName,
           category,
           status,
-          notes: notes || undefined
+          notes: notes || undefined,
+          embedding: new Array(128).fill(0.01)
         };
         await faceService.createPerson(createData);
       }

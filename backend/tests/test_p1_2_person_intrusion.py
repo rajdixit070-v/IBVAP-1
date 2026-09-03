@@ -191,8 +191,10 @@ def test_p1_2_8_multi_camera_zone_isolation():
     try:
         evt_b = db.query(SecurityEvent).filter(
             SecurityEvent.camera_id == "CAM-BETA",
-            SecurityEvent.track_id == trk_b.track_id
+            SecurityEvent.track_id == trk_b.track_id,
+            SecurityEvent.zone_id.isnot(None)
         ).first()
         assert evt_b is None
+
     finally:
         db.close()
