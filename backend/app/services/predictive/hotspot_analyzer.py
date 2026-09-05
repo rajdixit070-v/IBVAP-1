@@ -26,9 +26,11 @@ class HotspotAnalyzer:
 
             for z in zones:
                 cam = db.query(Camera).filter(Camera.camera_id == z.camera_id).first()
-                lat = cam.latitude if cam else 32.7266
-                lon = cam.longitude if cam else 74.8570
-                site = cam.bop_site if cam else "BOP Alpha"
+                lat = float(cam.latitude) if (cam and cam.latitude is not None) else 32.7266
+                lon = float(cam.longitude) if (cam and cam.longitude is not None) else 74.8570
+                site = cam.bop_site if (cam and cam.bop_site) else "BOP Alpha"
+
+
 
                 sec_events_count = db.query(SecurityEvent).filter(SecurityEvent.zone_name == z.name).count()
                 bhv_events_count = db.query(BehaviourEvent).filter(BehaviourEvent.zone_id == z.zone_id).count()

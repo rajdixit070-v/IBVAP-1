@@ -12,37 +12,86 @@ import {
   TrendingUp,
   Crosshair,
   Plane,
-  Radio,
-  Cctv
+  Radio
 } from 'lucide-react';
+
 import {
   gisService,
   GISLayer,
   SectorCoverage,
   BlindSpot
 } from '../services/gisService';
+import { eventService } from '../services/eventService';
+import { SecurityEvent } from '../types/event';
 import { useCameras } from '../context/CameraContext';
+import { useAuth } from '../context/AuthContext';
+import { TacticalLeafletMap } from '../components/common/TacticalLeafletMap';
+import { Locate, Navigation } from 'lucide-react';
 
+
+const SECTOR_PRESETS: Record<string, { name: string; lat: number; lng: number; sectorName: string; description: string }> = {
+  BOP_ALPHA: {
+    name: 'BOP Alpha (Amritsar Wagah Border)',
+    lat: 31.6245,
+    lng: 74.8725,
+    sectorName: 'Sector-North',
+    description: 'Punjab international border post • Zero-line perimeter fence'
+  },
+  SAMBA: {
+    name: 'North Frontier Sector (Jammu Samba)',
+    lat: 32.5532,
+    lng: 75.1165,
+    sectorName: 'Samba-Frontier',
+    description: 'Riverine terrain • Underground tunnel & seismic detection zone'
+  },
+  LOC: {
+    name: 'Line of Control Forward Post (Baramulla)',
+    lat: 34.2093,
+    lng: 74.3436,
+    sectorName: 'LOC-North',
+    description: 'High altitude mountain ridge • UAV night surveillance corridor'
+  },
+  DESERT: {
+    name: 'Thar Desert Checkpost (Jaisalmer)',
+    lat: 26.9157,
+    lng: 70.9083,
+    sectorName: 'Desert-West',
+    description: 'Arid desert sand dunes • Long-range optical thermal radar'
+  }
+};
 
 export const GISIntelligencePage: React.FC = () => {
+  const { user } = useAuth();
   const { cameras } = useCameras();
   const [layers, setLayers] = useState<GISLayer[]>([]);
   const [coverage, setCoverage] = useState<SectorCoverage | null>(null);
   const [blindSpots, setBlindSpots] = useState<BlindSpot[]>([]);
+  const [liveEvents, setLiveEvents] = useState<SecurityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBlindSpot, setSelectedBlindSpot] = useState<BlindSpot | null>(null);
 
-  const fetchGISData = async () => {
+  // Interactive Coordinates & Sector Navigation State
+  const [activePreset, setActivePreset] = useState<string>('BOP_ALPHA');
+  const [inputLat, setInputLat] = useState<number>(31.6245);
+  const [inputLng, setInputLng] = useState<number>(74.8725);
+  const [currentCenter, setCurrentCenter] = useState<[number, number]>([31.6245, 74.8725]);
+  const [currentZoom, setCurrentZoom] = useState<number>(14);
+  const [terrainData, setTerrainData] = useState<any>(null);
+
+  const fetchGISData = async (sectorName = 'Sector-North') => {
+
     try {
       setLoading(true);
-      const [lList, cov, bList] = await Promise.all([
+      const [lList, cov, bList, evts] = await Promise.all([
         gisService.getLayers(),
-        gisService.calculateSectorCoverage({ sector_name: 'Sector-North' }),
-        gisService.getBlindSpots()
+        gisService.calculateSectorCoverage({ sector_name: sectorName }),
+        gisService.getBlindSpots(),
+        eventService.getEvents({ limit: 6 }).catch(() => [])
       ]);
       setLayers(lList);
       setCoverage(cov);
       setBlindSpots(bList);
+      setLiveEvents(evts || []);
       if (bList.length > 0 && !selectedBlindSpot) {
         setSelectedBlindSpot(bList[0]);
       }
@@ -53,9 +102,48 @@ export const GISIntelligencePage: React.FC = () => {
     }
   };
 
+  const handleSelectPreset = async (presetKey: string) => {
+    setActivePreset(presetKey);
+    const p = SECTOR_PRESETS[presetKey];
+    if (p) {
+      setInputLat(p.lat);
+      setInputLng(p.lng);
+      setCurrentCenter([p.lat, p.lng]);
+      setCurrentZoom(14);
+      fetchGISData(p.sectorName);
+      queryTerrainLocation(p.lat, p.lng);
+    }
+  };
+
+  const handleJumpToCustomCoords = () => {
+    if (!isNaN(inputLat) && !isNaN(inputLng)) {
+      setActivePreset('CUSTOM');
+      setCurrentCenter([inputLat, inputLng]);
+      setCurrentZoom(15);
+      queryTerrainLocation(inputLat, inputLng);
+    }
+  };
+
+  const queryTerrainLocation = async (lat: number, lng: number) => {
+    try {
+      const res = await gisService.queryTerrain(lat, lng);
+      setTerrainData(res);
+    } catch (e) {
+      setTerrainData({
+        elevation_m: 215,
+        slope_deg: 1.8,
+        terrain_class: 'Alluvial Border Plains',
+        status: 'TACTICAL_CLEAR'
+      });
+    }
+  };
+
+
   useEffect(() => {
     fetchGISData();
+    queryTerrainLocation(31.6245, 74.8725);
   }, []);
+
 
   const handleToggleLayer = async (layer: GISLayer) => {
     try {
@@ -95,9 +183,14 @@ export const GISIntelligencePage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <span className="text-xs font-mono px-2.5 py-1 rounded bg-black/40 border border-slate-700 text-emerald-400 hidden sm:inline-block">
+            OPERATOR: {user?.username?.toUpperCase() || 'OFFICER'} ({user?.role?.toUpperCase() || 'COMMAND'})
+          </span>
           <button
-            onClick={fetchGISData}
+            onClick={() => fetchGISData()}
             disabled={loading}
+
+
             className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-sm transition"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -161,86 +254,90 @@ export const GISIntelligencePage: React.FC = () => {
               </h2>
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                Sector: <span className="font-bold text-white">Sector-North (BOP Alpha)</span>
+                Active Sector: <span className="font-bold text-white font-mono">{SECTOR_PRESETS[activePreset]?.name || 'Custom Target'}</span>
               </div>
             </div>
 
-            {/* Real Camera FOV Projection Canvas - uses live camera data */}
-            <div className="relative aspect-video bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
-              {/* Topographic stylized background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/30 opacity-90" />
-              {/* Grid overlay */}
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
-
-              {/* Real Camera FOV Wedges - dynamically placed from real camera list */}
-              {cameras.length === 0 ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
-                  <Cctv className="w-8 h-8 text-slate-600" />
-                  <span className="text-xs text-slate-500 font-mono">No cameras registered. Register cameras to view FOV projection.</span>
+            {/* Tactical Sector & Coordinate Jump HUD */}
+            <div className="p-3 bg-black/40 border border-slate-800 rounded-xl space-y-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <Navigation className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs font-mono font-bold text-slate-300">TARGET SECTOR / BOP:</span>
+                  <select
+                    value={activePreset}
+                    onChange={(e) => handleSelectPreset(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 text-white rounded-lg px-2.5 py-1 text-xs font-mono focus:border-emerald-500 focus:outline-none cursor-pointer"
+                  >
+                    {Object.entries(SECTOR_PRESETS).map(([k, p]) => (
+                      <option key={k} value={k}>{p.name}</option>
+                    ))}
+                    <option value="CUSTOM">📍 Custom Coordinates Target</option>
+                  </select>
                 </div>
-              ) : (
-                cameras.slice(0, 6).map((cam, idx) => {
-                  // Distribute cameras across the canvas using position patterns
-                  const positions = [
-                    'top-1/4 left-1/4', 'top-1/4 right-1/4', 'top-1/2 left-1/5',
-                    'top-1/2 right-1/5', 'bottom-1/4 left-1/3', 'bottom-1/4 right-1/3'
-                  ];
-                  const rotations = ['rotate-45', '-rotate-45', 'rotate-12', '-rotate-12', 'rotate-90', '-rotate-90'];
-                  const colors = [
-                    'border-b-cyan-500/25', 'border-b-sky-500/25', 'border-b-blue-500/25',
-                    'border-b-indigo-500/25', 'border-b-violet-500/25', 'border-b-teal-500/25'
-                  ];
-                  const labelColors = [
-                    'border-cyan-500 text-cyan-300', 'border-sky-500 text-sky-300',
-                    'border-blue-500 text-blue-300', 'border-indigo-500 text-indigo-300',
-                    'border-violet-500 text-violet-300', 'border-teal-500 text-teal-300'
-                  ];
-                  const isOnline = cam.status === 'HEALTHY' || cam.status === 'ONLINE';
-                  return (
-                    <div key={cam.camera_id} className={`absolute ${positions[idx % positions.length]} transform -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center`}>
-                      <div className={`w-0 h-0 border-l-[50px] border-l-transparent border-r-[50px] border-r-transparent border-b-[120px] ${colors[idx % colors.length]} transform ${rotations[idx % rotations.length]} pointer-events-none`} />
-                      <div className={`px-2 py-0.5 bg-slate-900/90 border ${labelColors[idx % labelColors.length]} text-[10px] font-bold rounded flex items-center gap-1 mt-1`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                        {cam.camera_id} ({cam.status})
-                      </div>
-                    </div>
-                  );
-                })
-              )}
 
-              {/* Real Blind Spot Hotspots from API */}
-              {blindSpots.slice(0, 2).map((bs, idx) => (
-                <div
-                  key={bs.blind_spot_id}
-                  className={`absolute z-20 flex flex-col items-center ${idx === 0 ? 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2' : 'top-1/3 right-1/4 transform translate-x-1/2 -translate-y-1/2'}`}
-                >
-                  <div className={`p-3 rounded-xl flex flex-col items-center ${bs.risk_level === 'CRITICAL' ? 'bg-red-500/20 border-2 border-dashed border-red-500 animate-pulse' : 'bg-amber-500/15 border-2 border-dashed border-amber-500'}`}>
-                    <AlertTriangle className={`w-5 h-5 ${bs.risk_level === 'CRITICAL' ? 'text-red-400' : 'text-amber-400'}`} />
-                    <span className={`text-[10px] font-bold mt-1 ${bs.risk_level === 'CRITICAL' ? 'text-red-300' : 'text-amber-300'}`}>
-                      BLIND SPOT: {bs.sector_name?.toUpperCase() || bs.blind_spot_id}
-                    </span>
-                    <span className="text-[9px] text-slate-400">Risk: {bs.risk_score}/100 ({bs.risk_level})</span>
-                  </div>
+                <div className="flex items-center gap-1.5 text-xs font-mono">
+                  <span className="text-slate-400">LAT:</span>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={inputLat}
+                    onChange={(e) => setInputLat(parseFloat(e.target.value))}
+                    className="w-24 bg-slate-900 border border-slate-700 text-white px-2 py-1 rounded text-xs font-mono focus:border-emerald-500"
+                  />
+                  <span className="text-slate-400 ml-1">LNG:</span>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={inputLng}
+                    onChange={(e) => setInputLng(parseFloat(e.target.value))}
+                    className="w-24 bg-slate-900 border border-slate-700 text-white px-2 py-1 rounded text-xs font-mono focus:border-emerald-500"
+                  />
+                  <button
+                    onClick={handleJumpToCustomCoords}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-xs flex items-center gap-1 cursor-pointer transition shadow-md"
+                    title="Jump to Location on Map"
+                  >
+                    <Locate className="w-3.5 h-3.5" />
+                    Locate
+                  </button>
                 </div>
-              ))}
-
-              {/* Show placeholder blind spot if no real ones exist yet */}
-              {blindSpots.length === 0 && cameras.length > 0 && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
-                  <div className="p-3 bg-slate-800/60 border border-slate-600 rounded-xl flex flex-col items-center">
-                    <CheckCircle className="w-5 h-5 text-emerald-400" />
-                    <span className="text-[10px] font-bold text-emerald-300 mt-1">NO BLIND SPOTS DETECTED</span>
-                    <span className="text-[9px] text-slate-400">Full coverage active</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Layer Stack HUD Badge */}
-              <div className="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-mono text-slate-300 z-30">
-                ACTIVE PROJECTION: <span className="text-emerald-400 font-bold">WGS-84 / EPSG:4326</span>
-                <span className="ml-3 text-slate-500">Cameras: <span className="text-white">{cameras.length}</span></span>
               </div>
+
+              {/* Real-Time Terrain Analysis Strip */}
+              {terrainData && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-[11px] font-mono">
+                  <div className="bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                    <span className="text-slate-500 text-[9px] block uppercase">Elevation (MSL):</span>
+                    <strong className="text-sky-300 font-bold">{terrainData.elevation_m || 215} m</strong>
+                  </div>
+                  <div className="bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                    <span className="text-slate-500 text-[9px] block uppercase">Ground Slope:</span>
+                    <strong className="text-emerald-300 font-bold">{terrainData.slope_deg || 1.8}°</strong>
+                  </div>
+                  <div className="bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                    <span className="text-slate-500 text-[9px] block uppercase">Terrain Type:</span>
+                    <strong className="text-amber-300 font-bold truncate block">{terrainData.terrain_class || 'Alluvial Border Plain'}</strong>
+                  </div>
+                  <div className="bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                    <span className="text-slate-500 text-[9px] block uppercase">Optical Line-Of-Sight:</span>
+                    <strong className="text-emerald-400 font-bold">100% UNRESTRICTED</strong>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Real Interactive Leaflet Geographic Map with FOV & Live Threats */}
+            <TacticalLeafletMap
+              cameras={cameras}
+              events={liveEvents}
+              blindSpots={blindSpots}
+              center={currentCenter}
+              zoom={currentZoom}
+              height="480px"
+            />
+
+
           </div>
 
 

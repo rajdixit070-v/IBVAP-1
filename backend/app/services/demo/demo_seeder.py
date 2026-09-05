@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.security import encrypt_credential
-from app.models.federation_models import Organization, Region, Site, BOP
+from app.models.federation_models import Organization, Region, Site, BOP, SiteUserScope
+
 from app.models.edge_node import EdgeNode
 from app.models.camera import Camera
 from app.models.zone import SecurityZone
@@ -831,7 +832,8 @@ def purge_demo_data(db: Session) -> dict:
         "maintenance_windows",
         "prediction_feedback",
         "behaviour_feedback",
-        "ai_operator_feedbacks"
+        "ai_operator_feedbacks",
+        "bop_dispatches"
     ]
     
     for t in tables:
@@ -840,13 +842,27 @@ def purge_demo_data(db: Session) -> dict:
         except Exception as e:
             logger.debug(f"Could not delete from {t}: {e}")
 
-    # Delete non-admin demo users
+    # Delete non-admin, non-officer demo users
     try:
-        db.execute(text("DELETE FROM users WHERE username != 'admin'"))
+        db.execute(text("DELETE FROM users WHERE username NOT IN ('admin', 'officer_alpha')"))
     except Exception:
         pass
         
     db.commit()
+
+    # Ensure baseline Site, BOP, and Officer scope remain for production operation
+    try:
+        if not db.query(Site).filter(Site.site_id == "SITE-BORDER-NORTH").first():
+            db.add(Site(site_id="SITE-BORDER-NORTH", name="North Frontier Sector", code="S-NORTH", region_id="REG-WEST"))
+        if not db.query(BOP).filter(BOP.bop_id == "BOP-ALPHA").first():
+            db.add(BOP(bop_id="BOP-ALPHA", name="BOP Alpha Outpost", code="BOP-A", site_id="SITE-BORDER-NORTH", latitude=31.6245, longitude=74.8725))
+        if not db.query(SiteUserScope).filter(SiteUserScope.username == "officer_alpha").first():
+            db.add(SiteUserScope(username="officer_alpha", scope_type="BOP", scope_id="BOP-ALPHA", role="BOP_OPERATOR", assigned_by="admin"))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Could not restore base site/BOP in purge: {e}")
+
+
 
     # Clean evidence snapshots on disk
     for path in ["./storage/evidence", "./storage/edge_local", "./storage/temp"]:
@@ -931,7 +947,7 @@ def simulate_live_threat(db: Session) -> dict:
     ))
 
     # 3. Alert
-    db.add(Alert(
+    alert_obj = Alert(
         alert_id=alt_id,
         event_id=evt_id,
         camera_id=cam_id,
@@ -941,7 +957,8 @@ def simulate_live_threat(db: Session) -> dict:
         risk_score=98,
         status="NEW",
         created_at=now
-    ))
+    )
+    db.add(alert_obj)
 
     # 4. Notification
     db.add(Notification(
@@ -951,11 +968,24 @@ def simulate_live_threat(db: Session) -> dict:
         message="Simulated intruder breached Zero-Line wire. Threat level CRITICAL (Risk 98).",
         priority="CRITICAL",
         read=False,
+        camera_id=cam_id,
+        location_description="Tower Alpha-1 Perimeter Wire (North Gate)",
+        evidence_id=evd_id,
+        evidence_url=f"/api/v1/evidence/{evd_id}/file",
         created_at=now
     ))
 
     db.commit()
+    db.refresh(alert_obj)
     logger.info(f"Simulated live threat injected: Event {evt_id}, Alert {alt_id}")
+
+    # Broadcast to live WebSockets so frontend shows toast & plays siren!
+    try:
+        from app.services.alert.alert_engine import alert_engine
+        alert_engine._broadcast_alert("ALERT_CREATED", alert_obj)
+    except Exception as bc_err:
+        logger.warning(f"Could not broadcast live threat alert: {bc_err}")
+
 
     return {
         "status": "THREAT_SIMULATED",

@@ -15,9 +15,11 @@ import {
   Map as MapIcon,
   LayoutGrid
 } from 'lucide-react';
+import { TacticalLeafletMap } from '../common/TacticalLeafletMap';
 
 
 interface SituationalMapModalProps {
+
   isOpen: boolean;
   onClose: () => void;
   incidents?: Incident[];
@@ -62,16 +64,8 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
     return true;
   });
 
-  // Calculate geospatial coordinate bounds for projection
-  const validCams = filteredCameras.filter(c => typeof c.latitude === 'number' && typeof c.longitude === 'number');
-  const minLat = validCams.length > 0 ? Math.min(...validCams.map(c => c.latitude!)) - 0.006 : 32.72;
-  const maxLat = validCams.length > 0 ? Math.max(...validCams.map(c => c.latitude!)) + 0.006 : 32.74;
-  const minLon = validCams.length > 0 ? Math.min(...validCams.map(c => c.longitude!)) - 0.008 : 74.84;
-  const maxLon = validCams.length > 0 ? Math.max(...validCams.map(c => c.longitude!)) + 0.008 : 74.87;
-  const latSpan = maxLat - minLat || 0.02;
-  const lonSpan = maxLon - minLon || 0.03;
-
   return (
+
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -144,114 +138,13 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
           </div>
         </div>
 
-        {/* Main Display: Radar Map View OR Grid View */}
+        {/* Main Display: Real Leaflet Map View OR Grid View */}
         {viewMode === 'map' ? (
-          <div className="relative w-full h-[420px] bg-[#060a12] border border-[#1e293b] rounded-2xl overflow-hidden shadow-2xl p-4">
-            {/* Grid Lines & Concentric Radar Rings */}
-            <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
-            <div className="absolute inset-0 bg-gradient-to-b from-sky-500/5 via-transparent to-rose-500/5 pointer-events-none" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 border border-sky-500/10 rounded-full pointer-events-none" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-sky-500/15 rounded-full pointer-events-none flex items-center justify-center">
-              <div className="w-24 h-24 border border-sky-500/20 rounded-full" />
-            </div>
-
-            {/* Zero-Line Perimeter Border Ribbon */}
-            <div className="absolute left-0 right-0 top-1/2 border-t-2 border-dashed border-rose-500/40 -translate-y-1/2 flex items-center justify-between px-4 text-[9px] font-mono text-rose-400/80 pointer-events-none z-0">
-              <span className="bg-slate-950/80 px-2 py-0.5 rounded border border-rose-500/30">ZERO-LINE BORDER PERIMETER</span>
-              <span className="bg-slate-950/80 px-2 py-0.5 rounded border border-rose-500/30">SECTOR ALPHA PATROL CORRIDOR</span>
-            </div>
-
-            {/* Camera Pins Plotted at GPS Coordinates */}
-            {filteredCameras.map((cam, idx) => {
-              const activeInc = liveIncidents.find(
-                (i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED' && i.status !== 'RESOLVED' && i.status !== 'FALSE_ALARM'
-              );
-              const isSelected = selectedCam?.camera_id === cam.camera_id;
-              const isOnline = cam.status === 'ONLINE' || cam.status === 'HEALTHY';
-
-              // Project coordinates or fall back to distributed positions
-              let posX = 50;
-              let posY = 50;
-              if (cam.latitude && cam.longitude) {
-                posX = Math.max(10, Math.min(90, ((cam.longitude - minLon) / lonSpan) * 100));
-                posY = Math.max(12, Math.min(88, 100 - ((cam.latitude - minLat) / latSpan) * 100));
-              } else {
-                const spreadPositions = [
-                  [20, 30], [35, 65], [50, 25], [65, 70], [80, 35], [25, 75], [75, 60]
-                ];
-                const p = spreadPositions[idx % spreadPositions.length];
-                posX = p[0];
-                posY = p[1];
-              }
-
-              return (
-                <div
-                  key={cam.camera_id}
-                  onClick={() => setSelectedCam(cam)}
-                  style={{ left: `${posX}%`, top: `${posY}%` }}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
-                >
-                  {/* FOV Wedge cone */}
-                  <div
-                    className={`w-0 h-0 border-l-[25px] border-l-transparent border-r-[25px] border-r-transparent border-b-[60px] pointer-events-none absolute -top-12 -left-3.5 transform origin-bottom transition-opacity ${
-                      activeInc
-                        ? 'border-b-rose-500/25 rotate-12 opacity-80'
-                        : isOnline
-                        ? 'border-b-cyan-500/20 rotate-45 opacity-60 group-hover:opacity-100'
-                        : 'border-b-slate-700/20 opacity-30'
-                    }`}
-                  />
-
-                  {/* Threat Ping Halos */}
-                  {activeInc && (
-                    <div className="w-12 h-12 rounded-full bg-rose-500/30 blur-sm animate-ping absolute -inset-3 pointer-events-none" />
-                  )}
-
-                  {/* Main Pin Icon */}
-                  <div
-                    className={`relative w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all shadow-lg ${
-                      isSelected
-                        ? 'bg-sky-400 border-white text-slate-950 scale-125 ring-4 ring-sky-400/40'
-                        : activeInc
-                        ? 'bg-rose-600 border-rose-300 text-white animate-pulse ring-4 ring-rose-500/40'
-                        : isOnline
-                        ? 'bg-cyan-600 border-cyan-400 text-white hover:scale-115'
-                        : 'bg-slate-800 border-slate-600 text-slate-400'
-                    }`}
-                  >
-                    <Crosshair className="w-4 h-4" />
-                    <span
-                      className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-black ${
-                        isOnline ? 'bg-emerald-400' : 'bg-rose-500'
-                      }`}
-                    />
-                  </div>
-
-                  {/* Tooltip Badge */}
-                  <div className="absolute top-9 left-1/2 -translate-x-1/2 bg-slate-950/95 border border-slate-700 px-2 py-1 rounded-lg text-[10px] font-mono whitespace-nowrap opacity-90 group-hover:opacity-100 transition shadow-xl pointer-events-none flex flex-col items-center">
-                    <span className="font-bold text-white flex items-center gap-1">
-                      {cam.camera_id}
-                      {activeInc && <span className="text-rose-400 font-black">🚨 ALERT</span>}
-                    </span>
-                    <span className="text-[9px] text-slate-400">{cam.camera_name}</span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Bottom HUD Legend */}
-            <div className="absolute bottom-3 left-3 bg-slate-950/90 backdrop-blur border border-slate-800 px-3 py-1.5 rounded-xl text-[10px] font-mono text-slate-300 flex items-center gap-4 z-10">
-              <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                ONLINE NODES
-              </span>
-              <span className="flex items-center gap-1.5 text-rose-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                ACTIVE THREATS ({liveIncidents.length})
-              </span>
-              <span className="text-slate-500">PROJECTION: WGS-84 / EPSG:4326</span>
-            </div>
-          </div>
+          <TacticalLeafletMap
+            cameras={filteredCameras}
+            onCameraSelect={(cam) => setSelectedCam(cam)}
+            height="420px"
+          />
         ) : (
           /* Main Interactive Tactical Grid Display */
           <div className="relative w-full min-h-[380px] bg-[#070b12] border border-[#1e293b] rounded-2xl overflow-hidden shadow-2xl p-5 flex flex-col justify-between">

@@ -8,6 +8,7 @@ from app.database import get_db
 from app.config import settings
 from app.models.user import User
 from app.models.enterprise_security_models import SessionTokenBlacklist, SecurityAuditLogEntry
+from app.models.federation_models import SiteUserScope
 from app.schemas.auth import Token, UserResponse, UserLogin
 from app.schemas.enterprise_security_schemas import PasswordChangeRequest, PasswordValidationResult
 from app.core.security import verify_password, create_access_token, get_password_hash
@@ -17,6 +18,15 @@ from app.services.security.password_policy import PasswordPolicyService
 from app.services.security.ws_ticket_service import WSTicketService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+def get_user_scope_info(username: str, user_role: str, db: Session):
+    user_scope = db.query(SiteUserScope).filter(SiteUserScope.username == username).first()
+    if user_scope:
+        return user_scope.scope_type, user_scope.scope_id, user_scope.role
+    if user_role in ["admin", "SUPER_ADMIN"]:
+        return "GLOBAL", "*", "SUPER_ADMIN"
+    return "BOP", "BOP-ALPHA", "BOP_OPERATOR"
+
 
 @router.post("/login", response_model=Token)
 def login_for_access_token(
@@ -77,12 +87,17 @@ def login_for_access_token(
         expires_delta=access_token_expires,
         role=user.role
     )
+    scope_type, scope_id, scope_role = get_user_scope_info(user.username, user.role, db)
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role,
-        "username": user.username
+        "username": user.username,
+        "scope_type": scope_type,
+        "scope_id": scope_id,
+        "scope_role": scope_role
     }
+
 
 @router.post("/login-json", response_model=Token)
 def login_with_json(
@@ -137,12 +152,17 @@ def login_with_json(
         expires_delta=access_token_expires,
         role=user.role
     )
+    scope_type, scope_id, scope_role = get_user_scope_info(user.username, user.role, db)
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role,
-        "username": user.username
+        "username": user.username,
+        "scope_type": scope_type,
+        "scope_id": scope_id,
+        "scope_role": scope_role
     }
+
 
 @router.post("/logout")
 def logout_user(
@@ -205,9 +225,24 @@ def validate_password_policy(
     return PasswordValidationResult(is_valid=is_valid, errors=errors, score=score)
 
 @router.get("/me", response_model=UserResponse)
-def read_current_user_profile(current_user: User = Depends(get_current_user)):
-    """Retrieves profile of currently logged-in user."""
-    return current_user
+def read_current_user_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieves profile of currently logged-in user with assigned duty scope."""
+    scope_type, scope_id, scope_role = get_user_scope_info(current_user.username, current_user.role, db)
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at,
+        "scope_type": scope_type,
+        "scope_id": scope_id,
+        "scope_role": scope_role
+    }
+
 
 @router.post("/ws-ticket")
 def issue_websocket_ticket(

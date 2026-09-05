@@ -4,6 +4,9 @@ import { authService } from '../services/authService';
 interface UserState {
   username: string;
   role: string;
+  scope_type?: string;
+  scope_id?: string;
+  scope_role?: string;
 }
 
 interface AuthContextType {
@@ -26,7 +29,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token) {
         try {
           const currentUser = await authService.getCurrentUser();
-          setUser({ username: currentUser.username, role: currentUser.role });
+          setUser({
+            username: currentUser.username,
+            role: currentUser.role,
+            scope_type: currentUser.scope_type,
+            scope_id: currentUser.scope_id,
+            scope_role: currentUser.scope_role
+          });
         } catch {
           // If token is invalid or expired, clear session
           authService.logout();
@@ -43,8 +52,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (username: string, password: string) => {
     const data = await authService.login(username, password);
-    setUser({ username: data.username, role: data.role });
+    setUser({
+      username: data.username,
+      role: data.role,
+      scope_type: data.scope_type,
+      scope_id: data.scope_id,
+      scope_role: data.scope_role
+    });
   };
+
 
   const logout = () => {
     authService.logout();

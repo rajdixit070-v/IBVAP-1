@@ -12,6 +12,8 @@ import {
   MapPin
 } from 'lucide-react';
 import { sensorService, Sensor, SensorFusionEvent } from '../services/sensorService';
+import { RegisterSensorModal } from '../components/sensors/RegisterSensorModal';
+import { Plus } from 'lucide-react';
 
 export const SensorFusionPage: React.FC = () => {
   const [sensors, setSensors] = useState<Sensor[]>([]);
@@ -20,6 +22,8 @@ export const SensorFusionPage: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('ALL');
   const [correlating, setCorrelating] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<SensorFusionEvent | null>(null);
+  const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
+
 
   const fetchSensorsAndEvents = async () => {
     try {
@@ -120,13 +124,21 @@ export const SensorFusionPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setIsSensorModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium rounded-lg shadow-lg shadow-cyan-900/30 text-sm transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Register Sensor
+          </button>
+          <button
             onClick={fetchSensorsAndEvents}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-sm transition"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-sm transition cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+
           <button
             onClick={triggerLiveCorrelation}
             disabled={correlating}
@@ -320,7 +332,14 @@ export const SensorFusionPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <RegisterSensorModal
+        isOpen={isSensorModalOpen}
+        onClose={() => setIsSensorModalOpen(false)}
+        onSuccess={fetchSensorsAndEvents}
+      />
     </div>
   );
 };
+
 

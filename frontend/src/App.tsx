@@ -75,6 +75,11 @@ const MainLayout: React.FC = () => {
             <DashboardPage
               onNavigateToCameras={() => setActiveTab('cameras')}
               onNavigateToLive={() => setActiveTab('live')}
+              onNavigateToSOC={() => setActiveTab('soc')}
+              onNavigateToFederation={() => setActiveTab('federation')}
+              onNavigateToEvidence={() => setActiveTab('evidence')}
+              onNavigateToIncidents={() => setActiveTab('incidents')}
+              onNavigateToSecurity={() => setActiveTab('security')}
               onNavigateToIntelligence={() => setActiveTab('intelligence')}
               onNavigateToEvents={() => setActiveTab('events')}
               onNavigateToANPR={() => setActiveTab('anpr')}
@@ -83,6 +88,7 @@ const MainLayout: React.FC = () => {
               onInspectCamera={handleInspect}
             />
           )}
+
           {activeTab === 'soc' && <CommandCenterPage />}
           {activeTab === 'health' && <SystemHealthCenterPage />}
           {activeTab === 'federation' && <MultiSiteCommandPage />}

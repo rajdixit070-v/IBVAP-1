@@ -40,30 +40,8 @@ def register_drone(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-@router.get("/{drone_id}", response_model=DroneResponse)
-def get_drone(
-    drone_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    drone = DroneService.get_drone_by_id(db, drone_id)
-    if not drone:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Drone '{drone_id}' not found.")
-    return drone
-
-@router.post("/{drone_id}/telemetry", response_model=DroneResponse)
-def update_drone_telemetry(
-    drone_id: str,
-    telemetry: DroneTelemetryUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    drone = DroneService.update_telemetry(db, drone_id, telemetry)
-    if not drone:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Drone '{drone_id}' not found.")
-    return drone
-
 @router.get("/missions/list", response_model=List[DroneMissionResponse])
+@router.get("/missions", response_model=List[DroneMissionResponse])
 def list_drone_missions(
     site_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -139,4 +117,28 @@ def get_handoff_history(
     current_user: User = Depends(get_current_user)
 ):
     return DroneHandoffService.get_handoff_history(db, global_track_id=global_track_id, limit=limit)
+
+@router.get("/{drone_id}", response_model=DroneResponse)
+def get_drone(
+    drone_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    drone = DroneService.get_drone_by_id(db, drone_id)
+    if not drone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Drone '{drone_id}' not found.")
+    return drone
+
+@router.post("/{drone_id}/telemetry", response_model=DroneResponse)
+def update_drone_telemetry(
+    drone_id: str,
+    telemetry: DroneTelemetryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    drone = DroneService.update_telemetry(db, drone_id, telemetry)
+    if not drone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Drone '{drone_id}' not found.")
+    return drone
+
 

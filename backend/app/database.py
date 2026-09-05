@@ -3,6 +3,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
+from sqlalchemy.pool import NullPool
+
 _db_url = settings.DATABASE_URL
 if _db_url in ("sqlite:///./ibvap.db", "sqlite:///ibvap.db", "sqlite:///./backend/ibvap.db"):
     _db_url = f"sqlite:///{settings._db_path}"
@@ -10,6 +12,7 @@ if _db_url in ("sqlite:///./ibvap.db", "sqlite:///ibvap.db", "sqlite:///./backen
 engine = create_engine(
     _db_url, 
     connect_args={"check_same_thread": False} if _db_url.startswith("sqlite") else {},
+    poolclass=NullPool if _db_url.startswith("sqlite") else None,
     pool_pre_ping=True
 )
 

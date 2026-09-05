@@ -317,9 +317,15 @@ class RTSPStreamer:
                     buffer += chunk
 
                     # Search for JPEG Start (0xFFD8) and End (0xFFD9) markers
-                    a = buffer.find(b"\xff\xd8")
-                    b = buffer.find(b"\xff\xd9")
-                    if a != -1 and b != -1 and b > a:
+                    while True:
+                        a = buffer.find(b"\xff\xd8")
+                        if a == -1:
+                            buffer = buffer[-1:] if buffer.endswith(b"\xff") else b""
+                            break
+                        b = buffer.find(b"\xff\xd9", a + 2)
+                        if b == -1:
+                            buffer = buffer[a:]
+                            break
                         jpg_data = buffer[a:b+2]
                         buffer = buffer[b+2:]
 
@@ -328,6 +334,7 @@ class RTSPStreamer:
                             self._process_new_frame(frame, time.time())
 
                 return True
+
         except Exception as e:
             logger.debug(f"[{self.camera_id}] Direct HTTP MJPEG notice for {url}: {e}")
             return False

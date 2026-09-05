@@ -699,7 +699,91 @@ class MultimodalEngine:
                 "safety_notice": "AI Virtual Assistant cited live database counts and hardware state. No configurations were modified."
             }
 
+        # 1.1 ADMIN ROLE & RESPONSIBILITIES (HQ COMMAND WORKFLOW)
+        if any(k in q_lower for k in ["admin", "hq", "administrator", "headquarters", "war room"]):
+            explanation = (
+                "🏢 **HQ Central Administrator — Operational Guide & Central Responsibilities**\n\n"
+                "As an **HQ Central Administrator (Delhi HQ)**, aapka kaam physically camera lagana nahi hai, balki poore desh ke borders aur officers ki supreme command & centralized monitoring karna hai:\n\n"
+                "1. **Officer & User Management (`Officer & User Management / Zero-Trust`)**:\n"
+                "   • Delhi HQ se Admin field officers create karta hai aur unko unki respective Checkpost (BOP) assign karta hai.\n"
+                "   • Kis officer ke paas kis site/checkpost ki clearance hai, yeh Admin decide karta hai.\n\n"
+                "2. **Multi-Site & Checkpost Federation Map (`Multi-Site Federation`)**:\n"
+                "   • Poore desh ke sabhi Border Outposts (BOPs) ko National Tactical Map par monitor karein.\n"
+                "   • Kis checkpost par kis officer ne kitne cameras lagaye hain aur wahan ka health score kya hai, live dekhein.\n\n"
+                "3. **Receive All Field Alerts, Sirens & Messages (`SOC Threat Matrix` & `Dashboard`)**:\n"
+                "   • Checkpost cameras se aane wale saare critical intrusion alerts, siren events aur notifications **direct Delhi HQ Admin ke desk par aate hain**.\n\n"
+                "4. **Review Daily SITREPs & Officer Dispatches (`HQ Monitoring Dashboard`)**:\n"
+                "   • Field officers dwara ground se bheje gaye Daily Field Evidence, suspect snapshots aur SITREP dispatches ko Delhi HQ me review karein.\n\n"
+                "5. **Forensic Evidence Vault & QRT Orders (`Forensic Vault` & `Incidents`)**:\n"
+                "   • Court-admissible SHA-256 tamper-proof evidence packages verify karein aur major intrusions par Quick Reaction Team (QRT) response authorize karein."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"role": "ADMIN_HQ", "intent": "ROLE_GUIDANCE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Authoritative HQ Administrator command guidance cited from IBVAP Operational Doctrine."
+            }
+
+        # 1.2 CHECKPOST FIELD OFFICER WORKFLOW
+        if any(k in q_lower for k in ["officer", "checkpost", "bop", "jawan", "sentry", "field operator", "base station"]):
+            explanation = (
+                "🛰️ **Checkpost Field Officer — Ground Operational Duties**\n\n"
+                "As a **Checkpost Field Officer** (`officer_alpha`), aap ground par physical security aur checkpost equipment sambhalte hain:\n\n"
+                "1. **Checkpost Camera Onboarding (`Checkpost Camera Onboarding`)**:\n"
+                "   • Checkpost par physical cameras lagana aur unhe system me **`+ Add Camera`** button se add karna officer ki primary duty hai.\n"
+                "   • Camera add hote hi uski live feed aur detection alerts automatically Delhi HQ tak transmit hone lagti hain.\n\n"
+                "2. **Live Checkpost Video Wall (`Live Tactical Video Wall`)**:\n"
+                "   • Apne checkpost ke zero-line fence aur gate feeds ko 1x1, 2x2 multi-view grid me continuous monitor karein.\n\n"
+                "3. **PTZ Joystick & Optical Zoom (`PTZ Joystick & Optical Zoom`)**:\n"
+                "   • Virtual joystick se camera ko Left/Right/Up/Down ghumayein aur zoom karke zero-line wire inspect karein.\n\n"
+                "4. **Perimeter Virtual Tripwires (`Virtual Perimeter / Tripwires`)**:\n"
+                "   • Camera screen par click karke polygon boundary (Zero-Line Wire) banayein taaki cross karte hi instant alarm baje.\n\n"
+                "5. **Capture Evidence & Dispatch to Delhi HQ (`Evidence & Dispatch to Delhi HQ`)**:\n"
+                "   • Agar koi sandigh person ya vehicle detect hota hai, to **Dispatch Evidence to Delhi HQ** button se snapshot, GPS coordinates aur descriptive field report turant Central Admin ko bhejein."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"role": "CHECKPOST_OFFICER", "intent": "ROLE_GUIDANCE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Authoritative Checkpost Field Officer operational guidance cited from IBVAP Ground Protocols."
+            }
+
+
+        # 1.3 NEXT-GEN CAPABILITIES (PTZ, DRONES, SENSOR FUSION, THERMAL, GIS)
+        if any(k in q_lower for k in ["drone", "ptz", "thermal", "radar", "seismic", "gis", "next gen", "fusion", "uav", "joystick"]):
+            explanation = (
+                "⚡ **Next-Gen Capabilities — Operational Features Guide**\n\n"
+                "IBVAP me 5 Next-Generation advanced tactical modules fully active hain:\n\n"
+                "1. **PTZ & ONVIF Control (`/ptz-control`)**:\n"
+                "   • Virtual joystick pan/tilt/zoom, optical zoom presets, aur AI auto-tracking.\n\n"
+                "2. **Drone Fleet & Autonomous Handoff (`/drone-operations`)**:\n"
+                "   • Autonomous UAV patrol missions launch karein.\n"
+                "   • **Target Handoff**: Zameen par camera se bahar nikalne wale intruder ko drone hawa se autonomously track karta hai.\n\n"
+                "3. **Multi-Sensor Bayesian Fusion (`/sensor-fusion`)**:\n"
+                "   • Optical cameras, subsurface seismic sensors, aur perimeter radar ka combined data correlate karke 96%+ accuracy se target verify hota hai.\n\n"
+                "4. **Thermal + RGB Dual-Camera Fusion (`/thermal-fusion`)**:\n"
+                "   • Day Optical + Night Thermal camera perspective alignment. Ghane kohre ya raat ke andhere me body heat detect hoti hai.\n\n"
+                "5. **GIS, Terrain & Blind-Spot Intelligence (`/gis-intelligence`)**:\n"
+                "   • Latitude & Longitude type karke kisi bhi border point par jump karein aur elevation/slope ground terrain check karein."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"category": "NEXT_GEN_INTELLIGENCE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Technical operational guide cited from Next-Gen Tactical Command Suite."
+            }
+
         # 2. OPERATIONAL MODULES COMPREHENSIVE WALKTHROUGH
+
         if any(k in q_lower for k in [
             "module", "modules", "operational module", "kya use", "kaise use", "kya kaam",
             "functionality", "features", "options", "explain", "btao", "list module",

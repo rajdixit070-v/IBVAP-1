@@ -7,7 +7,8 @@ import {
   PersonCategory
 } from '../../types/face';
 import { faceService } from '../../services/faceService';
-import { Save } from 'lucide-react';
+import { Save, Upload, Camera } from 'lucide-react';
+
 
 interface PersonWatchlistModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export const PersonWatchlistModal: React.FC<PersonWatchlistModalProps> = ({
   const [category, setCategory] = useState<PersonCategory>('WATCHLIST');
   const [status, setStatus] = useState<'ACTIVE' | 'SUSPENDED' | 'ARCHIVED'>('ACTIVE');
   const [notes, setNotes] = useState('');
+  const [photoRef, setPhotoRef] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,14 +40,33 @@ export const PersonWatchlistModal: React.FC<PersonWatchlistModalProps> = ({
       setCategory(personToEdit.category);
       setStatus(personToEdit.status);
       setNotes(personToEdit.notes || '');
+      setPhotoRef(personToEdit.photo_ref || '');
     } else {
       setPersonId('');
       setDisplayName('');
       setCategory('WATCHLIST');
       setStatus('ACTIVE');
       setNotes('');
+      setPhotoRef('');
     }
   }, [personToEdit, isOpen]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('Photo size must be under 2MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setPhotoRef(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +88,8 @@ export const PersonWatchlistModal: React.FC<PersonWatchlistModalProps> = ({
           display_name: displayName,
           category,
           status,
-          notes: notes || undefined
+          notes: notes || undefined,
+          photo_ref: photoRef || undefined
         };
         await faceService.updatePerson(personToEdit.id, updateData);
       } else {
@@ -77,6 +99,7 @@ export const PersonWatchlistModal: React.FC<PersonWatchlistModalProps> = ({
           category,
           status,
           notes: notes || undefined,
+          photo_ref: photoRef || undefined,
           embedding: new Array(128).fill(0.01)
         };
         await faceService.createPerson(createData);
@@ -84,6 +107,7 @@ export const PersonWatchlistModal: React.FC<PersonWatchlistModalProps> = ({
 
       onSuccess();
       onClose();
+
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save identity record.');
     } finally {
@@ -106,9 +130,50 @@ export const PersonWatchlistModal: React.FC<PersonWatchlistModalProps> = ({
           </div>
         )}
 
+        {/* Identity Photo / Mugshot Upload Section */}
+        <div className="bg-[#090d16] border border-[#1e293b] rounded-xl p-4 flex flex-col sm:flex-row items-center gap-4">
+          <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-slate-900 border-2 border-dashed border-purple-500/40 flex items-center justify-center shrink-0">
+            {photoRef ? (
+              <img src={photoRef} alt="Watchlist preview" className="w-full h-full object-cover" />
+            ) : (
+              <Camera className="w-8 h-8 text-purple-400/50" />
+            )}
+          </div>
+          <div className="flex-1 space-y-2 w-full text-left">
+            <label className="block text-xs font-semibold text-slate-300">
+              Identity Photo / Target Mugshot <span className="text-purple-400 font-mono font-normal">(Wanted / Terrorist / VIP)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload Photo</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
+              {photoRef && (
+                <button
+                  type="button"
+                  onClick={() => setPhotoRef('')}
+                  className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs transition"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-400">
+              Upload face photo (JPG, PNG max 2MB) for real-time facial recognition matching.
+            </p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
+
               Person ID <span className="text-rose-400">*</span>
             </label>
             <input

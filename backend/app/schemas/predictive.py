@@ -84,9 +84,10 @@ class HotspotZoneResponse(BaseModel):
     name: str
     camera_id: str
     bop_site: str
-    latitude: float
-    longitude: float
+    latitude: Optional[float] = 32.7266
+    longitude: Optional[float] = 74.8570
     hotspot_level: str # "NORMAL", "WATCH", "ELEVATED", "HIGH"
+
     activity_density: float # events per km² or relative index
     current_activity: int
     baseline_activity: float

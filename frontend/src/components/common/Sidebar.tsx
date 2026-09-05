@@ -4,26 +4,24 @@ import {
   Video,
   Cctv,
   ShieldAlert,
-  Cpu,
   Bell,
   Car,
   Fingerprint,
   Server,
   Flame,
   FileCheck,
-  Compass,
-  BrainCircuit,
   TrendingUp,
   HeartPulse,
   Globe,
   ShieldCheck,
   Activity,
   FolderLock,
-  Radio,
   Crosshair,
   Plane,
   Map
 } from 'lucide-react';
+
+import { useAuth } from '../../context/AuthContext';
 
 interface SidebarProps {
   activeTab: string;
@@ -45,179 +43,195 @@ interface NavSection {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen = true }) => {
-  const sections: NavSection[] = [
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
+
+  const hqAdminSections: NavSection[] = [
     {
-      title: 'COMMAND & OPERATIONS',
+      title: 'HQ CENTRAL WAR ROOM',
       items: [
         {
           id: 'dashboard',
-          label: 'Command Overview',
+          label: 'HQ Monitoring & Dispatches',
           icon: LayoutDashboard,
-          badge: null
+          badge: 'SITREPS'
+        },
+        {
+          id: 'federation',
+          label: 'Multi-Site & Checkposts Map',
+          icon: Globe,
+          badge: 'FEDERATED'
         },
         {
           id: 'soc',
-          label: 'SOC Command Center',
+          label: 'National SOC Threat Matrix',
           icon: Flame,
-          badge: 'LIVE'
-        },
-        {
-          id: 'live',
-          label: 'Live Video Wall',
-          icon: Video,
-          badge: 'FEED'
-        },
-        {
-          id: 'cameras',
-          label: 'Camera Management',
-          icon: Cctv,
-          badge: null
-        },
-        {
-          id: 'health',
-          label: 'System Health Center',
-          icon: HeartPulse,
-          badge: null
+          badge: 'ALL ALERTS'
         }
       ]
     },
     {
-      title: 'PERIMETER & SENSORS',
+      title: 'OFFICERS & ZERO-TRUST GOVERNANCE',
       items: [
         {
-          id: 'intelligence',
-          label: 'Virtual Perimeter / Zones',
-          icon: ShieldAlert,
-          badge: 'ZONES'
-        },
-        {
-          id: 'ai-pipeline',
-          label: 'AI Inference Pipeline',
-          icon: Cpu,
-          badge: 'YOLO'
-        },
-        {
-          id: 'anpr',
-          label: 'Vehicle Intelligence (ANPR)',
-          icon: Car,
-          badge: 'ANPR'
-        },
-        {
-          id: 'face',
-          label: 'Facial Watchlist Matrix',
-          icon: Fingerprint,
-          badge: 'FACE'
-        },
-        {
-          id: 'edge',
-          label: 'Edge Fleet & Sync',
-          icon: Server,
-          badge: 'EDGE'
-        }
-      ]
-    },
-    {
-      title: 'TACTICAL INTELLIGENCE',
-      items: [
-        {
-          id: 'multimodal',
-          label: 'Multimodal AI Intelligence',
-          icon: BrainCircuit,
-          badge: 'CORE'
-        },
-        {
-          id: 'behaviour',
-          label: 'Behaviour Intelligence',
-          icon: Activity,
-          badge: null
-        },
-        {
-          id: 'cross-camera',
-          label: 'Movement & Re-ID',
-          icon: Compass,
-          badge: 'CORRIDORS'
-        },
-        {
-          id: 'predictive',
-          label: 'Predictive Intelligence',
-          icon: TrendingUp,
-          badge: null
-        }
-      ]
-    },
-    {
-      title: 'NEXT-GEN CAPABILITIES',
-      items: [
-        {
-          id: 'sensor-fusion',
-          label: 'Multi-Sensor Fusion',
-          icon: Radio,
-          badge: 'BAYESIAN'
-        },
-        {
-          id: 'thermal-fusion',
-          label: 'Thermal + RGB Fusion',
-          icon: Flame,
-          badge: 'HOMOGRAPHY'
-        },
-        {
-          id: 'ptz-control',
-          label: 'PTZ & ONVIF Control',
-          icon: Crosshair,
-          badge: 'AUTOTRACK'
-        },
-        {
-          id: 'drone-operations',
-          label: 'Drone Fleet & Handoff',
-          icon: Plane,
-          badge: 'UAV'
-        },
-        {
-          id: 'gis-intelligence',
-          label: 'GIS & Blind-Spot Intelligence',
-          icon: Map,
-          badge: 'FOV/TERRAIN'
-        }
-      ]
-    },
-    {
-      title: 'SECURITY & RESPONSE',
-      items: [
-        {
-          id: 'incidents',
-          label: 'Incidents & Playbooks',
-          icon: FileCheck,
-          badge: 'SOP'
-        },
-        {
-          id: 'events',
-          label: 'Security Threat Feed',
-          icon: Bell,
-          badge: 'THREATS'
+          id: 'security',
+          label: 'Officer & User Management',
+          icon: ShieldCheck,
+          badge: 'ASSIGN BOP'
         },
         {
           id: 'evidence',
           label: 'Forensic Evidence Vault',
           icon: FolderLock,
-          badge: 'VAULT'
+          badge: 'SHA-256'
         },
         {
-          id: 'security',
-          label: 'Enterprise Zero-Trust',
-          icon: ShieldCheck,
-          badge: '88/100'
+          id: 'incidents',
+          label: 'Incidents & SOP Orders',
+          icon: FileCheck,
+          badge: 'QRT'
+        }
+      ]
+    },
+    {
+      title: 'NATIONAL INFRASTRUCTURE & HEALTH',
+      items: [
+        {
+          id: 'edge',
+          label: 'Border Outposts & Edge Sync',
+          icon: Server,
+          badge: 'SYNC'
         },
         {
-          id: 'federation',
-          label: 'Multi-Site Federation',
-          icon: Globe,
-          badge: null
+          id: 'health',
+          label: 'System Health Center',
+          icon: HeartPulse,
+          badge: 'SERVERS'
+        },
+        {
+          id: 'predictive',
+          label: 'Predictive Threat Trends',
+          icon: TrendingUp,
+          badge: '24H'
         }
       ]
     }
   ];
 
+
+  const bopOfficerSections: NavSection[] = [
+    {
+      title: `CHECKPOST SURVEILLANCE • ${user?.scope_id || 'BOP ALPHA'}`,
+      items: [
+        {
+          id: 'dashboard',
+          label: 'Checkpost Overview',
+          icon: LayoutDashboard,
+          badge: 'LOCAL'
+        },
+        {
+          id: 'cameras',
+          label: 'Checkpost Camera Onboarding',
+          icon: Cctv,
+          badge: '+ ADD CAM'
+        },
+        {
+          id: 'live',
+          label: 'Live Tactical Video Wall',
+          icon: Video,
+          badge: 'WATCH'
+        }
+      ]
+    },
+    {
+      title: 'TACTICAL GROUND CONTROLS',
+      items: [
+        {
+          id: 'ptz-control',
+          label: 'PTZ Joystick & Optical Zoom',
+          icon: Crosshair,
+          badge: 'JOYSTICK'
+        },
+        {
+          id: 'drone-operations',
+          label: 'Drone Fleet & Patrol',
+          icon: Plane,
+          badge: 'UAV'
+        },
+        {
+          id: 'thermal-fusion',
+          label: 'Thermal + Night IR Fusion',
+          icon: Flame,
+          badge: 'NIGHT IR'
+        },
+        {
+          id: 'gis-intelligence',
+          label: 'Checkpost GIS & Terrain Map',
+          icon: Map,
+          badge: 'GPS'
+        }
+      ]
+    },
+    {
+      title: 'PERIMETER & ACCESS SECURITY',
+      items: [
+        {
+          id: 'intelligence',
+          label: 'Virtual Perimeter / Tripwires',
+          icon: ShieldAlert,
+          badge: 'DRAW WIRE'
+        },
+        {
+          id: 'anpr',
+          label: 'Vehicle Intelligence (ANPR)',
+          icon: Car,
+          badge: 'GATE OCR'
+        },
+        {
+          id: 'face',
+          label: 'Facial Watchlist Matrix',
+          icon: Fingerprint,
+          badge: 'BIOMETRIC'
+        },
+        {
+          id: 'behaviour',
+          label: 'Behaviour Intelligence',
+          icon: Activity,
+          badge: 'RULES'
+        }
+      ]
+    },
+    {
+      title: 'LOCAL THREATS & REPORT TO HQ',
+      items: [
+        {
+          id: 'soc',
+          label: 'Checkpost Threat Alarms',
+          icon: Bell,
+          badge: 'SIREN'
+        },
+        {
+          id: 'evidence',
+          label: 'Dispatch Evidence to Delhi HQ',
+          icon: FolderLock,
+          badge: 'SEND TO HQ'
+        },
+        {
+          id: 'incidents',
+          label: 'Checkpost SOP Checklist',
+          icon: FileCheck,
+          badge: 'SOP'
+        }
+      ]
+    }
+  ];
+
+
+  const sections = isSuperAdmin ? hqAdminSections : bopOfficerSections;
+
   return (
+
+
     <aside
       className={`${
         isOpen ? 'w-64 opacity-100' : 'w-0 opacity-0 pointer-events-none border-r-0'

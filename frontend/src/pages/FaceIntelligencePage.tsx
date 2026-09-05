@@ -365,7 +365,19 @@ export const FaceIntelligencePage: React.FC = () => {
                           {p.person_id}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-semibold text-white">{p.display_name}</td>
+                      <td className="px-4 py-3 font-semibold text-white">
+                        <div className="flex items-center gap-2.5">
+                          {p.photo_ref ? (
+                            <img src={p.photo_ref} alt={p.display_name} className="w-8 h-8 rounded-lg object-cover border border-purple-500/40 shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                              <Fingerprint className="w-4 h-4" />
+                            </div>
+                          )}
+                          <span>{p.display_name}</span>
+                        </div>
+                      </td>
+
                       <td className="px-4 py-3">
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded border ${

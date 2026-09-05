@@ -7,6 +7,9 @@ class Token(BaseModel):
     token_type: str = "bearer"
     role: str = "admin"
     username: str
+    scope_type: Optional[str] = "GLOBAL"
+    scope_id: Optional[str] = "*"
+    scope_role: Optional[str] = "SUPER_ADMIN"
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -23,6 +26,10 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+    scope_type: Optional[str] = "GLOBAL"
+    scope_id: Optional[str] = "*"
+    scope_role: Optional[str] = "SUPER_ADMIN"
+
 
     class Config:
         from_attributes = True

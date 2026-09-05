@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { HotspotZone } from '../../types/predictive';
 import { MapPin, Layers } from 'lucide-react';
+import { TacticalLeafletMap } from '../common/TacticalLeafletMap';
+
 
 interface HotspotsMapModalProps {
   isOpen: boolean;
@@ -16,15 +18,8 @@ export const HotspotsMapModal: React.FC<HotspotsMapModalProps> = ({
 }) => {
   const [selectedHotspot, setSelectedHotspot] = useState<HotspotZone | null>(null);
 
-  const minLat = hotspots.length > 0 ? Math.min(...hotspots.map(h => h.latitude)) - 0.005 : 32.72;
-  const maxLat = hotspots.length > 0 ? Math.max(...hotspots.map(h => h.latitude)) + 0.005 : 32.74;
-  const minLon = hotspots.length > 0 ? Math.min(...hotspots.map(h => h.longitude)) - 0.005 : 74.84;
-  const maxLon = hotspots.length > 0 ? Math.max(...hotspots.map(h => h.longitude)) + 0.005 : 74.87;
-
-  const latSpan = maxLat - minLat || 0.02;
-  const lonSpan = maxLon - minLon || 0.03;
-
   return (
+
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -53,60 +48,27 @@ export const HotspotsMapModal: React.FC<HotspotsMapModalProps> = ({
             </div>
           </div>
 
-          <div className="h-64 rounded-xl bg-[#070b14] border border-slate-800/80 relative overflow-hidden">
-            {/* Grid Pattern Overlay */}
-            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:24px_24px]" />
-
-            {/* Zero-Line Perimeter Reference Vector */}
-            <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-rose-500/30 -translate-y-1/2 flex items-center justify-between px-3 text-[9px] text-rose-400/60">
-              <span>ZERO-LINE BORDER PERIMETER REFERENCE</span>
-              <span>PATROL CORRIDOR</span>
-            </div>
-
-            {/* Hotspot Geospatial Pins */}
-            {hotspots.map((h, idx) => {
-              const posX = Math.max(8, Math.min(92, ((h.longitude - minLon) / lonSpan) * 100));
-              const posY = Math.max(12, Math.min(88, 100 - ((h.latitude - minLat) / latSpan) * 100));
-              const isHigh = h.hotspot_level === 'HIGH';
-              const isElevated = h.hotspot_level === 'ELEVATED';
-              const isSelected = selectedHotspot?.zone_id === h.zone_id;
-
-              return (
-                <div
-                  key={h.zone_id || idx}
-                  onClick={() => setSelectedHotspot(h)}
-                  style={{ left: `${posX}%`, top: `${posY}%` }}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
-                >
-                  {isHigh && (
-                    <div className="w-12 h-12 rounded-full bg-rose-500/30 blur-sm animate-ping absolute -inset-3" />
-                  )}
-                  {isElevated && (
-                    <div className="w-10 h-10 rounded-full bg-orange-500/20 blur-sm animate-pulse absolute -inset-2" />
-                  )}
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all ${
-                      isSelected
-                        ? 'bg-sky-400 border-white text-slate-950 scale-125 shadow-lg shadow-sky-400/50'
-                        : isHigh
-                        ? 'bg-rose-600 border-rose-400 text-white animate-pulse'
-                        : isElevated
-                        ? 'bg-orange-600 border-orange-400 text-white'
-                        : 'bg-amber-600 border-amber-400 text-white'
-                    }`}
-                  >
-                    <MapPin className="w-3 h-3" />
-                  </div>
-
-                  {/* Tooltip on hover */}
-                  <div className="absolute top-7 left-1/2 -translate-x-1/2 bg-slate-950/95 border border-slate-700 px-2 py-1 rounded text-[10px] text-white whitespace-nowrap shadow-2xl pointer-events-none opacity-90 group-hover:opacity-100 transition">
-                    <span className="font-bold">{h.name}</span> ({h.current_activity} events, Risk: {h.risk_score})
-                  </div>
-                </div>
-              );
-            })}
+          <div className="rounded-xl overflow-hidden border border-slate-800/80">
+            <TacticalLeafletMap
+              cameras={hotspots.map(h => ({
+                camera_id: h.zone_id,
+                camera_name: `${h.name} (${h.hotspot_level})`,
+                latitude: h.latitude,
+                longitude: h.longitude,
+                status: h.hotspot_level === 'HIGH' ? 'OFFLINE' : 'ONLINE',
+                bop_site: `Risk ${h.risk_score}`,
+                sector: 'Hotspot Zone'
+              })) as any}
+              center={[
+                hotspots.length > 0 ? hotspots[0].latitude : 31.6245,
+                hotspots.length > 0 ? hotspots[0].longitude : 74.8725
+              ]}
+              height="320px"
+              zoom={13}
+            />
           </div>
         </div>
+
 
         {/* Hotspots Detailed Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

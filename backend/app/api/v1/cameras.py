@@ -19,7 +19,8 @@ from app.schemas.health import (
     CameraSummaryStats,
     CameraDiagnosticLogResponse
 )
-from app.api.deps import get_current_user, require_admin, verify_camera_access
+from app.api.deps import get_current_user, require_admin, require_camera_admin, verify_camera_access
+
 from app.services import camera_service
 from app.services.rtsp_tester import test_rtsp_connection
 from app.services.stream_manager import stream_manager
@@ -61,9 +62,10 @@ def get_cameras_summary(
 def create_new_camera(
     camera_in: CameraCreate,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin)
+    authorized_user: User = Depends(require_camera_admin)
 ):
-    """Registers a new IP camera into the IBVAP platform (Admin only)."""
+    """Registers a new IP camera into the IBVAP platform (Admin or Checkpost Commander)."""
+
     # Check for duplicate camera ID
     existing = db.query(Camera).filter(Camera.camera_id == camera_in.camera_id.strip().upper()).first()
     if existing:
@@ -114,9 +116,9 @@ def update_camera_details(
     camera_id: str,
     camera_in: CameraUpdate,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin)
+    admin_user: User = Depends(require_camera_admin)
 ):
-    """Updates camera configuration or credentials (Admin only with IDOR check)."""
+    """Updates camera configuration or credentials (Admin or Checkpost Officer with IDOR check)."""
     verify_camera_access(camera_id, admin_user, db)
     if camera_in.rtsp_url:
         is_valid, err_reason = SSRFValidator.validate_destination_url(camera_in.rtsp_url)
@@ -138,10 +140,11 @@ def update_camera_details(
 def delete_camera(
     camera_id: str,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin)
+    admin_user: User = Depends(require_camera_admin)
 ):
-    """Removes a camera and releases its ingestion resources (Admin only with IDOR check)."""
+    """Removes a camera and releases its ingestion resources (Admin or Checkpost Officer with IDOR check)."""
     verify_camera_access(camera_id, admin_user, db)
+
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(

@@ -36,8 +36,10 @@ import {
 import { SiteModal } from '../components/federation/SiteModal';
 import { BOPModal } from '../components/federation/BOPModal';
 import { UserScopeModal } from '../components/federation/UserScopeModal';
+import { TacticalLeafletMap } from '../components/common/TacticalLeafletMap';
 
 export const MultiSiteCommandPage: React.FC = () => {
+
   const [activeSubTab, setActiveSubTab] = useState<'map' | 'directory' | 'bop-wall' | 'matrix' | 'search' | 'reports' | 'admin'>('map');
   const [overview, setOverview] = useState<GlobalOverview | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
@@ -419,13 +421,33 @@ export const MultiSiteCommandPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Simulation Map Grid */}
-          <div className="relative min-h-[420px] bg-[#070b14] border border-slate-800 rounded-2xl p-6 overflow-hidden flex flex-col justify-between">
-            <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40"></div>
+          {/* Interactive Tactical Geospatial Map */}
+          <div className="relative bg-[#070b14] border border-slate-800 rounded-2xl p-6 overflow-hidden space-y-6">
+            <TacticalLeafletMap
+              cameras={mapData.cameras.map(c => ({
+                camera_id: c.id,
+                camera_name: c.name,
+                status: c.status,
+                latitude: c.latitude,
+                longitude: c.longitude,
+                bop_site: c.bop_name,
+                sector: 'Frontier Sector'
+              })) as any}
+              sites={mapData.sites}
+              bops={mapData.bops}
+              center={[
+                mapData.sites.length > 0 && mapData.sites[0].latitude ? mapData.sites[0].latitude : 31.6245,
+                mapData.sites.length > 0 && mapData.sites[0].longitude ? mapData.sites[0].longitude : 74.8725
+              ]}
+              height="480px"
+              zoom={12}
+            />
+
 
             {/* Sites Layer */}
             {mapData.sites.length === 0 ? (
-              <div className="relative z-10 py-12 text-center space-y-3">
+              <div className="relative z-10 py-8 text-center space-y-3 border-t border-slate-800/80">
+
                 <Globe className="w-12 h-12 mx-auto text-indigo-400/60 animate-pulse" />
                 <div className="text-sm font-mono font-bold text-slate-300">
                   NO FEDERATED SITES CONFIGURED

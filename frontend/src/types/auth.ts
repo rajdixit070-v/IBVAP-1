@@ -5,6 +5,9 @@ export interface User {
   role: 'admin' | 'operator' | 'viewer';
   is_active: boolean;
   created_at: string;
+  scope_type?: string;
+  scope_id?: string;
+  scope_role?: string;
 }
 
 export interface AuthResponse {
@@ -12,4 +15,8 @@ export interface AuthResponse {
   token_type: string;
   role: string;
   username: string;
+  scope_type?: string;
+  scope_id?: string;
+  scope_role?: string;
 }
+

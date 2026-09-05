@@ -11,6 +11,8 @@ import {
   Camera
 } from 'lucide-react';
 import { thermalService, CameraPair, ThermalFusionResult } from '../services/thermalService';
+import { CreatePairModal } from '../components/thermal/CreatePairModal';
+import { Plus } from 'lucide-react';
 
 export const ThermalFusionPage: React.FC = () => {
   const [pairs, setPairs] = useState<CameraPair[]>([]);
@@ -21,6 +23,8 @@ export const ThermalFusionPage: React.FC = () => {
   const [lightingCondition, setLightingCondition] = useState<string>('NIGHT');
   const [scaleFactor, setScaleFactor] = useState<number>(1.0);
   const [executing, setExecuting] = useState<boolean>(false);
+  const [isPairModalOpen, setIsPairModalOpen] = useState(false);
+
 
   const fetchData = async () => {
     try {
@@ -97,13 +101,21 @@ export const ThermalFusionPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setIsPairModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg shadow-lg shadow-amber-900/30 text-sm transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Create Camera Pair
+          </button>
+          <button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-sm transition"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-sm transition cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+
           <button
             onClick={handleExecuteFusion}
             disabled={executing || !selectedPair}
@@ -143,8 +155,9 @@ export const ThermalFusionPage: React.FC = () => {
                   </select>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  RGB: {selectedPair?.rgb_camera_id || 'CAM-001'} ↔ Thermal: {selectedPair?.thermal_camera_id || 'CAM-002'}
+                  RGB: {selectedPair?.rgb_camera_id || 'None'} ↔ Thermal: {selectedPair?.thermal_camera_id || 'None'}
                 </div>
+
               </div>
 
               {/* Mode Switcher */}
@@ -273,7 +286,15 @@ export const ThermalFusionPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <CreatePairModal
+        isOpen={isPairModalOpen}
+        onClose={() => setIsPairModalOpen(false)}
+        onSuccess={fetchData}
+      />
     </div>
   );
 };
+
+
 

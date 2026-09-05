@@ -135,7 +135,50 @@ class SecurityEventManager:
                 else:
                     loc_desc = f"Perimeter Outpost // {camera_id}"
 
+                # Auto-generate & register cryptographic evidence snapshot if not provided
+                if not evidence_id:
+                    try:
+                        import os
+                        from app.services.stream_manager import stream_manager
+                        from app.services.evidence.evidence_manager import evidence_manager
+                        
+                        evd_dir = os.path.abspath(os.path.join(".", "storage", "evidence", camera_id))
+                        os.makedirs(evd_dir, exist_ok=True)
+                        auto_evd_id = f"EVD-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+                        auto_file_path = os.path.join(evd_dir, f"{auto_evd_id}.jpg")
+                        
+                        jpeg_bytes = stream_manager.get_latest_jpeg(camera_id)
+                        if not jpeg_bytes:
+                            from app.services.demo.demo_seeder import _create_synthetic_jpeg
+                            _create_synthetic_jpeg(
+                                output_path=auto_file_path,
+                                camera_id=camera_id,
+                                title=f"INCIDENT CAPTURE: {event_type.replace('_', ' ').upper()}",
+                                risk_score=risk_score
+                            )
+                            if os.path.exists(auto_file_path):
+                                with open(auto_file_path, "rb") as f_in:
+                                    jpeg_bytes = f_in.read()
+                        else:
+                            with open(auto_file_path, "wb") as f_out:
+                                f_out.write(jpeg_bytes)
+                                
+                        evd_rec = evidence_manager.register_evidence(
+                            camera_id=camera_id,
+                            evidence_type="SNAPSHOT",
+                            file_path=auto_file_path,
+                            source_event_id=new_event_id,
+                            data_bytes=jpeg_bytes,
+                            mime_type="image/jpeg"
+                        )
+                        evidence_id = evd_rec.evidence_id
+                        evidence_path = auto_file_path
+                        logger.info(f"Auto-captured forensic evidence {evidence_id} (SHA-256: {evd_rec.checksum_sha256[:12]}...) for {new_event_id}")
+                    except Exception as e_evd:
+                        logger.warning(f"Could not auto-capture forensic evidence: {e_evd}")
+
                 event_record = SecurityEvent(
+
                     event_id=new_event_id,
                     camera_id=camera_id,
                     zone_id=zone_id,

@@ -46,7 +46,7 @@ def test_camera_pair_crud(client, auth_headers):
 
 def test_thermal_rgb_homography_and_heat_anomaly_fusion(client, auth_headers):
     req = {
-        "pair_id": "PAIR-01",
+        "pair_id": "PAIR-TEST-01",
         "lighting_condition": "NIGHT",
         "rgb_detections": [
             {"class": "person", "confidence": 0.40, "bbox": [0.20, 0.25, 0.15, 0.30]}

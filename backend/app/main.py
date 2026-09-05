@@ -47,6 +47,8 @@ from app.models.model_health import ModelHealth
 from app.models.prediction_feedback import PredictionFeedback
 
 from app.models.federation_models import Organization, Region, Site, BOP, SiteUserScope, ConfigurationScope
+from app.models.bop_dispatch import BOPDispatch
+
 
 from app.core.security import get_password_hash, encrypt_credential
 from app.api.v1.auth import router as auth_router
@@ -82,6 +84,8 @@ from app.api.v1.thermal import router as thermal_router
 from app.api.v1.ptz import router as ptz_router
 from app.api.v1.drones import router as drones_router
 from app.api.v1.gis import router as gis_router
+from app.api.v1.dispatches import router as dispatches_router
+
 
 from app.core.security_middleware import SecurityHeadersMiddleware
 from app.config import validate_environment
@@ -498,113 +502,13 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                     anomaly_detection=True,
                     loitering_threshold_seconds=180
                 )
-        # Seed Next-Gen Intelligence Defaults (Modules 1 - 5)
-        # 1. Sensors
-        if db.query(Sensor).count() == 0:
-            db.add_all([
-                Sensor(
-                    sensor_id="RAD-01",
-                    name="Perimeter Surveillance Radar Alpha",
-                    sensor_type="RADAR",
-                    site_id="SITE-BORDER-NORTH",
-                    bop_id="BOP-ALPHA",
-                    sector="Sector-North",
-                    location="Tower 1 Overlook",
-                    latitude=31.6245,
-                    longitude=74.8725,
-                    status="ONLINE",
-                    health_score=98.0,
-                    reliability_weight=0.92
-                ),
-                Sensor(
-                    sensor_id="SEIS-01",
-                    name="Subsurface Seismic Array-1",
-                    sensor_type="SEISMIC",
-                    site_id="SITE-BORDER-NORTH",
-                    bop_id="BOP-ALPHA",
-                    sector="Sector-North",
-                    location="Riverbed Zero-Line",
-                    latitude=31.6260,
-                    longitude=74.8750,
-                    status="ONLINE",
-                    health_score=95.0,
-                    reliability_weight=0.82
-                ),
-                Sensor(
-                    sensor_id="ACU-01",
-                    name="Acoustic Drone/Incursion Mic Array",
-                    sensor_type="ACOUSTIC",
-                    site_id="SITE-BORDER-NORTH",
-                    bop_id="BOP-ALPHA",
-                    sector="Sector-North",
-                    location="Main Gate BOP",
-                    latitude=31.6238,
-                    longitude=74.8715,
-                    status="ONLINE",
-                    health_score=92.0,
-                    reliability_weight=0.76
-                )
-            ])
-            db.commit()
-
-        # 2. Camera Pairs (RGB + Thermal Fusion)
-        if db.query(CameraPair).count() == 0:
-            db.add(CameraPair(
-                pair_id="PAIR-01",
-                rgb_camera_id="CAM-001",
-                thermal_camera_id="CAM-002",
-                site_id="SITE-BORDER-NORTH",
-                bop_id="BOP-ALPHA",
-                overlap_ratio=0.88,
-                fusion_mode="FUSED",
-                status="ACTIVE"
-            ))
-            db.commit()
-
-        # 3. PTZ Camera Profile
-        if db.query(PTZDevice).count() == 0:
-            db.add(PTZDevice(
-                device_id="PTZ-CAM-001",
-                camera_id="CAM-001",
-                onvif_endpoint="http://192.168.1.101/onvif/device_service",
-                onvif_port=80,
-                onvif_profile_token="Profile_1_Main",
-                supports_continuous_move=True,
-                supports_absolute_move=True,
-                supports_presets=True,
-                status="READY",
-                current_pan=0.0,
-                current_tilt=0.0,
-                current_zoom=1.0,
-                auto_track_enabled=False
-            ))
-            db.commit()
-
-        # 4. Autonomous Drones
-        if db.query(Drone).count() == 0:
-            db.add(Drone(
-                drone_id="UAV-BOP-01",
-                name="Guardian Eagle-1",
-                model="BorderGuardian-X8",
-                site_id="SITE-BORDER-NORTH",
-                bop_id="BOP-ALPHA",
-                status="AVAILABLE",
-                battery_pct=96.0,
-                latitude=31.6240,
-                longitude=74.8720,
-                altitude_m=45.0,
-                flight_state="HOVER",
-                camera_stream_url="rtsp://192.168.1.150:8554/drone01",
-                capabilities_json='{"has_thermal": true, "max_speed_mps": 24.0, "max_flight_time_min": 50}'
-            ))
-            db.commit()
-
-        # 5. GIS Layers
+        # 5. GIS Layers (Base Border Topology)
         if db.query(GISLayer).count() == 0:
             GISService.init_default_layers(db, "SITE-BORDER-NORTH")
 
     finally:
         db.close()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -675,6 +579,8 @@ app.include_router(thermal_router, prefix=settings.API_V1_STR)
 app.include_router(ptz_router, prefix=settings.API_V1_STR)
 app.include_router(drones_router, prefix=settings.API_V1_STR)
 app.include_router(gis_router, prefix=settings.API_V1_STR)
+app.include_router(dispatches_router, prefix=settings.API_V1_STR)
+
 
 @app.get("/health", tags=["Health & Probes"])
 def liveness_probe():

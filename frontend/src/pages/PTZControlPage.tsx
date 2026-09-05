@@ -15,9 +15,12 @@ import {
   Play
 } from 'lucide-react';
 import { ptzService, PTZDevice, PTZPreset, ONVIFDevice } from '../services/ptzService';
+import { useCameras } from '../context/CameraContext';
 
 export const PTZControlPage: React.FC = () => {
-  const [selectedCameraId, setSelectedCameraId] = useState<string>('CAM-001');
+  const { cameras } = useCameras();
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
+
   const [deviceStatus, setDeviceStatus] = useState<PTZDevice | null>(null);
   const [presets, setPresets] = useState<PTZPreset[]>([]);
   const [discoveredDevices, setDiscoveredDevices] = useState<ONVIFDevice[]>([]);
@@ -26,7 +29,18 @@ export const PTZControlPage: React.FC = () => {
   const [autoTrack, setAutoTrack] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
 
+  useEffect(() => {
+    if (cameras.length > 0 && (!selectedCameraId || !cameras.some(c => c.camera_id === selectedCameraId))) {
+      setSelectedCameraId(cameras[0].camera_id);
+    }
+  }, [cameras, selectedCameraId]);
+
   const fetchStatusAndPresets = async () => {
+    if (!selectedCameraId) {
+      setDeviceStatus(null);
+      setPresets([]);
+      return;
+    }
     try {
       setLoading(true);
       const [status, pList] = await Promise.all([
@@ -44,8 +58,11 @@ export const PTZControlPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchStatusAndPresets();
+    if (selectedCameraId) {
+      fetchStatusAndPresets();
+    }
   }, [selectedCameraId]);
+
 
   const handleMove = async (pan: number, tilt: number, zoom = 0) => {
     try {
@@ -180,9 +197,17 @@ export const PTZControlPage: React.FC = () => {
                   onChange={e => setSelectedCameraId(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white"
                 >
-                  <option value="CAM-001">CAM-001 (Tower Alpha PTZ)</option>
-                  <option value="CAM-002">CAM-002 (North Gate PTZ)</option>
+                  {cameras.length === 0 ? (
+                    <option value="">No cameras registered</option>
+                  ) : (
+                    cameras.map(c => (
+                      <option key={c.camera_id} value={c.camera_id}>
+                        {c.camera_id} — {c.camera_name} ({c.bop_site || 'BOP Site'})
+                      </option>
+                    ))
+                  )}
                 </select>
+
               </div>
             </div>
 

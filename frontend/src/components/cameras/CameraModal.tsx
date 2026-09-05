@@ -18,8 +18,12 @@ import {
   Info,
   CheckCircle2,
   Server,
-  Lock
+  Lock,
+  MapPin,
+  Compass,
+  Sparkles
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface CameraModalProps {
   isOpen: boolean;
@@ -28,7 +32,7 @@ interface CameraModalProps {
   cameraToEdit?: Camera | null;
 }
 
-type SourceCategory = 'rtsp' | 'webcam' | 'drone' | 'android';
+type SourceCategory = 'rtsp' | 'webcam' | 'drone' | 'android' | 'synthetic';
 
 export const CameraModal: React.FC<CameraModalProps> = ({
   isOpen,
@@ -37,6 +41,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   cameraToEdit
 }) => {
   const isEditing = !!cameraToEdit;
+  const { user } = useAuth();
 
   const [sourceCategory, setSourceCategory] = useState<SourceCategory>('rtsp');
   const [webcamIndex, setWebcamIndex] = useState<string>('0');
@@ -49,9 +54,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     camera_id: '',
     camera_name: '',
     description: '',
-    bop_site: '',
+    bop_site: user?.scope_id && user?.scope_id !== '*' ? user.scope_id : '',
     sector: '',
     location: '',
+
     latitude: undefined,
     longitude: undefined,
     rtsp_url: '',
@@ -99,6 +105,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         setSourceCategory('webcam');
         const idx = url.replace('webcam://', '').replace('device://', '').trim();
         setWebcamIndex(idx || '0');
+      } else if (url.startsWith('synthetic://') || url.startsWith('test://')) {
+        setSourceCategory('synthetic');
       } else if (st === 'drone' || url.startsWith('udp://') || url.startsWith('rtmp://')) {
         setSourceCategory('drone');
       } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
@@ -178,11 +186,20 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         stream_type: 'android',
         rtsp_url: androidUrl
       }));
+    } else if (cat === 'synthetic') {
+      const simId = formData.camera_id ? formData.camera_id.toLowerCase() : 'sim-01';
+      setFormData((prev) => ({
+        ...prev,
+        stream_type: 'main',
+        rtsp_url: `synthetic://${simId}/main`,
+        username: '',
+        password: ''
+      }));
     } else {
       setFormData((prev) => ({
         ...prev,
         stream_type: 'main',
-        rtsp_url: prev.rtsp_url.startsWith('webcam://') || prev.rtsp_url.startsWith('udp://') ? '' : prev.rtsp_url
+        rtsp_url: prev.rtsp_url.startsWith('webcam://') || prev.rtsp_url.startsWith('udp://') || prev.rtsp_url.startsWith('synthetic://') ? '' : prev.rtsp_url
       }));
     }
   };
@@ -210,15 +227,40 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }));
   };
 
-  const handleAndroidConfigChange = (ip: string, port: string, mode: string) => {
-    setAndroidIp(ip);
-    setAndroidPort(port);
+  const handleAndroidConfigChange = (rawIp: string, port: string, mode: string) => {
+    let cleanIp = (rawIp || '').trim();
+    let cleanPort = (port || '').trim();
+
+    // If user pasted a full URL (e.g. http://192.168.1.15:8080 or https://xyz.ngrok-free.app/video)
+    if (cleanIp.startsWith('http://') || cleanIp.startsWith('https://') || cleanIp.startsWith('rtsp://')) {
+      try {
+        const u = new URL(cleanIp);
+        cleanIp = u.hostname;
+        if (u.port) cleanPort = u.port;
+      } catch {
+        cleanIp = cleanIp.replace(/^https?:\/\//, '').replace(/^rtsp:\/\//, '').split('/')[0];
+      }
+    }
+
+    if (cleanIp.includes(':')) {
+      const parts = cleanIp.split(':');
+      cleanIp = parts[0];
+      if (parts[1]) cleanPort = parts[1];
+    }
+
+    if (!cleanPort) {
+      cleanPort = mode === 'droidcam' ? '4747' : '8080';
+    }
+
+    setAndroidIp(cleanIp);
+    setAndroidPort(cleanPort);
     setAndroidAppMode(mode);
-    let url = `http://${ip}:${port}/video`;
+
+    let url = `http://${cleanIp}:${cleanPort}/video`;
     if (mode === 'ipwebcam_rtsp') {
-      url = `rtsp://${ip}:${port}/h264_pcm.sdp`;
+      url = `rtsp://${cleanIp}:${cleanPort}/h264_pcm.sdp`;
     } else if (mode === 'droidcam') {
-      url = `http://${ip}:${port || '4747'}/video`;
+      url = `http://${cleanIp}:${cleanPort}/video`;
     }
     setFormData((prev) => ({
       ...prev,
@@ -227,7 +269,28 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }));
   };
 
+
+  const handleAutoDetectLocation = () => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setFormData(prev => ({
+            ...prev,
+            latitude: parseFloat(pos.coords.latitude.toFixed(6)),
+            longitude: parseFloat(pos.coords.longitude.toFixed(6))
+          }));
+        },
+        () => {
+          setFormData(prev => ({ ...prev, latitude: 31.6245, longitude: 74.8725 }));
+        }
+      );
+    } else {
+      setFormData(prev => ({ ...prev, latitude: 31.6245, longitude: 74.8725 }));
+    }
+  };
+
   const handleTestConnection = async () => {
+
     if (!formData.rtsp_url.trim()) {
       setError('Please provide a stream URL or device index to test.');
       return;
@@ -465,7 +528,79 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               </div>
             </div>
 
+            {/* Section 1.5: Geospatial GPS Positioning for Tactical GIS Map */}
+            <div className="p-3.5 bg-emerald-950/20 border border-emerald-500/30 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-300 text-xs font-mono font-semibold">
+                  <MapPin className="w-4 h-4 text-emerald-400" />
+                  <span>Geospatial Coordinates & Tactical GIS Placement</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutoDetectLocation}
+                  className="px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>Auto-Detect GPS</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Latitude (North / South) <span className="text-emerald-400 font-mono">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g. 31.6245"
+                    value={formData.latitude ?? ''}
+                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                    className="w-full bg-[#0d131f] border border-[#1e293b] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Longitude (East / West) <span className="text-emerald-400 font-mono">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g. 74.8725"
+                    value={formData.longitude ?? ''}
+                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                    className="w-full bg-[#0d131f] border border-[#1e293b] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Quick Border Outpost Presets
+                  </label>
+                  <select
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'bop_alpha') setFormData(prev => ({ ...prev, latitude: 31.6245, longitude: 74.8725, sector: prev.sector || 'Sector-North', bop_site: prev.bop_site || 'BOP-ALPHA' }));
+                      if (val === 'bop_bravo') setFormData(prev => ({ ...prev, latitude: 31.6310, longitude: 74.8850, sector: prev.sector || 'Sector-North', bop_site: prev.bop_site || 'BOP-BRAVO' }));
+                      if (val === 'bop_charlie') setFormData(prev => ({ ...prev, latitude: 31.6180, longitude: 74.8610, sector: prev.sector || 'Sector-South', bop_site: prev.bop_site || 'BOP-CHARLIE' }));
+                    }}
+                    className="w-full bg-[#0d131f] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono"
+                  >
+                    <option value="">Select Preset Coordinates...</option>
+                    <option value="bop_alpha">BOP Alpha (31.6245° N, 74.8725° E)</option>
+                    <option value="bop_bravo">BOP Bravo (31.6310° N, 74.8850° E)</option>
+                    <option value="bop_charlie">BOP Charlie (31.6180° N, 74.8610° E)</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                These GPS coordinates position the camera's optical viewing cone on the GIS Tactical Map and calculate blind spots.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Stream Classification</label>
                 <select
@@ -519,11 +654,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             {/* Source Category Selector Chips */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-2">Select Camera Source Type</label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 <button
                   type="button"
                   onClick={() => handleSelectSourceCategory('rtsp')}
-                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition ${
+                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition cursor-pointer ${
                     sourceCategory === 'rtsp'
                       ? 'bg-sky-950/50 border-sky-500 text-white shadow-md shadow-sky-950'
                       : 'bg-[#111a2e] border-[#22324d] text-slate-400 hover:text-slate-200 hover:border-slate-600'
@@ -533,13 +668,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                     <Cctv className={`w-4 h-4 ${sourceCategory === 'rtsp' ? 'text-sky-400' : 'text-slate-500'}`} />
                     <span className="text-xs font-bold font-mono">IP Camera</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 leading-tight">Standard RTSP / ONVIF IP Cameras</span>
+                  <span className="text-[10px] text-slate-400 leading-tight">Standard RTSP / ONVIF</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleSelectSourceCategory('webcam')}
-                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition ${
+                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition cursor-pointer ${
                     sourceCategory === 'webcam'
                       ? 'bg-cyan-950/50 border-cyan-500 text-white shadow-md shadow-cyan-950'
                       : 'bg-[#111a2e] border-[#22324d] text-slate-400 hover:text-slate-200 hover:border-slate-600'
@@ -549,13 +684,29 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                     <Laptop className={`w-4 h-4 ${sourceCategory === 'webcam' ? 'text-cyan-400' : 'text-slate-500'}`} />
                     <span className="text-xs font-bold font-mono">PC Webcam</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 leading-tight">Laptop Integrated or USB Webcams</span>
+                  <span className="text-[10px] text-slate-400 leading-tight">USB / Integrated</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectSourceCategory('android')}
+                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition cursor-pointer ${
+                    sourceCategory === 'android'
+                      ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md shadow-emerald-950'
+                      : 'bg-[#111a2e] border-[#22324d] text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Smartphone className={`w-4 h-4 ${sourceCategory === 'android' ? 'text-emerald-400' : 'text-slate-500'}`} />
+                    <span className="text-xs font-bold font-mono">Phone Camera</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 leading-tight">IP Webcam / DroidCam</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleSelectSourceCategory('drone')}
-                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition ${
+                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition cursor-pointer ${
                     sourceCategory === 'drone'
                       ? 'bg-purple-950/50 border-purple-500 text-white shadow-md shadow-purple-950'
                       : 'bg-[#111a2e] border-[#22324d] text-slate-400 hover:text-slate-200 hover:border-slate-600'
@@ -565,26 +716,59 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                     <Plane className={`w-4 h-4 ${sourceCategory === 'drone' ? 'text-purple-400' : 'text-slate-500'}`} />
                     <span className="text-xs font-bold font-mono">Drone / UAV</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 leading-tight">DJI, Autel, Skydio, UDP Streams</span>
+                  <span className="text-[10px] text-slate-400 leading-tight">DJI, UDP, RTMP</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => handleSelectSourceCategory('android')}
-                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition ${
-                    sourceCategory === 'android'
-                      ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md shadow-emerald-950'
+                  onClick={() => handleSelectSourceCategory('synthetic')}
+                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition cursor-pointer ${
+                    sourceCategory === 'synthetic'
+                      ? 'bg-amber-950/50 border-amber-500 text-white shadow-md shadow-amber-950'
                       : 'bg-[#111a2e] border-[#22324d] text-slate-400 hover:text-slate-200 hover:border-slate-600'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Smartphone className={`w-4 h-4 ${sourceCategory === 'android' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                    <span className="text-xs font-bold font-mono">Android Phone</span>
+                    <Sparkles className={`w-4 h-4 ${sourceCategory === 'synthetic' ? 'text-amber-400' : 'text-slate-500'}`} />
+                    <span className="text-xs font-bold font-mono">Simulated AI</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 leading-tight">IP Webcam & DroidCam Testing</span>
+                  <span className="text-[10px] text-slate-400 leading-tight">Tactical Test Stream</span>
                 </button>
               </div>
             </div>
+
+            {/* CASE 0: SIMULATED TEST STREAM */}
+            {sourceCategory === 'synthetic' && (
+              <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-amber-300 text-xs font-mono font-semibold">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>Simulated Tactical Border CCTV Generator</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Stream Identifier</label>
+                    <input
+                      type="text"
+                      value={formData.rtsp_url}
+                      onChange={(e) => setFormData({ ...formData, rtsp_url: e.target.value })}
+                      placeholder="synthetic://cam-01/main"
+                      className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Features Enabled</label>
+                    <div className="text-[11px] font-mono text-slate-300 bg-[#0a0e17] border border-slate-800 rounded-lg p-2 flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>HUD Overlay • Moving Target • 1080p 25 FPS</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>Perfect for testing AI models, zone alerts, and video wall without needing physical CCTV hardware.</span>
+                </p>
+              </div>
+            )}
 
             {/* CASE 1: PC WEBCAM CONFIG */}
             {sourceCategory === 'webcam' && (
@@ -676,14 +860,19 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 </div>
 
                 {/* Quick Step Guide */}
-                <div className="bg-[#0b1320] p-3 rounded-lg border border-emerald-900/40 text-[11px] text-slate-300 space-y-1">
+                <div className="bg-[#0b1320] p-3 rounded-lg border border-emerald-900/40 text-[11px] text-slate-300 space-y-1.5">
                   <div className="font-bold text-emerald-400 font-mono flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> 3-Step Phone Setup:
+                    <CheckCircle2 className="w-3.5 h-3.5" /> 3-Step Phone Setup (Same Wi-Fi / Hotspot):
                   </div>
-                  <div>1. Play Store se free <strong>"IP Webcam"</strong> (by Pavel Khlebovich) ya <strong>"DroidCam"</strong> app install karein.</div>
-                  <div>2. Phone aur laptop dono ko <strong>same Wi-Fi network</strong> se connect karein.</div>
-                  <div>3. App me <strong>"Start Server"</strong> tap karein — screen par local IP dikhega (e.g. <code>192.168.1.15:8080</code>).</div>
+                  <div>1. Play Store se free <strong>"IP Webcam"</strong> (by Pavel Khlebovich) app install karein.</div>
+                  <div>2. Laptop aur Phone ko <strong>same Wi-Fi ya Phone ke Mobile Hotspot</strong> se connect karein.</div>
+                  <div>3. App me sabse niche jakar <strong>"Start Server"</strong> tap karein — screen par IP aayega (jaise <code>http://192.168.1.15:8080</code>). Use yahan dalein.</div>
+                  <div className="pt-1.5 border-t border-emerald-900/40 text-[10px] text-amber-300/90 flex items-start gap-1">
+                    <span className="font-bold font-mono text-amber-400">🌐 DOOR KA CAMERA (Remote/Internet):</span>
+                    <span>Agar camera kisi doosre shahar/network par hai, to <strong>Ngrok Tunnel</strong> (e.g. <code>https://mycam.ngrok-free.app/video</code>) ya Cloudflare URL direct yahan dalein.</span>
+                  </div>
                 </div>
+
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>

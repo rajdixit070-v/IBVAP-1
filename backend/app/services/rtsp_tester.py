@@ -6,8 +6,10 @@ import re
 import urllib.parse
 from typing import Optional, Dict, Any, Tuple
 import cv2
+import numpy as np
 from app.schemas.camera import CameraTestResponse
 from app.core.security import build_authenticated_rtsp_url
+
 
 # Configure OpenCV FFMPEG transport for low-latency TCP handshake
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;4000000"
@@ -165,57 +167,72 @@ def test_rtsp_connection(
             candidate_urls = []
             if any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
                 candidate_urls.append(clean_base)
+                if not clean_base.endswith("/shot.jpg"):
+                    base_root = clean_base.rsplit("/", 1)[0]
+                    candidate_urls.append(f"{base_root}/shot.jpg")
             else:
                 candidate_urls.extend([
+                    f"{clean_base}/shot.jpg",
                     f"{clean_base}/video",
                     f"{clean_base}/mjpegfeed",
                     f"{clean_base}/videofeed",
                     clean_base
                 ])
+
+            # 1. Fast probe via direct HTTP request (handles shot.jpg and multipart /video)
+            import urllib.request
+            for cu in candidate_urls:
+                try:
+                    req = urllib.request.Request(cu, headers={"User-Agent": "IBVAP-Tester/2.0"})
+                    with urllib.request.urlopen(req, timeout=3.5) as stream:
+                        ctype = stream.headers.get("Content-Type", "")
+                        if "html" not in ctype.lower():
+                            buf = b""
+                            for _ in range(16):
+                                c = stream.read(16384)
+                                if not c:
+                                    break
+                                buf += c
+                                a = buf.find(b"\xff\xd8")
+                                if a != -1:
+                                    b = buf.find(b"\xff\xd9", a + 2)
+                                    if b != -1:
+                                        f = cv2.imdecode(np.frombuffer(buf[a:b+2], dtype=np.uint8), cv2.IMREAD_COLOR)
+                                        if f is not None:
+                                            latency = (time.time() - start_time) * 1000.0
+                                            h, w = f.shape[:2]
+                                            return CameraTestResponse(
+                                                success=True,
+                                                connected=True,
+                                                resolution=f"{w}x{h}",
+                                                fps=25.0,
+                                                codec="MJPEG / Mobile Stream",
+                                                latency_ms=round(latency, 2),
+                                                details={"source_type": "HTTP_MJPEG", "stream_url": cu, "status": "Ready"}
+                                            )
+                except Exception:
+                    pass
+
+            # 2. Fallback to OpenCV FFMPEG
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;3000000|max_delay;500000"
             for cu in candidate_urls:
-                cap = cv2.VideoCapture(cu, cv2.CAP_FFMPEG)
-                if cap.isOpened():
-                    r, f = cap.read()
-                    if r and f is not None:
-                        break
-                cap.release()
-                cap = cv2.VideoCapture(cu)
-                if cap.isOpened():
-                    r, f = cap.read()
-                    if r and f is not None:
-                        break
-                cap.release()
-
-            # If OpenCV failed, test direct HTTP MJPEG chunk probe
-            if not cap or not cap.isOpened():
-                for cu in candidate_urls:
-                    try:
-                        import urllib.request
-                        req = urllib.request.Request(cu, headers={"User-Agent": "IBVAP-Tester/2.0"})
-                        with urllib.request.urlopen(req, timeout=3.0) as stream:
-                            ctype = stream.headers.get("Content-Type", "")
-                            if "html" not in ctype.lower():
-                                chunk = stream.read(32768)
-                                a = chunk.find(b"\xff\xd8")
-                                b = chunk.find(b"\xff\xd9")
-                                if a != -1 and b != -1 and b > a:
-                                    f = cv2.imdecode(np.frombuffer(chunk[a:b+2], dtype=np.uint8), cv2.IMREAD_COLOR)
-                                    if f is not None:
-                                        latency = (time.time() - start_time) * 1000.0
-                                        h, w = f.shape[:2]
-                                        return CameraTestResponse(
-                                            success=True,
-                                            connected=True,
-                                            resolution=f"{w}x{h}",
-                                            fps=25.0,
-                                            codec="MJPEG / Mobile Stream",
-                                            latency_ms=round(latency, 2),
-                                            details={"source_type": "HTTP_MJPEG", "stream_url": cu, "status": "Ready"}
-                                        )
-                    except Exception:
-                        pass
+                try:
+                    cap = cv2.VideoCapture(cu, cv2.CAP_FFMPEG)
+                    if cap.isOpened():
+                        r, f = cap.read()
+                        if r and f is not None:
+                            break
+                    cap.release()
+                    cap = cv2.VideoCapture(cu)
+                    if cap.isOpened():
+                        r, f = cap.read()
+                        if r and f is not None:
+                            break
+                    cap.release()
+                except Exception:
+                    pass
         else:
+
             cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
             if not cap.isOpened():
                 cap.release()

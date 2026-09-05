@@ -8,6 +8,8 @@ import {
   Plane
 } from 'lucide-react';
 import { droneService, Drone, DroneMission, DroneHandoffEvent } from '../services/droneService';
+import { RegisterDroneModal } from '../components/drones/RegisterDroneModal';
+import { Plus } from 'lucide-react';
 
 export const DroneOperationsPage: React.FC = () => {
   const [drones, setDrones] = useState<Drone[]>([]);
@@ -15,6 +17,8 @@ export const DroneOperationsPage: React.FC = () => {
   const [handoffs, setHandoffs] = useState<DroneHandoffEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDrone, setSelectedDrone] = useState<Drone | null>(null);
+  const [isDroneModalOpen, setIsDroneModalOpen] = useState(false);
+
 
   // New Mission form state
   const [missionObjective, setMissionObjective] = useState('');
@@ -110,13 +114,21 @@ export const DroneOperationsPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setIsDroneModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg shadow-lg shadow-purple-900/30 text-sm transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Register Drone (UAV)
+          </button>
+          <button
             onClick={fetchFleetData}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-sm transition"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-sm transition cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+
           <button
             onClick={handleTriggerHandoff}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg shadow-lg shadow-purple-900/30 text-sm transition"
@@ -306,7 +318,14 @@ export const DroneOperationsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <RegisterDroneModal
+        isOpen={isDroneModalOpen}
+        onClose={() => setIsDroneModalOpen(false)}
+        onSuccess={fetchFleetData}
+      />
     </div>
   );
 };
+
 

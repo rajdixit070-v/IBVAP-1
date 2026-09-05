@@ -70,14 +70,6 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     }
   }, [camera.camera_id]);
 
-  // Clear frame buffer when camera transitions to OFFLINE
-  useEffect(() => {
-    if (camera.status === 'OFFLINE') {
-      setFrameSrc(null);
-      setFps(0);
-    }
-  }, [camera.status]);
-
   // Video Streaming WebSocket
 
   useEffect(() => {
@@ -222,7 +214,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
 
         {/* Main Video & Detection Overlay Surface */}
         <div className="relative flex-1 flex items-center justify-center min-h-[220px] bg-slate-950 overflow-hidden">
-          {camera.enabled && camera.status !== 'OFFLINE' ? (
+          {camera.enabled ? (
             <>
               {frameSrc ? (
                 <img

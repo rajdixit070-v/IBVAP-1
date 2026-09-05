@@ -33,15 +33,16 @@ interface AIAssistantModalProps {
 }
 
 const SAMPLE_QUERIES = [
+  'Admin ka kya kaam hai aur kaise use kare?',
+  'Officer ka kya kaam hai aur kaise use kare?',
   'What is system status?',
-  'Operational modules ka use aur functionality btao',
   'Camera kaise add karege?',
+  'PTZ, Drone aur Thermal features kaise use kare?',
+  'Evidence aur Daily SITREP dispatch kaise kare?',
   'How to draw a geofence zone?',
-  'How to add vehicle watchlist plate?',
-  'How to register suspect face?',
-  'How to run Incident SOP playbooks?',
   'Kaise run krege starting se?'
 ];
+
 
 const INITIAL_WELCOME: ChatMessage = {
   id: 'welcome',

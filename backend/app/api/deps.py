@@ -83,14 +83,26 @@ def get_current_user_optional(
         return None
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Ensures caller has administrator privileges."""
-    admin_roles = ["admin", "SUPER_ADMIN", "SITE_ADMIN"]
+    """Ensures caller has administrator or operational commander privileges."""
+    admin_roles = ["admin", "SUPER_ADMIN", "SITE_ADMIN", "COMMANDER"]
     if current_user.role not in admin_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required for this operation."
         )
     return current_user
+
+
+def require_camera_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Ensures caller has administrator or checkpost commander privileges to configure cameras."""
+    allowed_roles = ["admin", "SUPER_ADMIN", "SITE_ADMIN", "COMMANDER", "BOP_OPERATOR"]
+    if current_user.role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or Checkpost Commander privileges required to add cameras."
+        )
+    return current_user
+
 
 def require_super_admin(current_user: User = Depends(get_current_user)) -> User:
     """Ensures caller has super administrator privileges."""

@@ -260,6 +260,22 @@ class AIPipelineManager:
             except Exception as e:
                 logger.error(f"Error stopping AI worker {worker.camera_id}: {e}")
 
+    def shutdown(self):
+        """Graceful shutdown alias for unregister_all."""
+        self.unregister_all()
+
+    def stop_all(self):
+        """Stop all workers alias for unregister_all."""
+        self.unregister_all()
+
+    def ensure_worker_running(self, camera_id: str) -> Optional[CameraAIWorker]:
+        """Ensures an AI worker is active for a camera if registered/enabled."""
+        with self._lock:
+            worker = self.workers.get(camera_id)
+            if worker and worker.is_running:
+                return worker
+        return self.register_camera(camera_id, auto_start=True)
+
     def enable_camera(self, camera_id: str) -> bool:
         """Enables AI processing for a camera."""
         with self._lock:
@@ -282,11 +298,13 @@ class AIPipelineManager:
     def get_camera_status(self, camera_id: str) -> CameraAIStatus:
         """Returns the real-time AI status for a specific camera."""
         worker = self.workers.get(camera_id)
+        if not worker:
+            worker = self.ensure_worker_running(camera_id)
         if worker:
             return worker.get_status_schema()
         return CameraAIStatus(
             camera_id=camera_id,
-            status="PAUSED",
+            status="STARTING",
             counters=CameraAICounters(),
             device=self.detector.device_used,
             model_name=self.detector.model_name
@@ -309,6 +327,7 @@ class AIPipelineManager:
 
     def register_ws_subscriber(self, camera_id: str, websocket_send_fn: Callable):
         """Registers a WebSocket connection to receive AI telemetry."""
+        self.ensure_worker_running(camera_id)
         with self._lock:
             if camera_id not in self.ws_subscribers:
                 self.ws_subscribers[camera_id] = []

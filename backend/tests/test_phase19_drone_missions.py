@@ -64,7 +64,7 @@ def test_drone_registry_and_telemetry(client, auth_headers):
 def test_drone_mission_lifecycle_and_handoff(client, auth_headers):
     # 1. Create mission
     mission_payload = {
-        "drone_id": "UAV-BOP-01",
+        "drone_id": "UAV-TEST-02",
         "site_id": "SITE-BORDER-NORTH",
         "mission_type": "PATROL",
         "priority": "HIGH",
@@ -86,7 +86,7 @@ def test_drone_mission_lifecycle_and_handoff(client, auth_headers):
         "source_type": "CAMERA",
         "source_id": "CAM-001",
         "destination_type": "DRONE",
-        "destination_id": "UAV-BOP-01",
+        "destination_id": "UAV-TEST-02",
         "global_track_id": "GTRK-TEST-999",
         "target_class": "PERSON",
         "location_lat": 31.6240,

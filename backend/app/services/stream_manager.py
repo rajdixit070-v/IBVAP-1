@@ -93,6 +93,39 @@ class StreamManager:
         if streamer:
             streamer.stop()
 
+    def ensure_camera_running(self, camera_id: str) -> Optional[RTSPStreamer]:
+        """
+        Ensures a camera streamer is actively running in memory.
+        If not running and camera is enabled in database, starts it immediately.
+        """
+        streamer = self.get_streamer(camera_id)
+        if streamer and getattr(streamer, "_running", False):
+            return streamer
+
+        try:
+            from app.database import SessionLocal
+            from app.models.camera import Camera
+            from app.core.security import decrypt_credential
+
+            db = SessionLocal()
+            try:
+                cam = db.query(Camera).filter(Camera.camera_id == camera_id).first()
+                if cam and cam.enabled:
+                    decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
+                    return self.start_camera(
+                        camera_id=cam.camera_id,
+                        camera_name=cam.camera_name,
+                        bop_site=cam.bop_site,
+                        rtsp_url=cam.rtsp_url,
+                        username=cam.username,
+                        password=decrypted_pw
+                    )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Could not auto-start camera {camera_id}: {e}")
+        return streamer
+
     def get_streamer(self, camera_id: str) -> Optional[RTSPStreamer]:
         """Retrieves active streamer instance for a camera."""
         with self._lock:
@@ -100,21 +133,21 @@ class StreamManager:
 
     def get_latest_frame(self, camera_id: str) -> Optional[np.ndarray]:
         """Retrieves raw BGR frame from buffer."""
-        streamer = self._streamers.get(camera_id)
+        streamer = self.ensure_camera_running(camera_id)
         if streamer:
             return streamer.get_latest_frame()
         return None
 
     def get_latest_jpeg(self, camera_id: str) -> Optional[bytes]:
         """Retrieves pre-encoded JPEG bytes from buffer."""
-        streamer = self._streamers.get(camera_id)
+        streamer = self.ensure_camera_running(camera_id)
         if streamer:
             return streamer.get_latest_jpeg()
         return None
 
     def get_status(self, camera_id: str) -> Optional[dict]:
         """Returns health & stream metrics for a specific camera."""
-        streamer = self._streamers.get(camera_id)
+        streamer = self.ensure_camera_running(camera_id)
         if streamer:
             return streamer.get_status_info()
         return None
@@ -154,6 +187,7 @@ class StreamManager:
         When camera is offline, emits clean status placeholder.
         """
         frame_interval = 1.0 / max(1.0, fps_limit)
+        self.ensure_camera_running(camera_id)
         
         while True:
             streamer = self.get_streamer(camera_id)

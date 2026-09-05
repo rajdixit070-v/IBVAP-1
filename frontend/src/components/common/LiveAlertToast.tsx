@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { incidentService } from '../../services/incidentService';
 import { alertSoundService } from '../../services/alertSoundService';
 import { AlertsWebSocket } from '../../services/websocket';
 import { Notification } from '../../types/incident';
-import { ShieldAlert, User, Car, PawPrint, Plane, X, ExternalLink, MapPin } from 'lucide-react';
+import { ShieldAlert, User, Car, PawPrint, Plane, X, ExternalLink, MapPin, Volume2 } from 'lucide-react';
 
 interface LiveAlertToastProps {
   onOpenMap?: () => void;
@@ -12,7 +12,18 @@ interface LiveAlertToastProps {
 
 export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpenIncident }) => {
   const [activeAlert, setActiveAlert] = useState<Notification | null>(null);
-  const [lastSeenId, setLastSeenId] = useState<number | null>(null);
+  const shownIds = useRef<Set<string | number>>(new Set());
+
+  // Trigger alert and siren
+  const triggerAlertDisplay = (notif: Notification) => {
+    const key = notif.notification_id || notif.alert_id || notif.id;
+    if (shownIds.current.has(key)) return;
+    shownIds.current.add(key);
+
+    setActiveAlert(notif);
+    const sev = notif.severity === 'CRITICAL' || notif.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
+    alertSoundService.playAlarm(sev);
+  };
 
   // Real-time WebSocket Alert Push
   useEffect(() => {
@@ -22,53 +33,47 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
         const notif: Notification = {
           id: d.id || Date.now(),
           notification_id: d.alert_id || `ALT-${Date.now()}`,
-          title: d.title || 'Security Breach Detected',
-          message: `${d.title || 'Live Alert'} (Risk: ${d.risk_score || 80}/100)`,
+          title: d.title || 'Security Threat Alert',
+          message: d.message || `${d.title || 'Perimeter Alert'} (Risk: ${d.risk_score || 80}/100)`,
           priority: d.priority || 'HIGH',
           severity: d.priority || 'HIGH',
           channel: 'WEBSOCKET',
           alert_id: d.alert_id,
           evidence_id: d.evidence_id,
-          evidence_url: d.evidence_url,
+          evidence_url: d.evidence_url || (d.evidence_id ? `/api/v1/evidence/${d.evidence_id}/file` : undefined),
           camera_id: d.camera_id,
           created_at: d.created_at || new Date().toISOString()
         };
-        setActiveAlert(notif);
-        const sev = d.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
-        alertSoundService.playAlarm(sev);
+        triggerAlertDisplay(notif);
       }
     });
 
+    // Also listen to internal browser event for instant testing
+    const handleCustomTrigger = (e: any) => {
+      if (e.detail) {
+        triggerAlertDisplay(e.detail);
+      }
+    };
+    window.addEventListener('ibvap:trigger_alert', handleCustomTrigger);
+
     return () => {
       ws.close();
+      window.removeEventListener('ibvap:trigger_alert', handleCustomTrigger);
     };
   }, []);
 
+  // Polling fallback every 2 seconds for any new unread notification
   useEffect(() => {
     const checkAlerts = async () => {
       try {
-        let notifs = await incidentService.getNotifications({ unread_only: true, limit: 10 });
-        if (!notifs || notifs.length === 0) {
-          notifs = await incidentService.getNotifications({ limit: 5 });
-        }
+        const notifs = await incidentService.getNotifications({ unread_only: true, limit: 10 });
         if (notifs && notifs.length > 0) {
-          const newest = notifs[0];
-          // If newest notification has not been displayed yet
-          if (lastSeenId === null) {
-            setLastSeenId(newest.id);
-            // Check if this alert is unread and recent (under 2 minutes)
-            const createdSec = (Date.now() - new Date(newest.created_at).getTime()) / 1000;
-            if (createdSec < 120 && (!newest.read && !newest.is_read)) {
-              setActiveAlert(newest);
-              const sev = newest.severity === 'CRITICAL' || newest.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
-              alertSoundService.playAlarm(sev);
+          for (const n of notifs) {
+            const key = n.notification_id || n.alert_id || n.id;
+            if (!shownIds.current.has(key) && (!n.read && !n.is_read)) {
+              triggerAlertDisplay(n);
+              break;
             }
-          } else if (newest.id > lastSeenId) {
-            setLastSeenId(newest.id);
-            setActiveAlert(newest);
-            // Trigger tactical audio alarm
-            const sev = newest.severity === 'CRITICAL' || newest.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
-            alertSoundService.playAlarm(sev);
           }
         }
       } catch (e) {
@@ -77,22 +82,23 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
     };
 
     checkAlerts();
-    const interval = setInterval(checkAlerts, 2500);
+    const interval = setInterval(checkAlerts, 2000);
     return () => clearInterval(interval);
-  }, [lastSeenId]);
+  }, []);
 
-  // Auto-dismiss alert toast after 14 seconds
+  // Auto-dismiss alert toast after 15 seconds
   useEffect(() => {
     if (!activeAlert) return;
     const timer = setTimeout(() => {
       setActiveAlert(null);
-    }, 14000);
+    }, 15000);
     return () => clearTimeout(timer);
   }, [activeAlert]);
 
   if (!activeAlert) return null;
 
   const titleLower = (activeAlert.title || '').toLowerCase();
+
   const isPerson = titleLower.includes('person') || titleLower.includes('human') || titleLower.includes('intruder') || titleLower.includes('pedestrian');
   const isVehicle = titleLower.includes('vehicle') || titleLower.includes('car') || titleLower.includes('truck') || titleLower.includes('plate');
   const isAnimal = titleLower.includes('animal') || titleLower.includes('wildlife') || titleLower.includes('cattle');
@@ -161,13 +167,26 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
             </div>
           </div>
 
-          <button
-            onClick={() => setActiveAlert(null)}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
-            title="Dismiss Alert"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const sev = isCritical ? 'CRITICAL' : 'HIGH';
+                alertSoundService.playAlarm(sev);
+              }}
+              className="text-amber-300 hover:text-amber-100 p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+              title="Replay Tactical Audio Siren"
+            >
+              <Volume2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setActiveAlert(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+              title="Dismiss Alert"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
         </div>
 
         <p className="text-xs text-slate-200 font-sans leading-relaxed">

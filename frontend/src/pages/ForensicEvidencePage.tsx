@@ -11,11 +11,14 @@ import {
   FolderLock,
   Copy,
   Check,
-  Trash2
+  Trash2,
+  Send
 } from 'lucide-react';
 import { Evidence } from '../types/incident';
 import { evidenceService } from '../services/evidenceService';
 import { useCameras } from '../context/CameraContext';
+import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
+import { QuickSendEvidenceModal } from '../components/dispatches/QuickSendEvidenceModal';
 
 export const ForensicEvidencePage: React.FC = () => {
   const { cameras } = useCameras();
@@ -25,6 +28,10 @@ export const ForensicEvidencePage: React.FC = () => {
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
+  const [sitrepModalOpen, setSitrepModalOpen] = useState(false);
+  const [quickSendModalOpen, setQuickSendModalOpen] = useState(false);
+  const [quickSendTarget, setQuickSendTarget] = useState<Evidence | null>(null);
+
 
   useEffect(() => {
     loadEvidence();
@@ -101,7 +108,16 @@ export const ForensicEvidencePage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setSitrepModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-mono font-bold border border-cyan-400/40 shadow-lg shadow-cyan-600/30 transition cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>TRANSMIT EVIDENCE SITREP TO HQ</span>
+          </button>
+
           {evidenceList.length > 0 && (
+
             <button
               onClick={handleClearAllEvidence}
               className="flex items-center gap-1.5 px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white rounded-xl text-xs font-mono border border-rose-500/40 transition cursor-pointer"
@@ -249,6 +265,16 @@ export const ForensicEvidencePage: React.FC = () => {
                     >
                       <Eye className="w-3 h-3" /> INSPECT
                     </button>
+                    <button
+                      onClick={() => {
+                        setQuickSendTarget(ev);
+                        setQuickSendModalOpen(true);
+                      }}
+                      className="p-1.5 bg-amber-950/40 hover:bg-amber-900/70 text-amber-300 hover:text-white rounded-lg border border-amber-500/30 transition cursor-pointer"
+                      title="Transmit Evidence to HQ Admin"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
                     <a
                       href={fileUrl}
                       download={`${ev.evidence_id}.jpg`}
@@ -267,6 +293,7 @@ export const ForensicEvidencePage: React.FC = () => {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+
                 </div>
               </div>
             );
@@ -348,6 +375,15 @@ export const ForensicEvidencePage: React.FC = () => {
                 </button>
                 <div className="flex items-center gap-3">
                   <button
+                    onClick={() => {
+                      setQuickSendTarget(selectedEvidence);
+                      setQuickSendModalOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 transition shadow-lg shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" /> TRANSMIT TO HQ ADMIN
+                  </button>
+                  <button
                     onClick={() => setSelectedEvidence(null)}
                     className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800 transition cursor-pointer"
                   >
@@ -368,6 +404,26 @@ export const ForensicEvidencePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Daily Shift SITREP Modal */}
+      <DispatchSitrepModal
+        isOpen={sitrepModalOpen}
+        onClose={() => setSitrepModalOpen(false)}
+        onSuccess={loadEvidence}
+        defaultEvidenceIds={evidenceList.slice(0, 5).map(e => e.evidence_id)}
+      />
+
+      {/* Quick Evidence Send to HQ Modal */}
+      <QuickSendEvidenceModal
+        isOpen={quickSendModalOpen}
+        onClose={() => {
+          setQuickSendModalOpen(false);
+          setQuickSendTarget(null);
+        }}
+        onSuccess={loadEvidence}
+        evidence={quickSendTarget}
+      />
     </div>
   );
 };
+

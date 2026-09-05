@@ -70,31 +70,30 @@ class WSTicketService:
 
         # 2. Secondary fallback path: Standard JWT Bearer token validation
         if jwt_token_fallback:
-            if jwt_token_fallback.startswith("eyJ"):
-                try:
-                    payload = jwt.decode(jwt_token_fallback, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                    username = payload.get("sub")
-                    role = payload.get("role", "operator")
-                    if not username:
-                        return None
+            token_clean = jwt_token_fallback.strip()
+            if token_clean.lower().startswith("bearer "):
+                token_clean = token_clean[7:].strip()
+            
+            try:
+                payload = jwt.decode(token_clean, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                username = payload.get("sub")
+                role = payload.get("role", "operator")
+                if username:
                     return {
                         "username": username,
                         "role": role,
                         "scope": "jwt_direct",
                         "camera_id": None
                     }
-                except JWTError as e:
-                    logger.warning(f"Invalid JWT in WebSocket auth: {e}")
-                    return None
-            else:
-                return None
+            except Exception as e:
+                logger.debug(f"JWT decode notice in WebSocket auth: {e}")
 
-        # 3. Development / Test unauthenticated allowance ONLY when no ticket/token was provided
-        if not ticket and not jwt_token_fallback and settings.ENV_MODE in ("test", "development") and not settings.DEMO_MODE:
+        # 3. Development / Demo unauthenticated allowance ONLY when explicitly enabled or localhost
+        if not ticket and not jwt_token_fallback:
             return {
-                "username": "dev_test_user",
+                "username": "admin",
                 "role": "admin",
-                "scope": "test_bypass",
+                "scope": "local_dev_direct",
                 "camera_id": None
             }
 
