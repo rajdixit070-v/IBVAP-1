@@ -234,11 +234,19 @@ export const RegisterEdgeNodeModal: React.FC<RegisterEdgeNodeModalProps> = ({
               <input
                 type="text"
                 required
+                list="bop-site-presets"
                 placeholder="e.g. BOP Alpha, Sector 4"
                 value={formData.bop_site}
                 onChange={(e) => setFormData({ ...formData, bop_site: e.target.value })}
                 className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
               />
+              <datalist id="bop-site-presets">
+                <option value="BOP Alpha, Sector 4" />
+                <option value="BOP Bravo, Sector 7" />
+                <option value="BOP Charlie, Sector 2" />
+                <option value="BOP Delta, Sector 9" />
+                <option value="SITE-BORDER-NORTH" />
+              </datalist>
             </div>
 
             <div className="space-y-1.5">
@@ -260,11 +268,17 @@ export const RegisterEdgeNodeModal: React.FC<RegisterEdgeNodeModalProps> = ({
             </label>
             <input
               type="text"
+              list="hardware-presets"
               placeholder="e.g. NVIDIA Jetson Orin NX / Linux ARM64"
               value={formData.hardware_info || ''}
               onChange={(e) => setFormData({ ...formData, hardware_info: e.target.value })}
               className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
             />
+            <datalist id="hardware-presets">
+              <option value="NVIDIA Jetson Orin NX (ARM64 Linux)" />
+              <option value="Intel NUC Industrial Edge (x86_64 Ubuntu)" />
+              <option value="Raspberry Pi 5 CM4 Carrier Appliance" />
+            </datalist>
           </div>
 
           <div className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl flex items-center justify-between">

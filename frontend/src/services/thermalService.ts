@@ -70,6 +70,24 @@ export const thermalService = {
       params: { pair_id: pairId, limit }
     });
     return res.data;
+  },
+
+  async deletePair(pairId: string): Promise<{ message: string }> {
+    const res = await api.delete<{ message: string }>(`/thermal/pairs/${pairId}`);
+    return res.data;
+  },
+
+  async clearResults(pairId?: string): Promise<{ message: string }> {
+    const res = await api.delete<{ message: string }>('/thermal/fusion/results', {
+      params: { pair_id: pairId }
+    });
+    return res.data;
+  },
+
+  async deleteSingleResult(resultId: string): Promise<{ message: string }> {
+    const res = await api.delete<{ message: string }>(`/thermal/fusion/results/${resultId}`);
+    return res.data;
   }
 };
+
 

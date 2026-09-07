@@ -89,11 +89,11 @@ class ONVIFAdapter(IONVIFAdapter):
         # Bounded velocity integration
         pan_delta = max(-1.0, min(1.0, pan)) * 15.0 # deg/sec
         tilt_delta = max(-1.0, min(1.0, tilt)) * 10.0
-        zoom_delta = max(-1.0, min(1.0, zoom)) * 0.5
+        zoom_delta = max(-1.0, min(1.0, zoom)) * 1.5 # responsive zoom delta
 
         state["pan"] = max(-180.0, min(180.0, state["pan"] + pan_delta))
         state["tilt"] = max(-90.0, min(90.0, state["tilt"] + tilt_delta))
-        state["zoom"] = max(1.0, min(30.0, state["zoom"] + zoom_delta))
+        state["zoom"] = round(max(1.0, min(30.0, state["zoom"] + zoom_delta)), 1)
         state["status"] = "MOVING"
         logger.info(f"[{camera_id}] ONVIF ContinuousMove pan_vel={pan} tilt_vel={tilt} zoom_vel={zoom} -> pos=({state['pan']}, {state['tilt']}, {state['zoom']})")
         return True

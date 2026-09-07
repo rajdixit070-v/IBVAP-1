@@ -92,6 +92,23 @@ export const healthService = {
     return res.data;
   },
 
+  terminateMaintenanceWindow: async (maintenanceId: string): Promise<MaintenanceWindow> => {
+    const res = await axios.post(`${API_BASE}/maintenance/${maintenanceId}/terminate`);
+    return res.data;
+  },
+
+  triggerDiagnostics: async (): Promise<DiagnosticResultItem[]> => {
+    const res = await axios.post(`${API_BASE}/diagnostics/run`);
+    return res.data;
+  },
+
+  triggerTestEvent: async (title?: string, description?: string): Promise<HealthEventItem> => {
+    const res = await axios.post(`${API_BASE}/events/test`, null, {
+      params: { title, description }
+    });
+    return res.data;
+  },
+
   getHealthConfig: async (): Promise<HealthConfig> => {
     const res = await axios.get(`${API_BASE}/config`);
     return res.data;
@@ -102,3 +119,4 @@ export const healthService = {
     return res.data;
   }
 };
+

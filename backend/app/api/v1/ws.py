@@ -52,16 +52,28 @@ async def live_video_feed_ws(
         return
     
     try:
-        frame_interval = 1.0 / 25.0  # Max 25 FPS over WebSocket
+        frame_interval = 1.0 / 30.0  # Smooth 30 FPS over WebSocket
         last_frame_count = -1
+        # Ensure camera streamer is actively started from DB
+        stream_manager.ensure_camera_running(camera_id)
+
         while True:
             streamer = stream_manager.get_streamer(camera_id)
+            if not streamer or not getattr(streamer, "_running", False):
+                streamer = stream_manager.ensure_camera_running(camera_id)
+
             if streamer and streamer._running and streamer.status != "OFFLINE":
                 if streamer._frame_count != last_frame_count:
                     jpeg_bytes = streamer.get_latest_jpeg()
                     if jpeg_bytes:
                         await websocket.send_bytes(jpeg_bytes)
                         last_frame_count = streamer._frame_count
+            else:
+                placeholder = stream_manager._get_offline_placeholder_jpeg(camera_id)
+                await websocket.send_bytes(placeholder)
+                await asyncio.sleep(0.08)
+                continue
+
             await asyncio.sleep(frame_interval)
 
     except WebSocketDisconnect:

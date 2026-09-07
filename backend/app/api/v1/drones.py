@@ -118,6 +118,33 @@ def get_handoff_history(
 ):
     return DroneHandoffService.get_handoff_history(db, global_track_id=global_track_id, limit=limit)
 
+@router.delete("/handoff/clear", status_code=status.HTTP_200_OK)
+@router.delete("/handoff/history/clear", status_code=status.HTTP_200_OK)
+def clear_handoff_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clears all target handoff / trigger history records.
+    """
+    count = DroneHandoffService.clear_handoff_history(db)
+    return {"message": f"Cleared {count} trigger handoff history records.", "deleted_count": count}
+
+@router.delete("/handoff/{handoff_id}", status_code=status.HTTP_200_OK)
+@router.delete("/handoff/history/{handoff_id}", status_code=status.HTTP_200_OK)
+def delete_handoff_record(
+    handoff_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes an individual target handoff / trigger event from history.
+    """
+    success = DroneHandoffService.delete_handoff(db, handoff_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Handoff event '{handoff_id}' not found.")
+    return {"message": f"Handoff record '{handoff_id}' deleted successfully."}
+
 @router.get("/{drone_id}", response_model=DroneResponse)
 def get_drone(
     drone_id: str,
@@ -140,5 +167,35 @@ def update_drone_telemetry(
     if not drone:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Drone '{drone_id}' not found.")
     return drone
+
+@router.delete("/missions/{mission_id}", status_code=status.HTTP_200_OK)
+def delete_drone_mission(
+    mission_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    success = DroneService.delete_mission(db, mission_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Mission '{mission_id}' not found.")
+    return {"message": f"Mission '{mission_id}' deleted successfully."}
+
+@router.delete("/clear-all", status_code=status.HTTP_200_OK)
+def clear_all_drones(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    count = DroneService.clear_all_drones(db)
+    return {"message": f"Cleared all {count} drones and active missions."}
+
+@router.delete("/{drone_id}", status_code=status.HTTP_200_OK)
+def delete_drone(
+    drone_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    success = DroneService.delete_drone(db, drone_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Drone '{drone_id}' not found.")
+    return {"message": f"Drone '{drone_id}' deleted successfully."}
 
 

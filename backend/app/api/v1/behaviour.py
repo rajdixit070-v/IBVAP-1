@@ -322,3 +322,123 @@ def get_behaviour_analytics_summary(
         false_positive_rate_percent=fp_rate,
         confirmed_events_count=confirmed
     )
+
+# --- Deletion and Maintenance Endpoints ---
+
+@router.delete("/rules/{rule_id}")
+def delete_behaviour_rule(
+    rule_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes a behaviour detection rule.
+    """
+    rule = db.query(BehaviourRule).filter(BehaviourRule.rule_id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found.")
+
+    db.delete(rule)
+    audit = SecurityAuditLog(
+        username=current_user.username,
+        action="DELETE_BEHAVIOUR_RULE",
+        resource_type="BEHAVIOUR_RULE",
+        resource_id=rule_id,
+        details=json.dumps({"deleted_rule": rule_id, "name": rule.name})
+    )
+    db.add(audit)
+    db.commit()
+    return {"message": f"Behaviour rule '{rule_id}' deleted successfully.", "rule_id": rule_id}
+
+@router.delete("/events/clear")
+def clear_all_behaviour_events(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Purges all recorded behaviour events from the database.
+    """
+    count = db.query(BehaviourEvent).delete()
+    audit = SecurityAuditLog(
+        username=current_user.username,
+        action="CLEAR_BEHAVIOUR_EVENTS",
+        resource_type="BEHAVIOUR_EVENT",
+        resource_id="ALL",
+        details=json.dumps({"purged_count": count})
+    )
+    db.add(audit)
+    db.commit()
+    return {"message": f"Successfully cleared {count} behaviour event records.", "deleted_count": count}
+
+@router.delete("/events/{event_id}")
+def delete_behaviour_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes an individual behaviour event record.
+    """
+    event = db.query(BehaviourEvent).filter(BehaviourEvent.event_id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail=f"Event '{event_id}' not found.")
+
+    db.delete(event)
+    db.commit()
+    return {"message": f"Behaviour event '{event_id}' deleted successfully.", "event_id": event_id}
+
+@router.post("/rules/test-eval")
+def test_evaluate_rule(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Dry-run simulation endpoint to test how a behaviour rule scores given track parameters.
+    """
+    rule_id = payload.get("rule_id", "RULE-CUSTOM")
+    dwell_sec = float(payload.get("dwell_sec", 25.0))
+    speed_ms = float(payload.get("speed_ms", 3.5))
+    stop_count = int(payload.get("stop_count", 2))
+    direction_changes = int(payload.get("direction_changes", 2))
+    is_night = bool(payload.get("is_night", False))
+
+    rule = db.query(BehaviourRule).filter(BehaviourRule.rule_id == rule_id).first()
+    rule_name = rule.name if rule else "Custom Assessment Rule"
+    base_weight = rule.base_risk_weight if rule else 25
+    max_cap = rule.max_risk_cap if rule else 40
+
+    factors = []
+    calculated_risk = base_weight
+    triggered = False
+
+    if dwell_sec >= (rule.dwell_threshold_sec if rule else 20.0):
+        triggered = True
+        factors.append(f"Dwell threshold exceeded ({dwell_sec}s >= {rule.dwell_threshold_sec if rule else 20}s)")
+        calculated_risk += 15
+
+    if speed_ms >= (rule.speed_threshold_ms if rule else 4.0):
+        triggered = True
+        factors.append(f"Sudden sprint velocity detected ({speed_ms} m/s >= {rule.speed_threshold_ms if rule else 4.0} m/s)")
+        calculated_risk += 15
+
+    if direction_changes >= (rule.direction_change_threshold if rule else 3):
+        triggered = True
+        factors.append(f"Erratic kinetic direction changes detected ({direction_changes} changes)")
+        calculated_risk += 10
+
+    if is_night:
+        factors.append("Restricted after-hours nocturnal window (Night multiplier active)")
+        calculated_risk += 12
+
+    calculated_risk = min(100, calculated_risk)
+
+    return {
+        "rule_id": rule_id,
+        "rule_name": rule_name,
+        "triggered": triggered,
+        "risk_score": calculated_risk,
+        "risk_level": "CRITICAL" if calculated_risk >= 75 else "HIGH" if calculated_risk >= 50 else "ELEVATED",
+        "factors": factors,
+        "simulation_time": datetime.utcnow().isoformat()
+    }

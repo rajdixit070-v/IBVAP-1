@@ -60,5 +60,15 @@ export const edgeService = {
   async issueOrRotateToken(nodeId: string): Promise<any> {
     const response = await api.post(`/edge/nodes/${nodeId}/token`);
     return response.data;
+  },
+
+  async flushAllSync(): Promise<{ status: string; message: string; flushed_count: number }> {
+    const response = await api.post<{ status: string; message: string; flushed_count: number }>('/edge/sync/flush-all');
+    return response.data;
+  },
+
+  async simulateEdgeEvent(nodeId: string): Promise<any> {
+    const response = await api.post(`/edge/simulate-event/${nodeId}`);
+    return response.data;
   }
 };

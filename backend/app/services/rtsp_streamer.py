@@ -91,18 +91,14 @@ class RTSPStreamer:
         logger.info(f"[{self.camera_id}] Streamer stopped.")
 
     def get_latest_frame(self) -> Optional[np.ndarray]:
-        """Returns the latest BGR numpy frame."""
-        if self.status == "OFFLINE":
-            return None
+        """Returns the latest BGR numpy frame from buffer."""
         with self._lock:
             if self._latest_raw_frame is not None:
                 return self._latest_raw_frame.copy()
         return None
 
     def get_latest_jpeg(self) -> Optional[bytes]:
-        """Returns the latest pre-encoded JPEG bytes."""
-        if self.status == "OFFLINE":
-            return None
+        """Returns the latest pre-encoded JPEG bytes from buffer."""
         with self._lock:
             return self._latest_jpeg
 
@@ -140,6 +136,35 @@ class RTSPStreamer:
             except Exception as e:
                 logger.error(f"Error in on_status_change callback: {e}")
 
+    @staticmethod
+    def _build_http_request(url: str, username: Optional[str] = None, password: Optional[str] = None):
+        """Builds urllib Request object with Basic Auth header stripped from URL netloc."""
+        import base64
+        import urllib.parse
+        import urllib.request
+
+        parsed = urllib.parse.urlsplit(url)
+        u_user = parsed.username or username
+        u_pass = parsed.password or password
+
+        # Clean netloc removing user:pass@
+        host = parsed.hostname or "localhost"
+        port_str = f":{parsed.port}" if parsed.port else ""
+        clean_netloc = f"{host}{port_str}"
+        clean_url = urllib.parse.urlunsplit((parsed.scheme, clean_netloc, parsed.path, parsed.query, parsed.fragment))
+
+        headers = {
+            "User-Agent": "IBVAP-Ingestion/2.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "image/jpeg, multipart/x-mixed-replace, */*"
+        }
+
+        if u_user and u_pass:
+            auth_str = f"{u_user}:{u_pass}"
+            b64_auth = base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+            headers["Authorization"] = f"Basic {b64_auth}"
+
+        return urllib.request.Request(clean_url, headers=headers)
+
     def _worker_loop(self):
         """Main worker ingestion loop with auto-reconnection."""
         if self.is_synthetic:
@@ -149,27 +174,32 @@ class RTSPStreamer:
         while self._running:
             cap = None
             try:
-                self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
+                self._update_status("CONNECTING", "Connecting to camera stream...")
                 start_conn = time.time()
                 url_str = self.auth_url.strip()
 
                 if url_str.startswith(("webcam://", "device://")) or url_str.isdigit():
                     idx_str = url_str.replace("webcam://", "").replace("device://", "").strip()
                     dev_idx = int(idx_str) if idx_str.isdigit() else 0
-                    self._update_status("CONNECTING", f"Connecting to local webcam device #{dev_idx}...")
-                    if sys.platform == "win32":
-                        cap = cv2.VideoCapture(dev_idx, cv2.CAP_DSHOW)
-                    else:
-                        cap = cv2.VideoCapture(dev_idx)
-                    if not cap.isOpened():
-                        cap.release()
-                        cap = cv2.VideoCapture(dev_idx)
-                    if not cap.isOpened():
+                    try:
+                        if sys.platform == "win32":
+                            cap = cv2.VideoCapture(dev_idx, cv2.CAP_DSHOW)
+                        else:
+                            cap = cv2.VideoCapture(dev_idx)
+                        if not cap or not cap.isOpened():
+                            if cap:
+                                cap.release()
+                            cap = cv2.VideoCapture(dev_idx)
+                    except Exception as exc:
+                        logger.warning(f"[{self.camera_id}] Error opening device #{dev_idx}: {exc}")
+                        cap = None
+
+                    if not cap or not cap.isOpened():
                         raise ConnectionError(f"Unable to open local webcam device #{dev_idx}. Ensure camera is connected and not locked by another app.")
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 elif url_str.startswith("udp://"):
                     self._update_status("CONNECTING", "Connecting to Drone UDP video stream...")
-                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp|stimeout;5000000"
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp|stimeout;2000000|max_delay;100000|buffer_size;65536"
                     cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
                     if not cap.isOpened():
                         cap.release()
@@ -180,48 +210,49 @@ class RTSPStreamer:
                 elif url_str.startswith(("http://", "https://")):
                     self._update_status("CONNECTING", "Connecting to Mobile / HTTP video stream...")
                     clean_base = url_str.rstrip("/")
-                    test_urls = []
-                    if any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
-                        test_urls.append(clean_base)
+                    test_urls = [clean_base]
+                    if any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg", "/photo.jpg"]):
+                        if not clean_base.endswith(("/shot.jpg", "/photo.jpg")):
+                            base_root = clean_base.rsplit("/", 1)[0]
+                            test_urls.append(f"{base_root}/shot.jpg")
                     else:
                         test_urls.extend([
                             f"{clean_base}/video",
+                            f"{clean_base}/shot.jpg",
                             f"{clean_base}/mjpegfeed",
-                            f"{clean_base}/videofeed",
-                            clean_base
+                            f"{clean_base}/videofeed"
                         ])
 
-                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;4000000|max_delay;500000"
+                    # First priority: Fast direct HTTP multipart MJPEG and snapshot streaming
+                    direct_ok = False
+                    for u in test_urls:
+                        if not self._running:
+                            break
+                        if self._try_http_stream(u):
+                            direct_ok = True
+                            break
+                    
+                    if direct_ok:
+                        continue
+
+                    # Fallback: OpenCV VideoCapture
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;2000000|max_delay;100000|buffer_size;65536"
                     cap = None
                     for u in test_urls:
-                        # Try OpenCV with CAP_FFMPEG first (avoids MSMF issues on Windows)
                         cap = cv2.VideoCapture(u, cv2.CAP_FFMPEG)
                         if cap.isOpened():
                             ret, frame = cap.read()
                             if ret and frame is not None:
                                 break
                         cap.release()
-                        cap = cv2.VideoCapture(u)
-                        if cap.isOpened():
-                            ret, frame = cap.read()
-                            if ret and frame is not None:
-                                break
-                        cap.release()
+                        cap = None
 
                     if not cap or not cap.isOpened():
-                        # Direct HTTP MJPEG socket reader as ultimate fallback for mobile cameras
-                        direct_ok = False
-                        for u in test_urls:
-                            if self._try_http_mjpeg_stream(u):
-                                direct_ok = True
-                                break
-                        if direct_ok:
-                            continue
-                        raise ConnectionError(f"Unable to open Mobile / HTTP video stream at '{url_str}'. Ensure phone is on same Wi-Fi and camera broadcast is active.")
+                        raise ConnectionError(f"Unable to open Mobile / HTTP video stream at '{url_str}'. Ensure phone camera app is running on the same network.")
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 else:
                     self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
-                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;2000000|max_delay;100000|buffer_size;102400|fflags;nobuffer|flags;low_delay"
                     cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
                     if not cap.isOpened():
                         cap.release()
@@ -280,25 +311,64 @@ class RTSPStreamer:
         if self.rtsp_url.startswith(("webcam://", "device://")) or self.rtsp_url.isdigit():
             return 0.3 # Instant reconnect for local webcams
         att = attempt if attempt is not None else self.reconnect_attempts
-        return float(min(10.0, max(1.0, 1.5 ** min(att, 5))))
+        return float(min(8.0, max(1.0, 1.5 ** min(att, 4))))
 
-    def _try_http_mjpeg_stream(self, url: str) -> bool:
+    def _try_http_stream(self, url: str) -> bool:
         """
-        Direct socket-level HTTP MJPEG multipart stream consumer.
-        Guarantees rock-solid streaming for Android/iOS IP Webcam and browser streams on Windows.
+        Rock-solid HTTP video consumer for Android (IP Webcam, DroidCam, etc.) & browser feeds.
+        Automatically handles multipart MJPEG streams and snapshot polling (/shot.jpg) loops.
         """
         import urllib.request
         try:
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": "IBVAP-Ingestion/2.0 (Windows NT)"}
-            )
-            with urllib.request.urlopen(req, timeout=4.0) as stream:
-                content_type = stream.headers.get("Content-Type", "")
-                if "html" in content_type.lower():
+            req = self._build_http_request(url, self.username, self.password)
+            with urllib.request.urlopen(req, timeout=1.2) as stream:
+                content_type = stream.headers.get("Content-Type", "").lower()
+                if "html" in content_type:
                     return False
 
-                logger.info(f"[{self.camera_id}] Direct HTTP MJPEG stream connected: {url}")
+                # Case A: Snapshot polling loop (e.g. /shot.jpg or single image/jpeg)
+                if "image/jpeg" in content_type or "image/jpg" in content_type or url.endswith((".jpg", ".jpeg")):
+                    logger.info(f"[{self.camera_id}] Connected via HTTP snapshot polling mode: {url}")
+                    self.reconnect_attempts = 0
+                    self._update_status("HEALTHY", None)
+                    
+                    # Read first frame from initial stream
+                    initial_data = stream.read()
+                    if initial_data:
+                        f = cv2.imdecode(np.frombuffer(initial_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if f is not None:
+                            self._process_new_frame(f, time.time())
+
+                    # Enter continuous snapshot polling loop at up to 25 FPS
+                    poll_failures = 0
+                    while self._running:
+                        poll_start = time.time()
+                        try:
+                            p_req = self._build_http_request(url, self.username, self.password)
+                            with urllib.request.urlopen(p_req, timeout=2.5) as p_stream:
+                                img_bytes = p_stream.read()
+                                if img_bytes:
+                                    frame = cv2.imdecode(np.frombuffer(img_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+                                    if frame is not None:
+                                        poll_failures = 0
+                                        self._process_new_frame(frame, time.time())
+                                    else:
+                                        poll_failures += 1
+                                else:
+                                    poll_failures += 1
+                        except Exception:
+                            poll_failures += 1
+
+                        if poll_failures > 15:
+                            raise ConnectionError("Lost mobile snapshot stream.")
+
+                        # Target ~25 FPS polling rate
+                        elapsed = time.time() - poll_start
+                        time.sleep(max(0.02, 0.04 - elapsed))
+                    return True
+
+                # Case B: Multipart MJPEG stream (e.g. /video, /mjpegfeed, /videofeed)
+                logger.info(f"[{self.camera_id}] Connected via Direct HTTP MJPEG multipart stream: {url}")
                 self.reconnect_attempts = 0
                 self._update_status("HEALTHY", None)
 
@@ -308,8 +378,8 @@ class RTSPStreamer:
                     chunk = stream.read(8192)
                     if not chunk:
                         consecutive_empty += 1
-                        if consecutive_empty > 10:
-                            raise ConnectionError("Mobile stream closed by sender.")
+                        if consecutive_empty > 12:
+                            raise ConnectionError("Mobile multipart stream closed by sender.")
                         time.sleep(0.02)
                         continue
 
@@ -336,7 +406,7 @@ class RTSPStreamer:
                 return True
 
         except Exception as e:
-            logger.debug(f"[{self.camera_id}] Direct HTTP MJPEG notice for {url}: {e}")
+            logger.debug(f"[{self.camera_id}] HTTP stream attempt for {url}: {e}")
             return False
 
     def _process_new_frame(self, frame: np.ndarray, timestamp: float):
@@ -370,11 +440,8 @@ class RTSPStreamer:
             self._update_status("HEALTHY", None)
 
     def _handle_disconnect(self, err_msg: str):
-        """Handles stream failure, clears cached frames, and immediately sets status to OFFLINE."""
+        """Handles stream failure, preserves last frame for smooth UI transitions, and sets status to OFFLINE."""
         self.reconnect_attempts += 1
-        with self._lock:
-            self._latest_raw_frame = None
-            self._latest_jpeg = None
         self._update_status("OFFLINE", f"Stream disconnected: {err_msg}")
         self.fps = 0.0
 

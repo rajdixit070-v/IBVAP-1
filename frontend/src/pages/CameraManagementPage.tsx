@@ -16,7 +16,11 @@ import {
   Cctv
 } from 'lucide-react';
 
-export const CameraManagementPage: React.FC = () => {
+interface CameraManagementPageProps {
+  onLocateOnMap?: (camera: Camera) => void;
+}
+
+export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLocateOnMap }) => {
   const {
     cameras,
     loading,
@@ -228,6 +232,7 @@ export const CameraManagementPage: React.FC = () => {
           onEdit={handleOpenEditModal}
           onDelete={handleOpenDeleteModal}
           onTest={handleQuickTest}
+          onLocate={onLocateOnMap}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -239,6 +244,7 @@ export const CameraManagementPage: React.FC = () => {
               onEdit={handleOpenEditModal}
               onDelete={handleOpenDeleteModal}
               onTest={handleQuickTest}
+              onLocate={onLocateOnMap}
             />
           ))}
         </div>

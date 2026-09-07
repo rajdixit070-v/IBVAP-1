@@ -1,16 +1,27 @@
-// Web Audio API Tactical Threat Siren & Audio Synthesizer
-// Runs natively in all modern browsers with automatic AudioContext unlock & fallback
+// Web Audio API Tactical Threat Siren & Web Speech API Voice Alert Synthesizer
+// Runs natively in all modern browsers with automatic AudioContext unlock, speech queue management, & fallback
+
+export interface VoiceAlertOptions {
+  title?: string;
+  message?: string;
+  severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO';
+  priority?: string;
+  cameraId?: string;
+  location?: string;
+}
 
 class AlertSoundService {
   private muted: boolean = false;
   private audioCtx: AudioContext | null = null;
   private unlocked: boolean = false;
+  private voicesLoaded: boolean = false;
+  private selectedVoice: SpeechSynthesisVoice | null = null;
 
   constructor() {
     const saved = localStorage.getItem('ibvap_alarm_muted');
     this.muted = saved === 'true';
 
-    // Auto-unlock AudioContext on first user interaction anywhere on screen
+    // Auto-unlock AudioContext and SpeechSynthesis on first user interaction anywhere on screen
     if (typeof window !== 'undefined') {
       const unlockAudio = () => {
         try {
@@ -23,14 +34,59 @@ class AlertSoundService {
             this.unlocked = true;
           }
         } catch (_) {}
+
+        // Preload voices
+        if ('speechSynthesis' in window) {
+          try {
+            window.speechSynthesis.getVoices();
+          } catch (_) {}
+        }
       };
+
       window.addEventListener('click', unlockAudio, { passive: true });
       window.addEventListener('pointerdown', unlockAudio, { passive: true });
       window.addEventListener('mousedown', unlockAudio, { passive: true });
       window.addEventListener('keydown', unlockAudio, { passive: true });
       window.addEventListener('touchstart', unlockAudio, { passive: true });
       window.addEventListener('focus', unlockAudio, { passive: true });
+
+      // Init speech voices listener
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.initVoice();
+        };
+        this.initVoice();
+      }
     }
+  }
+
+  private initVoice(): void {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return;
+
+      this.voicesLoaded = true;
+      // Prefer crisp standard English voices
+      const preferred =
+        voices.find(
+          (v) =>
+            (v.lang.startsWith('en') || v.lang.startsWith('hi')) &&
+            (v.name.includes('Google') ||
+              v.name.includes('Natural') ||
+              v.name.includes('Samantha') ||
+              v.name.includes('Daniel') ||
+              v.name.includes('Zira') ||
+              v.name.includes('David') ||
+              v.name.includes('Alex'))
+        ) ||
+        voices.find((v) => v.lang.startsWith('en')) ||
+        voices[0];
+
+      if (preferred) {
+        this.selectedVoice = preferred;
+      }
+    } catch (_) {}
   }
 
   public isMuted(): boolean {
@@ -41,10 +97,18 @@ class AlertSoundService {
     return this.unlocked;
   }
 
+  public isVoiceSupported(): boolean {
+    return typeof window !== 'undefined' && 'speechSynthesis' in window;
+  }
 
   public setMuted(muted: boolean): void {
     this.muted = muted;
     localStorage.setItem('ibvap_alarm_muted', muted ? 'true' : 'false');
+    if (muted && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
   }
 
   public toggleMute(): boolean {
@@ -66,6 +130,7 @@ class AlertSoundService {
     }
   }
 
+  // Tactical Audio Siren Sound (Web Audio API)
   public async playAlarm(severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO' = 'HIGH'): Promise<void> {
     if (this.muted) return;
 
@@ -126,15 +191,114 @@ class AlertSoundService {
         osc.stop(now + 0.25);
       }
     } catch (e) {
-      console.warn('Audio alert playback not allowed or failed:', e);
+      console.warn('Audio alert playback failed:', e);
     }
   }
 
-  public testAlarm(): void {
+  // Voice Alert Speech Synthesizer (Web Speech API)
+  public speakVoiceAlert(text: string, options?: { rate?: number; pitch?: number; volume?: number; priority?: string }): void {
+    if (this.muted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return;
+    }
+
+    try {
+      // Clean speech synthesis queue if a new alert arrives
+      window.speechSynthesis.cancel();
+
+      // Clean spoken phrase
+      const cleanText = this.formatSpokenText(text);
+      if (!cleanText) return;
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.rate = options?.rate ?? 1.02;
+      utterance.pitch = options?.pitch ?? 1.0;
+      utterance.volume = options?.volume ?? 1.0;
+
+      if (this.selectedVoice) {
+        utterance.voice = this.selectedVoice;
+      } else if (!this.voicesLoaded) {
+        this.initVoice();
+        if (this.selectedVoice) utterance.voice = this.selectedVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Voice alert synthesis failed:', e);
+    }
+  }
+
+  // Clean and format text into natural military/tactical speech announcement
+  private formatSpokenText(raw: string): string {
+    if (!raw) return '';
+    let text = raw
+      .replace(/[\{\}\[\]\<\>\(\)\#\*\_\`]/g, ' ')
+      .replace(/ALT-[0-9]+/gi, '')
+      .replace(/CAM-([A-Za-z0-9_-]+)/gi, 'Camera $1')
+      .replace(/BOP-([A-Za-z0-9_-]+)/gi, 'Border Outpost $1')
+      .replace(/SECTOR-([A-Za-z0-9_-]+)/gi, 'Sector $1')
+      .replace(/CRITICAL/gi, 'Critical')
+      .replace(/INTRUSION/gi, 'Intrusion')
+      .replace(/UNAUTHORIZED/gi, 'Unauthorized')
+      .replace(/DETECTED/gi, 'Detected')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Limit length so announcement remains crisp and timely
+    if (text.length > 180) {
+      text = text.substring(0, 180);
+      const lastDot = text.lastIndexOf('.');
+      if (lastDot > 60) {
+        text = text.substring(0, lastDot + 1);
+      }
+    }
+    return text;
+  }
+
+  // Unified Alert: Plays Tactical Siren Chime followed by Voice Announcement
+  public async playAlertWithVoice(alert: VoiceAlertOptions | string, severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO'): Promise<void> {
+    if (this.muted) return;
+
+    let sev: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO' = 'HIGH';
+    let spokenSentence = '';
+
+    if (typeof alert === 'string') {
+      spokenSentence = alert;
+      sev = severity || 'HIGH';
+    } else {
+      const alertSev = alert.severity || alert.priority;
+      sev = alertSev === 'CRITICAL' ? 'CRITICAL' : alertSev === 'MEDIUM' ? 'MEDIUM' : 'HIGH';
+
+      const prefix = sev === 'CRITICAL' ? 'Warning! Critical security threat.' : sev === 'HIGH' ? 'Alert!' : 'Operational notice.';
+      const title = alert.title || 'Intrusion Alert';
+      const loc = alert.location || (alert.cameraId ? `on camera ${alert.cameraId}` : '');
+
+      spokenSentence = `${prefix} ${title} ${loc ? 'detected at ' + loc : ''}.`;
+    }
+
+    // 1. Play tactical audio siren immediately
+    await this.playAlarm(sev);
+
+    // 2. Play clear spoken voice announcement after a short 250ms gap
+    setTimeout(() => {
+      this.speakVoiceAlert(spokenSentence, { priority: sev });
+    }, 300);
+  }
+
+  // Test full sound & voice alert
+  public testVoiceAlert(): void {
     const wasMuted = this.muted;
     this.muted = false;
-    this.playAlarm('CRITICAL');
+    this.playAlertWithVoice({
+      title: 'Perimeter Intrusion Detected',
+      severity: 'CRITICAL',
+      cameraId: 'CAM-01',
+      location: 'Sector North Bravo'
+    });
     this.muted = wasMuted;
+  }
+
+  public testAlarm(): void {
+    this.testVoiceAlert();
   }
 }
 

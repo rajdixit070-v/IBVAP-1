@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.core.security import encrypt_credential
+from app.core.security import encrypt_credential, get_password_hash
+from app.models.user import User
 from app.models.federation_models import Organization, Region, Site, BOP, SiteUserScope
 
 from app.models.edge_node import EdgeNode
@@ -23,6 +24,8 @@ from app.models.face_event import FaceEvent
 from app.models.global_track import GlobalTrack
 from app.models.track_observation import TrackObservation
 from app.models.camera_transition import CameraTransition
+from app.models.thermal_fusion_models import CameraPair
+from app.models.ptz_models import PTZDevice
 
 logger = logging.getLogger("ibvap.demo.seeder")
 
@@ -114,6 +117,40 @@ def seed_demo_data(db: Session) -> dict:
             timezone="UTC+05:30",
             status="ACTIVE"
         ))
+    db.commit()
+
+    # Provision Core Administrative & Officer Users
+    admin_user = db.query(User).filter(User.username == "admin").first()
+    if not admin_user:
+        db.add(User(
+            username="admin",
+            email="admin@ibvap.mil",
+            hashed_password=get_password_hash("Admin@IBVAP2026"),
+            role="admin",
+            is_active=True
+        ))
+    else:
+        admin_user.is_active = True
+        admin_user.locked_until = None
+
+    officer_user = db.query(User).filter(User.username == "officer_alpha").first()
+    if not officer_user:
+        db.add(User(
+            username="officer_alpha",
+            email="officer.alpha@ibvap.mil",
+            hashed_password=get_password_hash("Officer@IBVAP2026"),
+            role="COMMANDER",
+            is_active=True
+        ))
+    else:
+        officer_user.is_active = True
+        officer_user.locked_until = None
+    db.commit()
+
+    if not db.query(SiteUserScope).filter(SiteUserScope.username == "admin").first():
+        db.add(SiteUserScope(username="admin", scope_type="GLOBAL", scope_id="*", role="SUPER_ADMIN", assigned_by="system"))
+    if not db.query(SiteUserScope).filter(SiteUserScope.username == "officer_alpha").first():
+        db.add(SiteUserScope(username="officer_alpha", scope_type="BOP", scope_id="BOP-ALPHA", role="BOP_OPERATOR", assigned_by="admin"))
     db.commit()
 
     # 2. Border Outposts (BOPs)
@@ -782,7 +819,45 @@ def seed_demo_data(db: Session) -> dict:
         ])
         db.commit()
 
-    logger.info("Successfully seeded comprehensive demo dataset across all 13 modules.")
+    # 14. Initial Thermal + RGB Camera Pair (Phase 17)
+    if db.query(CameraPair).count() == 0:
+        db.add(CameraPair(
+            pair_id="PAIR-NORTH-01",
+            rgb_camera_id="CAM-001",
+            thermal_camera_id="CAM-002",
+            site_id="SITE-BORDER-NORTH",
+            bop_id="BOP-ALPHA",
+            calibration_transform_json='{"homography": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "scale_x": 1.0, "scale_y": 1.0, "offset_x": 0, "offset_y": 0, "rotation_deg": 0.0}',
+            overlap_area_json='[{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 0.0}, {"x": 1.0, "y": 1.0}, {"x": 0.0, "y": 1.0}]',
+            overlap_ratio=0.85,
+            sync_tolerance_ms=100.0,
+            fusion_mode="FUSED",
+            status="ACTIVE"
+        ))
+        db.commit()
+        logger.info("Seeded initial CameraPair 'PAIR-NORTH-01'")
+
+    # 15. Initial PTZ Hardware Controller (Phase 18)
+    if not db.query(PTZDevice).filter(PTZDevice.camera_id == "CAM-001").first():
+        db.add(PTZDevice(
+            device_id="PTZ-CAM-001",
+            camera_id="CAM-001",
+            onvif_endpoint="http://192.168.1.101/onvif/device_service",
+            onvif_port=80,
+            onvif_profile_token="Profile_1_Main",
+            supports_continuous_move=True,
+            supports_absolute_move=True,
+            supports_presets=True,
+            status="READY",
+            current_pan=0.0,
+            current_tilt=0.0,
+            current_zoom=1.0,
+            auto_track_enabled=False
+        ))
+        db.commit()
+        logger.info("Seeded initial PTZ device 'PTZ-CAM-001'")
+
+    logger.info("Successfully seeded comprehensive demo dataset across all 15 modules.")
     return get_demo_status(db)
 
 
@@ -810,6 +885,13 @@ def purge_demo_data(db: Session) -> dict:
         "ai_events",
         "ai_observations",
         "camera_transitions",
+        "camera_pairs",
+        "ptz_devices",
+        "ptz_presets",
+        "behaviour_events",
+        "drone_missions",
+        "drone_telemetry",
+        "drone_handoffs",
         "cameras",
         "camera_ai_configs",
         "camera_ai_profiles",
@@ -836,6 +918,13 @@ def purge_demo_data(db: Session) -> dict:
         "bop_dispatches"
     ]
     
+    # Shutdown all running camera video streamers
+    try:
+        from app.services.stream_manager import stream_manager
+        stream_manager.shutdown_all()
+    except Exception as e:
+        logger.debug(f"Could not shutdown stream_manager: {e}")
+
     for t in tables:
         try:
             db.execute(text(f"DELETE FROM {t}"))
@@ -850,17 +939,34 @@ def purge_demo_data(db: Session) -> dict:
         
     db.commit()
 
-    # Ensure baseline Site, BOP, and Officer scope remain for production operation
+    # Ensure baseline Site, BOP, Officer and Admin remain
     try:
         if not db.query(Site).filter(Site.site_id == "SITE-BORDER-NORTH").first():
             db.add(Site(site_id="SITE-BORDER-NORTH", name="North Frontier Sector", code="S-NORTH", region_id="REG-WEST"))
         if not db.query(BOP).filter(BOP.bop_id == "BOP-ALPHA").first():
             db.add(BOP(bop_id="BOP-ALPHA", name="BOP Alpha Outpost", code="BOP-A", site_id="SITE-BORDER-NORTH", latitude=31.6245, longitude=74.8725))
+
+        admin_u = db.query(User).filter(User.username == "admin").first()
+        if not admin_u:
+            db.add(User(username="admin", email="admin@ibvap.mil", hashed_password=get_password_hash("Admin@IBVAP2026"), role="admin", is_active=True))
+        else:
+            admin_u.is_active = True
+            admin_u.locked_until = None
+
+        officer_u = db.query(User).filter(User.username == "officer_alpha").first()
+        if not officer_u:
+            db.add(User(username="officer_alpha", email="officer.alpha@ibvap.mil", hashed_password=get_password_hash("Officer@IBVAP2026"), role="COMMANDER", is_active=True))
+        else:
+            officer_u.is_active = True
+            officer_u.locked_until = None
+
+        if not db.query(SiteUserScope).filter(SiteUserScope.username == "admin").first():
+            db.add(SiteUserScope(username="admin", scope_type="GLOBAL", scope_id="*", role="SUPER_ADMIN", assigned_by="system"))
         if not db.query(SiteUserScope).filter(SiteUserScope.username == "officer_alpha").first():
             db.add(SiteUserScope(username="officer_alpha", scope_type="BOP", scope_id="BOP-ALPHA", role="BOP_OPERATOR", assigned_by="admin"))
         db.commit()
     except Exception as e:
-        logger.warning(f"Could not restore base site/BOP in purge: {e}")
+        logger.warning(f"Could not restore base site/BOP/users in purge: {e}")
 
 
 

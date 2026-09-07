@@ -569,6 +569,43 @@ class SystemHealthService:
         finally:
             db.close()
 
+    def terminate_maintenance_window(
+        self,
+        maintenance_id: str,
+        authorized_by: str = "admin"
+    ) -> MaintenanceWindow:
+        """Terminates an active maintenance window early and restores target device to ONLINE."""
+        db: Session = SessionLocal()
+        now = datetime.utcnow()
+        try:
+            m = db.query(MaintenanceWindow).filter(MaintenanceWindow.maintenance_id == maintenance_id).first()
+            if not m:
+                raise ValueError(f"Maintenance window {maintenance_id} not found.")
+
+            m.status = "TERMINATED"
+            m.ended_at = now
+
+            if m.target_type == "CAMERA":
+                cam = db.query(Camera).filter(Camera.camera_id == m.target_id).first()
+                if cam:
+                    cam.is_maintenance = False
+                    cam.status = "ONLINE"
+                    cam.maintenance_reason = None
+
+            audit = SecurityAuditLog(
+                username=authorized_by,
+                action="MAINTENANCE_WINDOW_TERMINATED",
+                resource_type=m.target_type,
+                resource_id=m.target_id,
+                details=f'{{"maintenance_id": "{maintenance_id}", "ended_at": "{now.isoformat()}"}}'
+            )
+            db.add(audit)
+            db.commit()
+            db.refresh(m)
+            return m
+        finally:
+            db.close()
+
     def evaluate_maintenance_expirations(self):
         """Checks for expired maintenance windows and marks them EXPIRED."""
         db: Session = SessionLocal()
@@ -582,9 +619,16 @@ class SystemHealthService:
             for m in active:
                 m.status = "EXPIRED"
                 m.ended_at = now
+                if m.target_type == "CAMERA":
+                    cam = db.query(Camera).filter(Camera.camera_id == m.target_id).first()
+                    if cam:
+                        cam.is_maintenance = False
+                        cam.status = "ONLINE"
+                        cam.maintenance_reason = None
                 logger.info(f"Maintenance window {m.maintenance_id} for {m.target_type} {m.target_id} expired.")
             db.commit()
         finally:
             db.close()
 
 system_health_service = SystemHealthService()
+

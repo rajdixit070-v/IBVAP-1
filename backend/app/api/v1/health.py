@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -228,6 +229,70 @@ def list_maintenance_windows(
     system_health_service.evaluate_maintenance_expirations()
     return db.query(MaintenanceWindow).order_by(desc(MaintenanceWindow.started_at)).limit(50).all()
 
+@router.post("/maintenance/{maintenance_id}/terminate", response_model=MaintenanceWindowResponse)
+def terminate_maintenance_window(
+    maintenance_id: str,
+    current_user: User = Depends(require_admin)
+):
+    """Concludes an active maintenance window early and restores device to ONLINE (Admin only)."""
+    try:
+        return system_health_service.terminate_maintenance_window(
+            maintenance_id=maintenance_id,
+            authorized_by=current_user.username
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/diagnostics/run", response_model=List[DiagnosticResultItem])
+def trigger_system_diagnostics(current_user: User = Depends(get_current_user)):
+    """Triggers an on-demand correlated multi-layer diagnostic scan."""
+    return diagnostic_engine.evaluate_diagnostics()
+
+@router.post("/events/test", response_model=HealthEventItem, status_code=status.HTTP_201_CREATED)
+def trigger_test_health_event(
+    event_type: str = "DIAGNOSTIC_PROBE",
+    severity: str = "INFO",
+    title: str = "Manual Health Diagnostics Probe",
+    description: str = "Operator manually executed live infrastructure health probe.",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """Logs an on-demand audit event into the infrastructure health timeline."""
+    import uuid
+    evt = HealthEvent(
+        event_id=f"HEVT-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}",
+        event_type=event_type,
+        source_type="SYSTEM",
+        source_id="CORE-HEALTH-PROBE",
+        severity=severity,
+        status="RESOLVED",
+        title=title,
+        description=description,
+        started_at=datetime.utcnow(),
+        detected_at=datetime.utcnow(),
+        recovered_at=datetime.utcnow(),
+        downtime_seconds=0.0
+    )
+    db.add(evt)
+    db.commit()
+    db.refresh(evt)
+    return HealthEventItem(
+        id=evt.id,
+        event_id=evt.event_id,
+        event_type=evt.event_type,
+        source_type=evt.source_type,
+        source_id=evt.source_id,
+        severity=evt.severity,
+        status=evt.status,
+        title=evt.title,
+        description=evt.description,
+        started_at=evt.started_at,
+        detected_at=evt.detected_at,
+        recovered_at=evt.recovered_at,
+        downtime_seconds=evt.downtime_seconds or 0.0,
+        incident_id=evt.incident_id
+    )
+
 @router.get("/config", response_model=Dict[str, Any])
 def get_health_config(current_user: User = Depends(get_current_user)):
     """Returns effective health monitoring thresholds and weights."""
@@ -240,3 +305,4 @@ def update_health_config(
 ):
     """Updates health monitoring thresholds with versioning and audit (Admin only)."""
     return system_health_service.update_config(body)
+

@@ -86,3 +86,34 @@ def get_thermal_fusion_results(
         query = query.filter(ThermalFusionResult.pair_id == pair_id)
     return query.order_by(ThermalFusionResult.timestamp.desc()).limit(limit).all()
 
+@router.delete("/pairs/{pair_id}", status_code=status.HTTP_200_OK)
+def delete_camera_pair(
+    pair_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    success = ThermalRGBFusionService.delete_pair(db, pair_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"CameraPair '{pair_id}' not found.")
+    return {"message": f"CameraPair '{pair_id}' deleted successfully."}
+
+@router.delete("/fusion/results", status_code=status.HTTP_200_OK)
+def clear_thermal_fusion_results(
+    pair_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    count = ThermalRGBFusionService.clear_fusion_results(db, pair_id=pair_id)
+    return {"message": f"Cleared {count} thermal fusion results."}
+
+@router.delete("/fusion/results/{result_id}", status_code=status.HTTP_200_OK)
+def delete_single_fusion_result(
+    result_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    success = ThermalRGBFusionService.delete_single_result(db, result_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Result '{result_id}' not found.")
+    return {"message": f"Result '{result_id}' deleted successfully."}
+

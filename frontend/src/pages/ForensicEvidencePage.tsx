@@ -12,7 +12,11 @@ import {
   Copy,
   Check,
   Trash2,
-  Send
+  Send,
+  Camera as CameraIcon,
+  Upload,
+  AlertCircle,
+  ArrowLeft
 } from 'lucide-react';
 import { Evidence } from '../types/incident';
 import { evidenceService } from '../services/evidenceService';
@@ -20,7 +24,11 @@ import { useCameras } from '../context/CameraContext';
 import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
 import { QuickSendEvidenceModal } from '../components/dispatches/QuickSendEvidenceModal';
 
-export const ForensicEvidencePage: React.FC = () => {
+interface ForensicEvidencePageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = ({ onBackToDashboard }) => {
   const { cameras } = useCameras();
   const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +39,28 @@ export const ForensicEvidencePage: React.FC = () => {
   const [sitrepModalOpen, setSitrepModalOpen] = useState(false);
   const [quickSendModalOpen, setQuickSendModalOpen] = useState(false);
   const [quickSendTarget, setQuickSendTarget] = useState<Evidence | null>(null);
+
+  // Capture Live Evidence State
+  const [captureModalOpen, setCaptureModalOpen] = useState(false);
+  const [captureCamId, setCaptureCamId] = useState<string>('');
+  const [captureType, setCaptureType] = useState<string>('SNAPSHOT');
+  const [captureNotes, setCaptureNotes] = useState<string>('');
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+
+  // Upload Evidence State
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCamId, setUploadCamId] = useState<string>('EXTERNAL_IMPORT');
+  const [uploadType, setUploadType] = useState<string>('SNAPSHOT');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cameras.length > 0 && !captureCamId) {
+      setCaptureCamId(cameras[0].camera_id);
+    }
+  }, [cameras]);
 
 
   useEffect(() => {
@@ -75,6 +105,48 @@ export const ForensicEvidencePage: React.FC = () => {
     }
   };
 
+  const handleExecuteCapture = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!captureCamId) {
+      setCaptureError('Please select a camera to capture live frame from.');
+      return;
+    }
+    try {
+      setIsCapturing(true);
+      setCaptureError(null);
+      await evidenceService.captureCameraEvidence(captureCamId, captureType, captureNotes);
+      await loadEvidence();
+      setCaptureModalOpen(false);
+      setCaptureNotes('');
+    } catch (err: any) {
+      console.error('Failed to capture live camera evidence', err);
+      setCaptureError(err?.response?.data?.detail || err.message || 'Failed to capture live evidence frame.');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleExecuteUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) {
+      setUploadError('Please select an image or video file to upload.');
+      return;
+    }
+    try {
+      setIsUploading(true);
+      setUploadError(null);
+      await evidenceService.uploadEvidence(uploadFile, uploadCamId, uploadType);
+      await loadEvidence();
+      setUploadModalOpen(false);
+      setUploadFile(null);
+    } catch (err: any) {
+      console.error('Failed to upload evidence', err);
+      setUploadError(err?.response?.data?.detail || err.message || 'Failed to upload forensic evidence.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleClearAllEvidence = async () => {
     const scope = selectedCamera === 'ALL' ? 'all cameras' : `camera '${selectedCamera}'`;
     if (window.confirm(`Are you sure you want to permanently delete all archived evidence snapshots for ${scope}?`)) {
@@ -107,7 +179,39 @@ export const ForensicEvidencePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex flex-wrap items-center gap-3">
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-mono font-bold border border-slate-700 transition cursor-pointer"
+              title="Return to Central Dashboard"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>DASHBOARD</span>
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setCaptureError(null);
+              setCaptureModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold border border-emerald-400/40 shadow-lg shadow-emerald-600/30 transition cursor-pointer"
+          >
+            <CameraIcon className="w-3.5 h-3.5" />
+            <span>CAPTURE LIVE EVIDENCE</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setUploadError(null);
+              setUploadModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#16223d] hover:bg-[#1f2f54] text-cyan-300 hover:text-white rounded-xl text-xs font-mono font-bold border border-cyan-500/30 transition cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>UPLOAD FILE</span>
+          </button>
+
           <button
             onClick={() => setSitrepModalOpen(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-mono font-bold border border-cyan-400/40 shadow-lg shadow-cyan-600/30 transition cursor-pointer"
@@ -117,10 +221,9 @@ export const ForensicEvidencePage: React.FC = () => {
           </button>
 
           {evidenceList.length > 0 && (
-
             <button
               onClick={handleClearAllEvidence}
-              className="flex items-center gap-1.5 px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white rounded-xl text-xs font-mono border border-rose-500/40 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white rounded-xl text-xs font-mono border border-rose-500/40 transition cursor-pointer"
               title="Delete All Evidence Records"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -423,6 +526,219 @@ export const ForensicEvidencePage: React.FC = () => {
         onSuccess={loadEvidence}
         evidence={quickSendTarget}
       />
+
+      {/* Capture Live Evidence Modal */}
+      {captureModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#0c121e] border border-cyan-500/40 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl">
+            <div className="p-5 bg-gradient-to-r from-[#111a2e] to-[#0c121e] border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <CameraIcon className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-base text-white">Capture Live Camera Evidence</h3>
+                  <p className="text-[11px] font-mono text-slate-400">Grab instant frame & seal with SHA-256 in Tactical Vault</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCaptureModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteCapture} className="p-5 space-y-4">
+              {captureError && (
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{captureError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5 font-semibold">
+                  SELECT CAMERA STREAM:
+                </label>
+                <select
+                  value={captureCamId}
+                  onChange={(e) => setCaptureCamId(e.target.value)}
+                  required
+                  className="w-full bg-[#111a2e] border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                >
+                  {cameras.map((c) => (
+                    <option key={c.camera_id} value={c.camera_id}>
+                      {c.camera_name} ({c.camera_id}) - {c.bop_site}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5 font-semibold">
+                  EVIDENCE CLASSIFICATION:
+                </label>
+                <select
+                  value={captureType}
+                  onChange={(e) => setCaptureType(e.target.value)}
+                  className="w-full bg-[#111a2e] border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="SNAPSHOT">SNAPSHOT (TACTICAL INTERCEPTION)</option>
+                  <option value="SUSPECT_PERSON">SUSPECT PERSON INTERCEPT</option>
+                  <option value="SUSPECT_VEHICLE">SUSPECT VEHICLE / ANPR</option>
+                  <option value="PERIMETER_BREACH">PERIMETER BREACH / FENCE CROSSING</option>
+                  <option value="CONTRABAND_DROP">DRONE / AIRDROP / CONTRABAND</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5 font-semibold">
+                  OFFICER NOTES / TACTICAL REMARKS (OPTIONAL):
+                </label>
+                <textarea
+                  value={captureNotes}
+                  onChange={(e) => setCaptureNotes(e.target.value)}
+                  placeholder="E.g., Suspect observed carrying package near boundary pillar 104..."
+                  rows={2}
+                  className="w-full bg-[#111a2e] border border-slate-700 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCaptureModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-mono font-bold transition"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCapturing}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition disabled:opacity-50"
+                >
+                  {isCapturing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>SEALING EVIDENCE...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CameraIcon className="w-4 h-4" />
+                      <span>CAPTURE & SEAL NOW</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Evidence Modal */}
+      {uploadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#0c121e] border border-cyan-500/40 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl">
+            <div className="p-5 bg-gradient-to-r from-[#111a2e] to-[#0c121e] border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  <Upload className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-base text-white">Upload External Forensic Evidence</h3>
+                  <p className="text-[11px] font-mono text-slate-400">Import image/video file & calculate cryptographic hash</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setUploadModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteUpload} className="p-5 space-y-4">
+              {uploadError && (
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5 font-semibold">
+                  SELECT EVIDENCE FILE:
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
+                  required
+                  className="w-full bg-[#111a2e] border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-cyan-500 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-mono file:bg-cyan-600 file:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5 font-semibold">
+                  SOURCE IDENTIFIER / NODE:
+                </label>
+                <input
+                  type="text"
+                  value={uploadCamId}
+                  onChange={(e) => setUploadCamId(e.target.value)}
+                  placeholder="EXTERNAL_IMPORT or CAM-01"
+                  className="w-full bg-[#111a2e] border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5 font-semibold">
+                  EVIDENCE TYPE:
+                </label>
+                <select
+                  value={uploadType}
+                  onChange={(e) => setUploadType(e.target.value)}
+                  className="w-full bg-[#111a2e] border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="SNAPSHOT">SNAPSHOT (PHOTO)</option>
+                  <option value="VIDEO_CLIP">VIDEO CLIP</option>
+                  <option value="FACE_CROP">FACE CROP</option>
+                  <option value="PLATE_CROP">PLATE CROP</option>
+                  <option value="FORENSIC_DOCUMENT">FORENSIC DOCUMENT</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setUploadModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-mono font-bold transition"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploading || !uploadFile}
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-mono font-bold flex items-center gap-2 shadow-lg shadow-cyan-600/30 transition disabled:opacity-50"
+                >
+                  {isUploading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>UPLOADING & HASHING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      <span>IMPORT & SEAL</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

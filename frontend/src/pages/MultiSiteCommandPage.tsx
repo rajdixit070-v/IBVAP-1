@@ -17,7 +17,8 @@ import {
   UserCheck,
   Trash2,
   Activity,
-  Sliders
+  Sliders,
+  ArrowLeft
 } from 'lucide-react';
 import { federationService } from '../services/federationService';
 import {
@@ -38,7 +39,11 @@ import { BOPModal } from '../components/federation/BOPModal';
 import { UserScopeModal } from '../components/federation/UserScopeModal';
 import { TacticalLeafletMap } from '../components/common/TacticalLeafletMap';
 
-export const MultiSiteCommandPage: React.FC = () => {
+interface MultiSiteCommandPageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBackToDashboard }) => {
 
   const [activeSubTab, setActiveSubTab] = useState<'map' | 'directory' | 'bop-wall' | 'matrix' | 'search' | 'reports' | 'admin'>('map');
   const [overview, setOverview] = useState<GlobalOverview | null>(null);
@@ -217,6 +222,17 @@ export const MultiSiteCommandPage: React.FC = () => {
               ))}
             </select>
           </div>
+
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-mono font-bold transition border border-slate-700 cursor-pointer"
+              title="Return to Central Dashboard"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>DASHBOARD</span>
+            </button>
+          )}
 
           <button
             onClick={loadGlobalData}

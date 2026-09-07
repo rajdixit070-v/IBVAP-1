@@ -182,7 +182,7 @@ export interface MaintenanceWindow {
   target_id: string;
   reason: string;
   authorized_by: string;
-  status: 'ACTIVE' | 'EXPIRED' | 'COMPLETED' | 'CANCELLED';
+  status: 'ACTIVE' | 'EXPIRED' | 'COMPLETED' | 'CANCELLED' | 'TERMINATED';
   started_at: string;
   expected_end_at?: string;
   ended_at?: string;

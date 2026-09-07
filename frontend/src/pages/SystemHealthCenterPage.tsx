@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Sliders,
   ArrowUpRight,
+  ArrowLeft,
   Layers
 } from 'lucide-react';
 import { healthService } from '../services/healthService';
@@ -32,7 +33,11 @@ import {
 import { MaintenanceModal } from '../components/health/MaintenanceModal';
 import { DiagnosticDetailModal } from '../components/health/DiagnosticDetailModal';
 
-export const SystemHealthCenterPage: React.FC = () => {
+interface SystemHealthCenterPageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const SystemHealthCenterPage: React.FC<SystemHealthCenterPageProps> = ({ onBackToDashboard }) => {
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
@@ -54,9 +59,81 @@ export const SystemHealthCenterPage: React.FC = () => {
   // Filters
   const [cameraSearch, setCameraSearch] = useState('');
 
-  // Modals
+  // Modals & Target State
   const [maintenanceModalOpen, setMaintenanceModalOpen] = useState(false);
+  const [maintenanceTargetType, setMaintenanceTargetType] = useState<'CAMERA' | 'EDGE_NODE' | 'SERVICE'>('CAMERA');
+  const [maintenanceTargetId, setMaintenanceTargetId] = useState<string>('');
   const [selectedDiagnostic, setSelectedDiagnostic] = useState<DiagnosticResultItem | null>(null);
+
+  // Config Draft State & Operations
+  const [configDraft, setConfigDraft] = useState<Partial<HealthConfig>>({});
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configMsg, setConfigMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [terminatingId, setTerminatingId] = useState<string | null>(null);
+  const [diagnosticRunning, setDiagnosticRunning] = useState(false);
+
+  const handleOpenMaintenance = (type: 'CAMERA' | 'EDGE_NODE' | 'SERVICE' = 'CAMERA', id: string = '') => {
+    setMaintenanceTargetType(type);
+    setMaintenanceTargetId(id);
+    setMaintenanceModalOpen(true);
+  };
+
+  const handleTerminateMaintenance = async (maintenanceId: string) => {
+    try {
+      setTerminatingId(maintenanceId);
+      await healthService.terminateMaintenanceWindow(maintenanceId);
+      await fetchAllHealthData();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to end maintenance window.');
+    } finally {
+      setTerminatingId(null);
+    }
+  };
+
+  const handleRunDiagnostics = async () => {
+    try {
+      setDiagnosticRunning(true);
+      const res = await healthService.triggerDiagnostics();
+      setDiagnostics(res);
+      setLastRefreshed(new Date());
+    } catch (err) {
+      console.error('Failed to run diagnostics:', err);
+    } finally {
+      setDiagnosticRunning(false);
+    }
+  };
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConfigSaving(true);
+    setConfigMsg(null);
+    try {
+      const updated = await healthService.updateHealthConfig({
+        ...configDraft,
+        notes: 'Operator SLA threshold calibration'
+      });
+      setConfig(updated);
+      setConfigDraft(updated);
+      setConfigMsg({ type: 'success', text: 'Thresholds & SLA configuration updated successfully!' });
+      setTimeout(() => setConfigMsg(null), 5000);
+    } catch (err: any) {
+      setConfigMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to update configuration.' });
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  const handleTriggerTestEvent = async () => {
+    try {
+      await healthService.triggerTestEvent(
+        'Manual Health Diagnostics Probe',
+        'Operator executed manual infrastructure audit verification probe.'
+      );
+      await fetchAllHealthData();
+    } catch (err) {
+      console.error('Failed to trigger test event', err);
+    }
+  };
 
   const fetchAllHealthData = async () => {
     setLoading(true);
@@ -101,6 +178,7 @@ export const SystemHealthCenterPage: React.FC = () => {
       setEvents(evtRes);
       setMaintenanceWindows(maintRes);
       setConfig(cfgRes);
+      setConfigDraft(cfgRes);
       setLastRefreshed(new Date());
     } catch (err) {
       console.error('Failed to load system health data:', err);
@@ -141,22 +219,30 @@ export const SystemHealthCenterPage: React.FC = () => {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <HeartPulse className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-white tracking-wide flex items-center gap-2">
-                System Health Center
-                <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider font-mono">
-                  HEALTH MATRIX
-                </span>
-              </h1>
-              <p className="text-xs text-slate-400">
-                Continuous Infrastructure Observability, Symptom Correlation, Self-Diagnostics & Resource Optimization
-              </p>
-            </div>
+        <div className="flex items-center space-x-3">
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              className="flex items-center space-x-1.5 px-3 py-2 bg-slate-800/90 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-xl text-xs font-mono font-bold border border-slate-700 transition cursor-pointer shadow-sm group"
+              title="Return to Central Dashboard"
+            >
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform text-cyan-400" />
+              <span>Back to Dashboard</span>
+            </button>
+          )}
+          <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <HeartPulse className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-white tracking-wide flex items-center gap-2">
+              System Health Center
+              <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider font-mono">
+                HEALTH MATRIX
+              </span>
+            </h1>
+            <p className="text-xs text-slate-400">
+              Continuous Infrastructure Observability, Symptom Correlation, Self-Diagnostics & Resource Optimization
+            </p>
           </div>
         </div>
 
@@ -167,14 +253,14 @@ export const SystemHealthCenterPage: React.FC = () => {
           <button
             onClick={() => fetchAllHealthData()}
             disabled={loading}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition disabled:opacity-50"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
           <button
-            onClick={() => setMaintenanceModalOpen(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-amber-900/20 transition"
+            onClick={() => handleOpenMaintenance('CAMERA', '')}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-amber-900/20 transition cursor-pointer"
           >
             <Wrench className="w-3.5 h-3.5" />
             <span>Maintenance Mode</span>
@@ -537,8 +623,9 @@ export const SystemHealthCenterPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        onClick={() => setMaintenanceModalOpen(true)}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] transition"
+                        onClick={() => handleOpenMaintenance('CAMERA', c.camera_id)}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-amber-600/80 text-slate-300 hover:text-white rounded text-[11px] transition cursor-pointer"
+                        title={`Schedule Maintenance for Camera ${c.camera_id}`}
                       >
                         Service
                       </button>
@@ -615,8 +702,14 @@ export const SystemHealthCenterPage: React.FC = () => {
 
               {/* Cameras & Sync Status */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                <span className="text-slate-400">Attached Cameras:</span>
-                <span className="font-mono text-slate-200">{node.total_cameras_count}</span>
+                <span className="text-slate-400">Attached Cameras: <strong className="text-slate-200 font-mono">{node.total_cameras_count}</strong></span>
+                <button
+                  onClick={() => handleOpenMaintenance('EDGE_NODE', node.node_id)}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-amber-600/80 text-slate-300 hover:text-white rounded text-[11px] font-semibold transition cursor-pointer"
+                  title={`Schedule Maintenance for Edge Appliance ${node.node_id}`}
+                >
+                  Service Node
+                </button>
               </div>
               {node.affected_cameras.length > 0 && (
                 <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300">
@@ -690,11 +783,21 @@ export const SystemHealthCenterPage: React.FC = () => {
       {/* TAB 5: DIAGNOSTIC ENGINE */}
       {activeTab === 'diagnostics' && (
         <div className="space-y-4">
-          <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl text-xs text-slate-400 flex items-center justify-between">
+          <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl text-xs text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span>
               The Self-Diagnostic Engine correlates multi-source symptoms across cameras, nodes, and network links to deduce probable root causes without generating duplicate alarm noise.
             </span>
-            <span className="font-mono text-cyan-400">{diagnostics.length} Active Correlated Findings</span>
+            <div className="flex items-center space-x-3 shrink-0">
+              <span className="font-mono text-cyan-400">{diagnostics.length} Correlated Findings</span>
+              <button
+                onClick={handleRunDiagnostics}
+                disabled={diagnosticRunning}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md transition cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${diagnosticRunning ? 'animate-spin' : ''}`} />
+                <span>{diagnosticRunning ? 'Probing...' : 'Run Diagnostics Scan'}</span>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -777,29 +880,54 @@ export const SystemHealthCenterPage: React.FC = () => {
       {/* TAB 7: TIMELINE */}
       {activeTab === 'timeline' && (
         <div className="space-y-3">
-          {events.map((evt, i) => (
-            <div key={i} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                  evt.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-400' :
-                  evt.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-400' :
-                  'bg-blue-500/20 text-blue-400'
-                }`}>
-                  {evt.event_type}
-                </span>
-                <div>
-                  <div className="text-xs font-bold text-white">{evt.title}</div>
-                  <div className="text-[11px] text-slate-400">{evt.description}</div>
+          <div className="flex justify-between items-center pb-1">
+            <span className="text-xs text-slate-400 font-mono">Continuous Event Log ({events.length} records)</span>
+            <button
+              onClick={handleTriggerTestEvent}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs font-mono font-semibold border border-slate-700 transition cursor-pointer"
+            >
+              + Log Diagnostics Probe Event
+            </button>
+          </div>
+
+          {events.length === 0 ? (
+            <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-xl space-y-3">
+              <div className="text-sm font-semibold text-slate-300">No degradation or failure events recorded in current audit window.</div>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                All edge node heartbeats, camera streams, and AI pipelines are operating within nominal parameters.
+              </p>
+              <button
+                onClick={handleTriggerTestEvent}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs font-mono font-semibold border border-slate-700 transition cursor-pointer"
+              >
+                + Log Health Diagnostics Probe Event
+              </button>
+            </div>
+          ) : (
+            events.map((evt, i) => (
+              <div key={i} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                    evt.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-400' :
+                    evt.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-400' :
+                    'bg-blue-500/20 text-blue-400'
+                  }`}>
+                    {evt.event_type}
+                  </span>
+                  <div>
+                    <div className="text-xs font-bold text-white">{evt.title}</div>
+                    <div className="text-[11px] text-slate-400">{evt.description}</div>
+                  </div>
+                </div>
+                <div className="text-right text-[11px] font-mono text-slate-500">
+                  {new Date(evt.started_at).toLocaleTimeString()}
+                  {evt.downtime_seconds > 0 && (
+                    <span className="block text-emerald-400 font-semibold">{Math.round(evt.downtime_seconds)}s downtime</span>
+                  )}
                 </div>
               </div>
-              <div className="text-right text-[11px] font-mono text-slate-500">
-                {new Date(evt.started_at).toLocaleTimeString()}
-                {evt.downtime_seconds > 0 && (
-                  <span className="block text-emerald-400 font-semibold">{Math.round(evt.downtime_seconds)}s downtime</span>
-                )}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 
@@ -816,7 +944,7 @@ export const SystemHealthCenterPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden shadow-lg">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-[#0b1329] text-[11px] font-bold uppercase text-slate-400 border-b border-slate-800">
                 <tr>
@@ -826,16 +954,18 @@ export const SystemHealthCenterPage: React.FC = () => {
                   <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Authorized By</th>
                   <th className="px-4 py-3">Started</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {maintenanceWindows.map(m => (
-                  <tr key={m.id}>
+                  <tr key={m.id} className="hover:bg-slate-800/30 transition">
                     <td className="px-4 py-3 font-mono text-slate-400">{m.maintenance_id}</td>
                     <td className="px-4 py-3 font-bold text-white">{m.target_type}: {m.target_id}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        m.status === 'ACTIVE' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-300'
+                        m.status === 'ACTIVE' ? 'bg-amber-500/20 text-amber-400' :
+                        m.status === 'TERMINATED' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-300'
                       }`}>
                         {m.status}
                       </span>
@@ -843,6 +973,20 @@ export const SystemHealthCenterPage: React.FC = () => {
                     <td className="px-4 py-3 text-slate-300">{m.reason}</td>
                     <td className="px-4 py-3 text-slate-400">{m.authorized_by}</td>
                     <td className="px-4 py-3 font-mono text-slate-400">{new Date(m.started_at).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right">
+                      {m.status === 'ACTIVE' ? (
+                        <button
+                          onClick={() => handleTerminateMaintenance(m.maintenance_id)}
+                          disabled={terminatingId === m.maintenance_id}
+                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded text-[11px] font-semibold transition cursor-pointer shadow-sm"
+                          title="Restore device and bring back ONLINE immediately"
+                        >
+                          {terminatingId === m.maintenance_id ? 'Restoring...' : 'End Maintenance'}
+                        </button>
+                      ) : (
+                        <span className="text-slate-500 text-[11px] font-mono">Concluded</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -853,50 +997,72 @@ export const SystemHealthCenterPage: React.FC = () => {
 
       {/* TAB 9: CONFIGURATION */}
       {activeTab === 'config' && config && (
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl max-w-2xl space-y-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-emerald-400" />
-            Health Monitoring Thresholds & SLAs
-          </h3>
+        <form onSubmit={handleSaveConfig} className="p-6 bg-slate-900 border border-slate-800 rounded-xl max-w-2xl space-y-4 shadow-xl">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-emerald-400" />
+              Health Monitoring Thresholds & SLAs
+            </h3>
+            <button
+              type="submit"
+              disabled={configSaving}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-lg shadow-emerald-900/20 transition cursor-pointer"
+            >
+              {configSaving ? 'Saving...' : 'Save & Apply Thresholds'}
+            </button>
+          </div>
+
+          {configMsg && (
+            <div className={`p-3 rounded-lg text-xs font-semibold flex items-center gap-2 ${
+              configMsg.type === 'success' ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300' : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+            }`}>
+              {configMsg.type === 'success' ? '✓' : '⚠️'} {configMsg.text}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div>
-              <label className="block text-slate-400 mb-1">Heartbeat Timeout (Seconds)</label>
+              <label className="block text-slate-400 mb-1 font-semibold">Heartbeat Timeout (Seconds)</label>
               <input
                 type="number"
-                defaultValue={config.heartbeat_timeout_seconds}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono"
+                value={configDraft.heartbeat_timeout_seconds ?? 60}
+                onChange={(e) => setConfigDraft(prev => ({ ...prev, heartbeat_timeout_seconds: Number(e.target.value) }))}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-slate-400 mb-1">FPS Degradation Ratio</label>
+              <label className="block text-slate-400 mb-1 font-semibold">FPS Degradation Ratio</label>
               <input
                 type="number"
                 step="0.05"
-                defaultValue={config.fps_degradation_ratio}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono"
+                value={configDraft.fps_degradation_ratio ?? 0.60}
+                onChange={(e) => setConfigDraft(prev => ({ ...prev, fps_degradation_ratio: Number(e.target.value) }))}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-slate-400 mb-1">Storage Warning (%)</label>
+              <label className="block text-slate-400 mb-1 font-semibold">Storage Warning (%)</label>
               <input
                 type="number"
-                defaultValue={config.storage_warning_percent}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono"
+                value={configDraft.storage_warning_percent ?? 80}
+                onChange={(e) => setConfigDraft(prev => ({ ...prev, storage_warning_percent: Number(e.target.value) }))}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-slate-400 mb-1">Queue Backlog Threshold</label>
+              <label className="block text-slate-400 mb-1 font-semibold">Queue Backlog Threshold</label>
               <input
                 type="number"
-                defaultValue={config.queue_backlog_threshold}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono"
+                value={configDraft.queue_backlog_threshold ?? 25}
+                onChange={(e) => setConfigDraft(prev => ({ ...prev, queue_backlog_threshold: Number(e.target.value) }))}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
           <p className="text-[11px] text-slate-500 italic pt-2">
             All modifications create a new versioned configuration record with an immutable operator audit log.
           </p>
-        </div>
+        </form>
       )}
 
       {/* Modals */}
@@ -904,6 +1070,8 @@ export const SystemHealthCenterPage: React.FC = () => {
         isOpen={maintenanceModalOpen}
         onClose={() => setMaintenanceModalOpen(false)}
         onSuccess={fetchAllHealthData}
+        defaultTargetType={maintenanceTargetType}
+        defaultTargetId={maintenanceTargetId}
       />
 
       <DiagnosticDetailModal

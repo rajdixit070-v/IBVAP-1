@@ -17,6 +17,24 @@ export const evidenceService = {
     return res.data;
   },
 
+  async captureCameraEvidence(cameraId: string, evidenceType: string = 'SNAPSHOT', notes?: string): Promise<Evidence> {
+    const res = await api.post<Evidence>(`/evidence/capture/${cameraId}`, null, {
+      params: { evidence_type: evidenceType, notes }
+    });
+    return res.data;
+  },
+
+  async uploadEvidence(file: File, cameraId: string = 'EXTERNAL_IMPORT', evidenceType: string = 'SNAPSHOT'): Promise<Evidence> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('camera_id', cameraId);
+    formData.append('evidence_type', evidenceType);
+    const res = await api.post<Evidence>('/evidence/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return res.data;
+  },
+
   async deleteEvidence(evidenceId: string): Promise<any> {
     const res = await api.delete(`/evidence/${evidenceId}`);
     return res.data;

@@ -98,13 +98,15 @@ class PTZTrackingService:
             dev.tracking_target_id = None
             logger.info(f"[{camera_id}] Operator override: Disabled auto-tracking.")
 
-        pan = max(-1.0, min(1.0, move_req.pan_speed or 0.0))
-        tilt = max(-1.0, min(1.0, move_req.tilt_speed or 0.0))
-        zoom = max(-1.0, min(1.0, move_req.zoom_speed or 0.0))
-
         if move_req.move_type == "ABSOLUTE":
+            pan = max(-180.0, min(180.0, move_req.pan_speed or 0.0))
+            tilt = max(-90.0, min(90.0, move_req.tilt_speed or 0.0))
+            zoom = max(1.0, min(30.0, move_req.zoom_speed or 1.0))
             success = onvif_adapter.absolute_move(camera_id, pan, tilt, zoom)
         else:
+            pan = max(-1.0, min(1.0, move_req.pan_speed or 0.0))
+            tilt = max(-1.0, min(1.0, move_req.tilt_speed or 0.0))
+            zoom = max(-1.0, min(1.0, move_req.zoom_speed or 0.0))
             success = onvif_adapter.continuous_move(camera_id, pan, tilt, zoom, move_req.timeout_sec or 2.0)
 
         hw_status = onvif_adapter.get_status(camera_id)

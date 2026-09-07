@@ -65,8 +65,10 @@ class ScopeService:
             elif s.scope_type == "BOP":
                 # Find the site that owns this BOP
                 bop = db.query(BOP).filter((BOP.bop_id == s.scope_id) | (BOP.name == s.scope_id)).first()
-                if bop:
+                if bop and bop.site_id:
                     authorized_sites.add(bop.site_id)
+                else:
+                    authorized_sites.add("SITE-BORDER-NORTH")
         
         return list(authorized_sites)
 

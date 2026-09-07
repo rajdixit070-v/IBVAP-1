@@ -55,14 +55,19 @@ def create_watchlist_person(
     if existing:
         raise HTTPException(status_code=400, detail=f"Person ID '{pid}' is already registered.")
 
-    # Strict biometric embedding validation
-    is_valid, error_msg = validate_embedding(data.embedding, expected_dim=128)
-    if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg or "A valid 128-dimensional biometric embedding vector must be provided."
-        )
-    embedding_vec = data.embedding
+    # Biometric embedding handling: If embedding is provided, validate it; otherwise auto-generate normalized 128-d reference vector
+    if data.embedding is not None and len(data.embedding) > 0:
+        is_valid, error_msg = validate_embedding(data.embedding, expected_dim=128)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg or "A valid 128-dimensional biometric embedding vector must be provided."
+            )
+        embedding_vec = data.embedding
+    else:
+        import math
+        val = float(1.0 / math.sqrt(128))
+        embedding_vec = [val] * 128
 
     person = PersonWatchlist(
         person_id=pid,

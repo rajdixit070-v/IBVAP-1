@@ -15,10 +15,15 @@ import {
   Plus,
   RefreshCw,
   BellRing,
-  Trash2
+  Trash2,
+  ArrowLeft
 } from 'lucide-react';
 
-export const CommandCenterPage: React.FC = () => {
+interface CommandCenterPageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({ onBackToDashboard }) => {
   const { cameras } = useCameras();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -123,6 +128,16 @@ export const CommandCenterPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-mono font-bold transition border border-slate-700 cursor-pointer"
+              title="Return to Central Dashboard"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>DASHBOARD</span>
+            </button>
+          )}
           <button
             onClick={() => setMapModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-mono font-bold transition border border-slate-700"

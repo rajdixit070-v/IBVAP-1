@@ -12,8 +12,17 @@ import {
   Search,
   Plus,
   Play,
-  Trash2
+  Trash2,
+  UserCheck,
+  MapPin,
+  UserPlus,
+  Unlock,
+  ArrowLeft
 } from 'lucide-react';
+import { userService, Officer } from '../services/userService';
+import { RegisterOfficerModal } from '../components/security/RegisterOfficerModal';
+import { ResetPasswordModal } from '../components/security/ResetPasswordModal';
+import { ReassignPostModal } from '../components/security/ReassignPostModal';
 import { securityService } from '../services/securityService';
 import {
   SecurityThreatEvent,
@@ -26,10 +35,22 @@ import {
 import { EdgeCredentialModal } from '../components/security/EdgeCredentialModal';
 import { ResolveThreatModal } from '../components/security/ResolveThreatModal';
 
-export const EnterpriseSecurityPage: React.FC = () => {
+interface EnterpriseSecurityPageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const EnterpriseSecurityPage: React.FC<EnterpriseSecurityPageProps> = ({ onBackToDashboard }) => {
   const [activeSubTab, setActiveSubTab] = useState<
-    'threats' | 'edge-keys' | 'blocklist' | 'posture' | 'audit' | 'policy'
-  >('threats');
+    'officers' | 'threats' | 'edge-keys' | 'blocklist' | 'posture' | 'audit' | 'policy'
+  >('officers');
+
+  // Officers Management State
+  const [officers, setOfficers] = useState<Officer[]>([]);
+  const [selectedOfficerForReset, setSelectedOfficerForReset] = useState<Officer | null>(null);
+  const [selectedOfficerForReassign, setSelectedOfficerForReassign] = useState<Officer | null>(null);
+  const [registerOfficerOpen, setRegisterOfficerOpen] = useState(false);
+  const [officerSearch, setOfficerSearch] = useState('');
+  const [officerRoleFilter, setOfficerRoleFilter] = useState('ALL');
 
   // State
   const [overview, setOverview] = useState<SecurityPostureOverview | null>(null);
@@ -56,18 +77,20 @@ export const EnterpriseSecurityPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [ov, ths, eks, ips, logs] = await Promise.all([
+      const [ov, ths, eks, ips, logs, ofs] = await Promise.all([
         securityService.getOverview().catch(() => null),
         securityService.listThreats({ limit: 50 }).catch(() => []),
         securityService.listEdgeKeys().catch(() => []),
         securityService.listBlockedIPs().catch(() => []),
-        securityService.listAuditLogs({ limit: 50 }).catch(() => [])
+        securityService.listAuditLogs({ limit: 50 }).catch(() => []),
+        userService.listOfficers().catch(() => [])
       ]);
       setOverview(ov);
       setThreats(ths);
       setEdgeKeys(eks);
       setBlockedIPs(ips);
       setAuditLogs(logs);
+      setOfficers(ofs);
     } catch (err) {
       console.error('Failed to load Enterprise Security data:', err);
     }
@@ -151,6 +174,30 @@ export const EnterpriseSecurityPage: React.FC = () => {
     }
   };
 
+  const handleToggleOfficerStatus = async (officer: Officer) => {
+    try {
+      await userService.updateOfficer(officer.id, { is_active: !officer.is_active });
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to update status: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+  const handleDeleteOfficer = async (officer: Officer) => {
+    if (officer.username.toLowerCase() === 'admin') {
+      alert('Master Administrator account cannot be deleted.');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to decommission officer '${officer.username}'?`)) {
+      try {
+        await userService.deleteOfficer(officer.id);
+        setOfficers((prev) => prev.filter((o) => o.id !== officer.id));
+      } catch (err: any) {
+        alert(`Failed to decommission officer: ${err.response?.data?.detail || err.message}`);
+      }
+    }
+  };
+
   const handleDeleteThreat = async (eventId: string) => {
     if (window.confirm(`Delete threat event '${eventId}'?`)) {
       try {
@@ -217,6 +264,16 @@ export const EnterpriseSecurityPage: React.FC = () => {
 
         {/* Global Actions */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Return to Central Dashboard"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Dashboard</span>
+            </button>
+          )}
           <button
             onClick={handlePurgeAllData}
             className="px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-white border border-rose-500/40 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-rose-950/50"
@@ -311,6 +368,7 @@ export const EnterpriseSecurityPage: React.FC = () => {
       {/* Sub-Tab Navigation Strip */}
       <div className="flex border-b border-slate-800 space-x-2 overflow-x-auto pb-2">
         {[
+          { id: 'officers', label: 'Officers & Duty Post Directory', icon: UserCheck },
           { id: 'threats', label: 'Threat Intelligence Feed', icon: ShieldAlert },
           { id: 'edge-keys', label: 'Edge Cryptographic Keys', icon: Key },
           { id: 'blocklist', label: 'IP Blocklist & Defense', icon: Ban },
@@ -336,6 +394,216 @@ export const EnterpriseSecurityPage: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Sub-Tab 0: Officers & Personnel Directory */}
+      {activeSubTab === 'officers' && (
+        <div className="space-y-4">
+          {/* Officers Header & Filter Bar */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="relative flex-1 md:w-80">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search officers by callsign, post, or username..."
+                  value={officerSearch}
+                  onChange={(e) => setOfficerSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono"
+                />
+              </div>
+
+              <select
+                value={officerRoleFilter}
+                onChange={(e) => setOfficerRoleFilter(e.target.value)}
+                className="bg-slate-950 border border-slate-700 text-xs rounded-lg px-3 py-1.5 text-slate-200 font-mono"
+              >
+                <option value="ALL">All Ranks & Roles</option>
+                <option value="COMMANDER">COMMANDER</option>
+                <option value="OFFICER">OFFICER</option>
+                <option value="BOP_OPERATOR">BOP_OPERATOR</option>
+                <option value="ADMIN">ADMIN</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => setRegisterOfficerOpen(true)}
+              className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg shadow-purple-600/20"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>+ REGISTER NEW DUTY OFFICER</span>
+            </button>
+          </div>
+
+          {/* Officer Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-[#0e1626] border border-purple-500/30 p-3.5 rounded-xl">
+              <div className="text-[11px] font-mono text-purple-400 font-bold uppercase">Total Personnel</div>
+              <div className="text-2xl font-bold font-mono text-white mt-0.5">{officers.length}</div>
+              <div className="text-[10px] text-slate-500">Registered system users</div>
+            </div>
+
+            <div className="bg-[#0e1626] border border-emerald-500/30 p-3.5 rounded-xl">
+              <div className="text-[11px] font-mono text-emerald-400 font-bold uppercase">Active Duty Officers</div>
+              <div className="text-2xl font-bold font-mono text-emerald-400 mt-0.5">
+                {officers.filter((o) => o.is_active).length}
+              </div>
+              <div className="text-[10px] text-slate-500">Authorized border checkposts</div>
+            </div>
+
+            <div className="bg-[#0e1626] border border-sky-500/30 p-3.5 rounded-xl">
+              <div className="text-[11px] font-mono text-sky-400 font-bold uppercase">Assigned Outposts (BOPs)</div>
+              <div className="text-2xl font-bold font-mono text-sky-400 mt-0.5">
+                {new Set(officers.map((o) => o.scope_id)).size}
+              </div>
+              <div className="text-[10px] text-slate-500">Active duty sectors</div>
+            </div>
+
+            <div className="bg-[#0e1626] border border-amber-500/30 p-3.5 rounded-xl">
+              <div className="text-[11px] font-mono text-amber-400 font-bold uppercase">Locked / Suspended</div>
+              <div className="text-2xl font-bold font-mono text-amber-400 mt-0.5">
+                {officers.filter((o) => !o.is_active || (o.locked_until && new Date(o.locked_until) > new Date())).length}
+              </div>
+              <div className="text-[10px] text-slate-500">Access temporarily restricted</div>
+            </div>
+          </div>
+
+          {/* Officers Table */}
+          <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <div className="p-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-purple-400" />
+                Border Personnel & Duty Post Assignments
+              </span>
+              <span className="text-[11px] font-mono text-slate-500">Level-5 Central Authority Access Control</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="p-3">Officer / Callsign</th>
+                    <th className="p-3">Assigned Duty Post (BOP)</th>
+                    <th className="p-3">Rank & Role</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Last Login / Activity</th>
+                    <th className="p-3 text-right">Administrative Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {officers
+                    .filter((o) => {
+                      const matchSearch =
+                        !officerSearch ||
+                        o.username.toLowerCase().includes(officerSearch.toLowerCase()) ||
+                        o.post_name.toLowerCase().includes(officerSearch.toLowerCase()) ||
+                        o.scope_id.toLowerCase().includes(officerSearch.toLowerCase());
+                      const matchRole =
+                        officerRoleFilter === 'ALL' || o.role.toUpperCase() === officerRoleFilter;
+                      return matchSearch && matchRole;
+                    })
+                    .map((officer) => (
+                      <tr key={officer.id} className="hover:bg-slate-800/40 transition">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold text-xs">
+                              {officer.username.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-white font-bold">{officer.username}</div>
+                              <div className="text-[10px] text-slate-500">{officer.email}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="p-3">
+                          <div className="flex items-center gap-1.5 text-emerald-300 font-bold">
+                            <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>{officer.post_name}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 pl-5">
+                            Scope: {officer.scope_type} • ID: {officer.scope_id}
+                          </div>
+                        </td>
+
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded border text-[10px] font-bold ${
+                              officer.role.toUpperCase() === 'ADMIN'
+                                ? 'bg-rose-950/60 text-rose-300 border-rose-500/30'
+                                : officer.role.toUpperCase() === 'COMMANDER'
+                                ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
+                                : 'bg-purple-950/60 text-purple-300 border-purple-500/30'
+                            }`}
+                          >
+                            {officer.role}
+                          </span>
+                        </td>
+
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded border text-[10px] font-bold ${
+                              officer.is_active
+                                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+                                : 'bg-rose-950/60 text-rose-300 border-rose-500/30'
+                            }`}
+                          >
+                            {officer.is_active ? '🟢 ACTIVE' : '🔴 SUSPENDED'}
+                          </span>
+                        </td>
+
+                        <td className="p-3 text-slate-400 text-[11px]">
+                          {officer.last_login_at
+                            ? new Date(officer.last_login_at).toLocaleString()
+                            : 'First login pending'}
+                        </td>
+
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setSelectedOfficerForReset(officer)}
+                              className="flex items-center gap-1 px-2 py-1 bg-amber-950/50 hover:bg-amber-900/60 text-amber-300 border border-amber-500/30 rounded-lg text-[11px] transition"
+                              title="Set or reset officer password & provide credentials"
+                            >
+                              <Key className="w-3 h-3" />
+                              <span>Password</span>
+                            </button>
+
+                            <button
+                              onClick={() => setSelectedOfficerForReassign(officer)}
+                              className="flex items-center gap-1 px-2 py-1 bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] transition"
+                              title="Reassign duty outpost or transfer officer"
+                            >
+                              <MapPin className="w-3 h-3" />
+                              <span>Transfer Post</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleToggleOfficerStatus(officer)}
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition border border-slate-700"
+                              title={officer.is_active ? 'Suspend account' : 'Reactivate account'}
+                            >
+                              {officer.is_active ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5 text-emerald-400" />}
+                            </button>
+
+                            {officer.username.toLowerCase() !== 'admin' && (
+                              <button
+                                onClick={() => handleDeleteOfficer(officer)}
+                                className="p-1 bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 rounded-lg transition border border-slate-700 hover:border-rose-500/30"
+                                title={`Decommission ${officer.username}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sub-Tab 1: Threat Intelligence Feed */}
       {activeSubTab === 'threats' && (
@@ -780,6 +1048,26 @@ export const EnterpriseSecurityPage: React.FC = () => {
       )}
 
       {/* Modals */}
+      <RegisterOfficerModal
+        isOpen={registerOfficerOpen}
+        onClose={() => setRegisterOfficerOpen(false)}
+        onSuccess={loadData}
+      />
+
+      <ResetPasswordModal
+        isOpen={!!selectedOfficerForReset}
+        officer={selectedOfficerForReset}
+        onClose={() => setSelectedOfficerForReset(null)}
+        onSuccess={loadData}
+      />
+
+      <ReassignPostModal
+        isOpen={!!selectedOfficerForReassign}
+        officer={selectedOfficerForReassign}
+        onClose={() => setSelectedOfficerForReassign(null)}
+        onSuccess={loadData}
+      />
+
       <EdgeCredentialModal
         isOpen={isKeyModalOpen}
         onClose={() => setIsKeyModalOpen(false)}

@@ -51,6 +51,41 @@ export const behaviourService = {
     return response.data;
   },
 
+  async deleteBehaviourRule(ruleId: string): Promise<{ message: string; rule_id: string }> {
+    const response = await api.delete<{ message: string; rule_id: string }>(`/behaviour/rules/${ruleId}`);
+    return response.data;
+  },
+
+  async deleteBehaviourEvent(eventId: string): Promise<{ message: string; event_id: string }> {
+    const response = await api.delete<{ message: string; event_id: string }>(`/behaviour/events/${eventId}`);
+    return response.data;
+  },
+
+  async clearBehaviourEvents(): Promise<{ message: string; deleted_count: number }> {
+    const response = await api.delete<{ message: string; deleted_count: number }>('/behaviour/events/clear');
+    return response.data;
+  },
+
+  async testRuleEvaluation(payload: {
+    rule_id?: string;
+    dwell_sec?: number;
+    speed_ms?: number;
+    stop_count?: number;
+    direction_changes?: number;
+    is_night?: boolean;
+  }): Promise<{
+    rule_id: string;
+    rule_name: string;
+    triggered: boolean;
+    risk_score: number;
+    risk_level: string;
+    factors: string[];
+    simulation_time: string;
+  }> {
+    const response = await api.post('/behaviour/rules/test-eval', payload);
+    return response.data;
+  },
+
   // Baselines
   async getActivityBaselines(cameraId?: string): Promise<ActivityBaseline[]> {
     const response = await api.get<ActivityBaseline[]>('/behaviour/baselines', { params: { camera_id: cameraId } });

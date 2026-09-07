@@ -1,7 +1,7 @@
 import React from 'react';
 import { Camera } from '../../types/camera';
 import { StatusBadge } from '../common/StatusBadge';
-import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone } from 'lucide-react';
+import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin } from 'lucide-react';
 
 interface CameraTableProps {
   cameras: Camera[];
@@ -9,6 +9,7 @@ interface CameraTableProps {
   onEdit: (camera: Camera) => void;
   onDelete: (camera: Camera) => void;
   onTest: (camera: Camera) => void;
+  onLocate?: (camera: Camera) => void;
 }
 
 export const CameraTable: React.FC<CameraTableProps> = ({
@@ -16,7 +17,8 @@ export const CameraTable: React.FC<CameraTableProps> = ({
   onView,
   onEdit,
   onDelete,
-  onTest
+  onTest,
+  onLocate
 }) => {
   return (
     <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl overflow-hidden shadow-xl">
@@ -133,30 +135,39 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                   {/* Actions */}
                   <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">
+                      {onLocate && (
+                        <button
+                          onClick={() => onLocate(camera)}
+                          className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded transition cursor-pointer"
+                          title="Locate on Tactical Map"
+                        >
+                          <MapPin className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => onView(camera)}
-                        className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded transition"
+                        className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded transition cursor-pointer"
                         title="Live Stream View"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => onTest(camera)}
-                        className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded transition"
+                        className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded transition cursor-pointer"
                         title="Test RTSP Stream"
                       >
                         <Activity className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => onEdit(camera)}
-                        className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+                        className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
                         title="Edit Configuration"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => onDelete(camera)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition"
+                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition cursor-pointer"
                         title="Delete Camera"
                       >
                         <Trash2 className="w-4 h-4" />

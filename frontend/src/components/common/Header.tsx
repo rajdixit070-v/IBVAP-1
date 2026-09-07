@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Clock } from 'lucide-react';
+import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Clock, Home, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
@@ -8,13 +8,22 @@ import { alertSoundService } from '../../services/alertSoundService';
 import { AlertsWebSocket } from '../../services/websocket';
 
 interface HeaderProps {
+  activeTab?: string;
+  onNavigateToDashboard?: () => void;
   onOpenMap?: () => void;
   onOpenAssistant?: () => void;
   onToggleSidebar?: () => void;
   sidebarOpen?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onToggleSidebar, sidebarOpen = true }) => {
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  onNavigateToDashboard,
+  onOpenMap,
+  onOpenAssistant,
+  onToggleSidebar,
+  sidebarOpen = true
+}) => {
   const { user, logout } = useAuth();
   const { summary, refreshCameras, loading } = useCameras();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -78,13 +87,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onTo
             </button>
           )}
 
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-sm shadow-cyan-500/20 shrink-0">
-              <Shield className="w-4.5 h-4.5 text-cyan-400" />
+          <div
+            onClick={onNavigateToDashboard}
+            className="flex items-center gap-2.5 cursor-pointer group select-none"
+            title="Return to Central Dashboard"
+          >
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-sm shadow-cyan-500/20 shrink-0 group-hover:border-cyan-400 transition-colors">
+              <Shield className="w-4.5 h-4.5 text-cyan-400 group-hover:scale-105 transition-transform" />
             </div>
             <div className="flex flex-col justify-center leading-none">
               <div className="flex items-center gap-2">
-                <span className="font-mono font-black text-base text-white tracking-widest">IBVAP</span>
+                <span className="font-mono font-black text-base text-white tracking-widest group-hover:text-cyan-300 transition-colors">IBVAP</span>
                 <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30 font-bold tracking-wider">
                   C2 MATRIX
                 </span>
@@ -94,6 +107,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onTo
               </span>
             </div>
           </div>
+
+          {/* Universal Return to Dashboard Quick Action */}
+          {activeTab && activeTab !== 'dashboard' && onNavigateToDashboard && (
+            <button
+              onClick={onNavigateToDashboard}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-cyan-950/70 hover:bg-cyan-900/90 text-cyan-300 hover:text-white rounded-lg border border-cyan-500/50 transition text-xs font-mono font-bold cursor-pointer shadow-md shadow-cyan-950/40 group animate-in fade-in duration-150"
+              title="Return to Central Dashboard / Home"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400 group-hover:-translate-x-0.5 transition-transform" />
+              <Home className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">HOME DASHBOARD</span>
+            </button>
+          )}
 
           {/* Live System Indicator */}
           <div className="hidden lg:flex items-center gap-1.5 pl-3 ml-1 border-l border-slate-800 text-[11px] font-mono">
@@ -189,7 +215,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMap, onOpenAssistant, onTo
                 ? 'text-cyan-300 bg-cyan-950/40 border-cyan-500/40 hover:bg-cyan-900/50 shadow-sm'
                 : 'text-slate-500 bg-slate-900/60 border-slate-800 hover:text-slate-400'
             }`}
-            title={!isMuted ? "Tactical Audio Siren Active (Click to Mute)" : "Tactical Audio Siren Muted (Click to Unmute)"}
+            title={!isMuted ? "Voice Alert & Tactical Siren Active (Click to Mute)" : "Voice Alert & Tactical Siren Muted (Click to Unmute)"}
           >
             {!isMuted ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
           </button>

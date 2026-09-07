@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { CameraProvider, useCameras } from './context/CameraContext';
 import { Header } from './components/common/Header';
@@ -37,15 +37,40 @@ import { Camera } from './types/camera';
 import { Bot } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const getInitialTab = () => {
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    return hash || 'dashboard';
+  };
+  const [activeTab, setActiveTabState] = useState(getInitialTab);
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    if (window.location.hash !== `#${tab}`) {
+      window.location.hash = `#${tab}`;
+    }
+  };
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
+      setActiveTabState(hash);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
   const [selectedCameraForInspection, setSelectedCameraForInspection] = useState<Camera | null>(null);
   const [selectedCameraForEdit, setSelectedCameraForEdit] = useState<Camera | null>(null);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [globalMapOpen, setGlobalMapOpen] = useState(false);
+  const [targetMapCamera, setTargetMapCamera] = useState<Camera | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const { refreshCameras } = useCameras();
+  const { cameras, refreshCameras } = useCameras();
 
   const handleInspect = (cam: Camera) => {
     setSelectedCameraForInspection(cam);
@@ -56,16 +81,33 @@ const MainLayout: React.FC = () => {
     setCameraModalOpen(true);
   };
 
+  const handleOpenMapWithTarget = (cameraOrId?: Camera | string) => {
+    if (!cameraOrId) {
+      setTargetMapCamera(null);
+      setGlobalMapOpen(true);
+      return;
+    }
+    if (typeof cameraOrId === 'string') {
+      const found = cameras.find((c) => c.camera_id === cameraOrId);
+      setTargetMapCamera(found || null);
+    } else {
+      setTargetMapCamera(cameraOrId);
+    }
+    setGlobalMapOpen(true);
+  };
+
   return (
     <div className="h-screen flex flex-col bg-[#0b0f17] text-slate-100 overflow-hidden">
       <Header
-        onOpenMap={() => setGlobalMapOpen(true)}
+        activeTab={activeTab}
+        onNavigateToDashboard={() => setActiveTab('dashboard')}
+        onOpenMap={() => handleOpenMapWithTarget()}
         onOpenAssistant={() => setAssistantOpen(true)}
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
         sidebarOpen={sidebarOpen}
       />
       <LiveAlertToast
-        onOpenMap={() => setGlobalMapOpen(true)}
+        onOpenMap={(camId) => handleOpenMapWithTarget(camId)}
         onOpenIncident={() => setActiveTab('incidents')}
       />
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
@@ -85,33 +127,37 @@ const MainLayout: React.FC = () => {
               onNavigateToANPR={() => setActiveTab('anpr')}
               onNavigateToFace={() => setActiveTab('face')}
               onNavigateToEdge={() => setActiveTab('edge')}
+              onNavigateToHealth={() => setActiveTab('health')}
+              onNavigateToPredictive={() => setActiveTab('predictive')}
+              onNavigateToDrones={() => setActiveTab('drone-operations')}
+              onNavigateToGIS={() => setActiveTab('gis-intelligence')}
               onInspectCamera={handleInspect}
             />
           )}
 
-          {activeTab === 'soc' && <CommandCenterPage />}
-          {activeTab === 'health' && <SystemHealthCenterPage />}
-          {activeTab === 'federation' && <MultiSiteCommandPage />}
+          {activeTab === 'soc' && <CommandCenterPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'health' && <SystemHealthCenterPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'federation' && <MultiSiteCommandPage onBackToDashboard={() => setActiveTab('dashboard')} />}
           {activeTab === 'multimodal' && <MultimodalIntelligencePage />}
-          {activeTab === 'security' && <EnterpriseSecurityPage />}
-          {activeTab === 'predictive' && <PredictiveIntelligencePage />}
-          {activeTab === 'behaviour' && <BehaviourIntelligencePage />}
+          {activeTab === 'security' && <EnterpriseSecurityPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'predictive' && <PredictiveIntelligencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'behaviour' && <BehaviourIntelligencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
           {activeTab === 'cross-camera' && <MovementIntelligencePage />}
-          {activeTab === 'incidents' && <IncidentsPage />}
-          {activeTab === 'cameras' && <CameraManagementPage />}
+          {activeTab === 'incidents' && <IncidentsPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'cameras' && <CameraManagementPage onLocateOnMap={(cam) => handleOpenMapWithTarget(cam)} />}
           {activeTab === 'live' && <LivePreviewPage />}
           {activeTab === 'ai-pipeline' && <AIPipelinePage />}
           {activeTab === 'intelligence' && <PerimeterIntelligencePage />}
           {activeTab === 'anpr' && <VehicleIntelligencePage />}
           {activeTab === 'face' && <FaceIntelligencePage />}
-          {activeTab === 'edge' && <EdgeInfrastructurePage />}
+          {activeTab === 'edge' && <EdgeInfrastructurePage onBackToDashboard={() => setActiveTab('dashboard')} />}
           {activeTab === 'events' && <SecurityEventsPage />}
-          {activeTab === 'evidence' && <ForensicEvidencePage />}
+          {activeTab === 'evidence' && <ForensicEvidencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
           {activeTab === 'sensor-fusion' && <SensorFusionPage />}
-          {activeTab === 'thermal-fusion' && <ThermalFusionPage />}
-          {activeTab === 'ptz-control' && <PTZControlPage />}
-          {activeTab === 'drone-operations' && <DroneOperationsPage />}
-          {activeTab === 'gis-intelligence' && <GISIntelligencePage />}
+          {activeTab === 'thermal-fusion' && <ThermalFusionPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'ptz-control' && <PTZControlPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'drone-operations' && <DroneOperationsPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'gis-intelligence' && <GISIntelligencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
         </main>
       </div>
 
@@ -135,7 +181,11 @@ const MainLayout: React.FC = () => {
       {/* Situational Awareness Map Modal */}
       <SituationalMapModal
         isOpen={globalMapOpen}
-        onClose={() => setGlobalMapOpen(false)}
+        onClose={() => {
+          setGlobalMapOpen(false);
+          setTargetMapCamera(null);
+        }}
+        targetCamera={targetMapCamera}
         onSelectIncident={() => {
           setGlobalMapOpen(false);
           setActiveTab('incidents');

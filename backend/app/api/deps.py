@@ -84,8 +84,9 @@ def get_current_user_optional(
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Ensures caller has administrator or operational commander privileges."""
-    admin_roles = ["admin", "SUPER_ADMIN", "SITE_ADMIN", "COMMANDER"]
-    if current_user.role not in admin_roles:
+    user_role = (current_user.role or "").strip().upper()
+    admin_roles = {"ADMIN", "SUPER_ADMIN", "SUPERADMIN", "SITE_ADMIN", "COMMANDER"}
+    if user_role not in admin_roles and not getattr(current_user, "is_superuser", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required for this operation."
@@ -95,18 +96,20 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 def require_camera_admin(current_user: User = Depends(get_current_user)) -> User:
     """Ensures caller has administrator or checkpost commander privileges to configure cameras."""
-    allowed_roles = ["admin", "SUPER_ADMIN", "SITE_ADMIN", "COMMANDER", "BOP_OPERATOR"]
-    if current_user.role not in allowed_roles:
+    user_role = (current_user.role or "").strip().upper()
+    allowed_roles = {"ADMIN", "SUPER_ADMIN", "SUPERADMIN", "SITE_ADMIN", "COMMANDER", "BOP_OPERATOR", "OPERATOR", "OFFICER"}
+    if user_role not in allowed_roles and not getattr(current_user, "is_superuser", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin or Checkpost Commander privileges required to add cameras."
+            detail="Admin or Checkpost Officer privileges required to configure cameras."
         )
     return current_user
 
 
 def require_super_admin(current_user: User = Depends(get_current_user)) -> User:
     """Ensures caller has super administrator privileges."""
-    if current_user.role not in ["admin", "SUPER_ADMIN"]:
+    user_role = (current_user.role or "").strip().upper()
+    if user_role not in {"ADMIN", "SUPER_ADMIN", "SUPERADMIN"} and not getattr(current_user, "is_superuser", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super Administrator privileges required for this security operation."

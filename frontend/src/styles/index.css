@@ -8,6 +8,30 @@
 .leaflet-container {
   background-color: #070b14 !important;
   font-family: inherit;
+  outline: none;
+}
+
+.leaflet-tile {
+  image-rendering: auto;
+}
+
+.leaflet-bar {
+  border: 1px solid #334155 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-bar a {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  color: #38bdf8 !important;
+  border-bottom: 1px solid #334155 !important;
+  transition: all 0.2s ease;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
 }
 
 .leaflet-popup-content-wrapper {

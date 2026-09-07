@@ -111,3 +111,21 @@ class DroneHandoffService:
             query = query.filter(DroneHandoffEvent.global_track_id == global_track_id)
         return query.order_by(DroneHandoffEvent.timestamp.desc()).limit(limit).all()
 
+    @staticmethod
+    def delete_handoff(db: Session, handoff_id: str) -> bool:
+        event = db.query(DroneHandoffEvent).filter(DroneHandoffEvent.handoff_id == handoff_id).first()
+        if not event:
+            return False
+        db.delete(event)
+        db.commit()
+        logger.info(f"Target Handoff Record Deleted: {handoff_id}")
+        return True
+
+    @staticmethod
+    def clear_handoff_history(db: Session) -> int:
+        count = db.query(DroneHandoffEvent).delete()
+        db.commit()
+        logger.info(f"Cleared all {count} target handoff history events")
+        return count
+
+

@@ -1,4 +1,4 @@
-﻿import json
+import json
 import uuid
 from datetime import datetime
 from typing import List, Optional
@@ -44,7 +44,7 @@ def list_dispatches(
     query = db.query(BOPDispatch)
     
     # If not Super Admin, constrain to user's assigned BOP
-    is_super = current_user.role in ["admin", "SUPER_ADMIN"]
+    is_super = str(current_user.role or '').upper() in ["ADMIN", "SUPER_ADMIN", "SUPERADMIN", "CENTRAL_ADMIN", "SITE_ADMIN"]
     if not is_super:
         user_bop = get_user_bop(current_user, db)
         query = query.filter(BOPDispatch.bop_id == user_bop)

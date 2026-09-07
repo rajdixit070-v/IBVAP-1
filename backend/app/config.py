@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     DEFAULT_ADMIN_USERNAME: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     DEFAULT_ADMIN_PASSWORD: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@IBVAP2026")
     DEFAULT_ADMIN_EMAIL: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@ibvap.mil")
+
+    # Default Checkpost Officer Credentials
+    DEFAULT_OFFICER_USERNAME: str = os.getenv("DEFAULT_OFFICER_USERNAME", "officer_alpha")
+    DEFAULT_OFFICER_PASSWORD: str = os.getenv("DEFAULT_OFFICER_PASSWORD", "Officer@IBVAP2026")
+    DEFAULT_OFFICER_EMAIL: str = os.getenv("DEFAULT_OFFICER_EMAIL", "officer.alpha@ibvap.mil")
     
     # CORS
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")

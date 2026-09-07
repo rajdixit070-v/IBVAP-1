@@ -32,7 +32,10 @@ import {
   FolderLock,
   FileCheck,
   ShieldCheck,
-  Flame
+  Flame,
+  HeartPulse,
+  Plane,
+  Compass
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -48,6 +51,10 @@ interface DashboardPageProps {
   onNavigateToANPR?: () => void;
   onNavigateToFace?: () => void;
   onNavigateToEdge?: () => void;
+  onNavigateToHealth?: () => void;
+  onNavigateToPredictive?: () => void;
+  onNavigateToDrones?: () => void;
+  onNavigateToGIS?: () => void;
   onInspectCamera: (camera: Camera) => void;
 }
 
@@ -61,8 +68,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigateToEvents,
   onNavigateToANPR,
   onNavigateToFace,
-
   onNavigateToEdge,
+  onNavigateToHealth,
+  onNavigateToPredictive,
+  onNavigateToDrones,
+  onNavigateToGIS,
   onInspectCamera
 }) => {
 
@@ -160,7 +170,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           <span className="text-xs font-mono text-slate-400">Level-5 Central Supreme Authority</span>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {onNavigateToSOC && (
             <button
               onClick={onNavigateToSOC}
@@ -171,7 +181,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
               <div>
                 <div className="text-xs font-bold text-white group-hover:text-rose-400 transition">SOC Command</div>
-                <div className="text-[10px] text-slate-400">Real-time threat triage</div>
+                <div className="text-[10px] text-slate-400">Threat triage</div>
               </div>
             </button>
           )}
@@ -186,7 +196,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
               <div>
                 <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Federated Map</div>
-                <div className="text-[10px] text-slate-400">National border sites</div>
+                <div className="text-[10px] text-slate-400">National border</div>
               </div>
             </button>
           )}
@@ -200,8 +210,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-xs font-bold text-white group-hover:text-purple-400 transition">Officer Management</div>
-                <div className="text-[10px] text-slate-400">Assign BOPs & RBAC</div>
+                <div className="text-xs font-bold text-white group-hover:text-purple-400 transition">Officer Mgmt</div>
+                <div className="text-[10px] text-slate-400">Assign BOPs & Pass</div>
               </div>
             </button>
           )}
@@ -216,7 +226,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
               <div>
                 <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition">Forensic Vault</div>
-                <div className="text-[10px] text-slate-400">SHA-256 chain of custody</div>
+                <div className="text-[10px] text-slate-400">SHA-256 custody</div>
               </div>
             </button>
           )}
@@ -230,8 +240,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <FileCheck className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-xs font-bold text-white group-hover:text-amber-400 transition">SOP Playbooks</div>
-                <div className="text-[10px] text-slate-400">QRT response workflows</div>
+                <div className="text-xs font-bold text-white group-hover:text-amber-400 transition">SOP Orders</div>
+                <div className="text-[10px] text-slate-400">QRT playbooks</div>
               </div>
             </button>
           )}
@@ -245,8 +255,68 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <Server className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-xs font-bold text-white group-hover:text-sky-400 transition">Border Edge Sync</div>
-                <div className="text-[10px] text-slate-400">Outpost connectivity</div>
+                <div className="text-xs font-bold text-white group-hover:text-sky-400 transition">Edge Fleet</div>
+                <div className="text-[10px] text-slate-400">Outpost sync</div>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToHealth && (
+            <button
+              onClick={onNavigateToHealth}
+              className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+            >
+              <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
+                <HeartPulse className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Health Matrix</div>
+                <div className="text-[10px] text-slate-400">9 Subsystems & SLAs</div>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToPredictive && (
+            <button
+              onClick={onNavigateToPredictive}
+              className="group p-4 bg-[#111a2e] hover:bg-teal-950/40 border border-[#1e293b] hover:border-teal-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+            >
+              <div className="p-2 w-fit rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/30 group-hover:scale-110 transition">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white group-hover:text-teal-400 transition">Predictive AI</div>
+                <div className="text-[10px] text-slate-400">24H Threat Forecast</div>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToDrones && (
+            <button
+              onClick={onNavigateToDrones}
+              className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+            >
+              <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
+                <Plane className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Drone Fleet</div>
+                <div className="text-[10px] text-slate-400">Patrol & Handoffs</div>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToGIS && (
+            <button
+              onClick={onNavigateToGIS}
+              className="group p-4 bg-[#111a2e] hover:bg-indigo-950/40 border border-[#1e293b] hover:border-indigo-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+            >
+              <div className="p-2 w-fit rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 group-hover:scale-110 transition">
+                <Compass className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white group-hover:text-indigo-400 transition">GIS Terrain</div>
+                <div className="text-[10px] text-slate-400">Perimeter & FOV</div>
               </div>
             </button>
           )}

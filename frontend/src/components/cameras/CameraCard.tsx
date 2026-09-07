@@ -1,7 +1,7 @@
 import React from 'react';
 import { Camera } from '../../types/camera';
 import { StatusBadge } from '../common/StatusBadge';
-import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone } from 'lucide-react';
+import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin } from 'lucide-react';
 
 interface CameraCardProps {
   camera: Camera;
@@ -9,6 +9,7 @@ interface CameraCardProps {
   onEdit: (camera: Camera) => void;
   onDelete: (camera: Camera) => void;
   onTest: (camera: Camera) => void;
+  onLocate?: (camera: Camera) => void;
 }
 
 export const CameraCard: React.FC<CameraCardProps> = ({
@@ -16,7 +17,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   onView,
   onEdit,
   onDelete,
-  onTest
+  onTest,
+  onLocate
 }) => {
   const url = camera.rtsp_url || '';
   const st = camera.stream_type || '';
@@ -105,25 +107,36 @@ export const CameraCard: React.FC<CameraCardProps> = ({
 
       {/* Footer Actions */}
       <div className="p-3 border-t border-[#1e293b] bg-[#0c1322] flex items-center justify-between">
-        <button
-          onClick={() => onTest(camera)}
-          className="flex items-center gap-1 text-xs font-mono text-sky-400 hover:text-sky-300 transition"
-        >
-          <Activity className="w-3.5 h-3.5" />
-          <span>TEST STREAM</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onTest(camera)}
+            className="flex items-center gap-1 text-xs font-mono text-sky-400 hover:text-sky-300 transition cursor-pointer"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>TEST</span>
+          </button>
+          {onLocate && (
+            <button
+              onClick={() => onLocate(camera)}
+              className="flex items-center gap-1 text-xs font-mono text-amber-400 hover:text-amber-300 transition cursor-pointer"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              <span>MAP</span>
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center gap-1">
           <button
             onClick={() => onEdit(camera)}
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
             title="Edit Camera"
           >
             <Edit2 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => onDelete(camera)}
-            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition"
+            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition cursor-pointer"
             title="Delete Camera"
           >
             <Trash2 className="w-3.5 h-3.5" />

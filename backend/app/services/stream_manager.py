@@ -159,8 +159,9 @@ class StreamManager:
         return {cam_id: s.get_status_info() for cam_id, s in streamers_snapshot}
 
     def _get_offline_placeholder_jpeg(self, camera_id: str) -> bytes:
-        """Generates dynamic dark tactical placeholder JPEG for offline stream."""
+        """Generates dynamic dark tactical placeholder JPEG with timestamp for offline stream."""
         import cv2
+        from datetime import datetime
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         frame[:] = (15, 20, 25) # Dark tactical slate
         
@@ -169,13 +170,23 @@ class StreamManager:
             cv2.line(frame, (0, y), (640, y), (30, 35, 42), 1)
         for x in range(0, 640, 80):
             cv2.line(frame, (x, 0), (x, 480), (30, 35, 42), 1)
+
+        # Top HUD bar
+        cv2.rectangle(frame, (0, 0), (640, 40), (10, 14, 18), -1)
+        cv2.putText(frame, f"IBVAP CCTV // NODE: {camera_id}", (15, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 225, 235), 1)
+        timestamp_str = datetime.now().strftime("%d-%b-%Y %H:%M:%S")
+        cv2.putText(frame, timestamp_str, (430, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 210, 255), 1)
             
-        cv2.rectangle(frame, (140, 180), (500, 300), (25, 30, 38), -1)
-        cv2.rectangle(frame, (140, 180), (500, 300), (50, 60, 75), 1)
+        cv2.rectangle(frame, (120, 170), (520, 310), (22, 28, 36), -1)
+        cv2.rectangle(frame, (120, 170), (520, 310), (50, 60, 75), 1)
         
-        cv2.putText(frame, "STREAM OFFLINE", (195, 230), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (80, 90, 240), 2)
-        cv2.putText(frame, f"NODE: {camera_id}", (220, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 170, 185), 1)
-        cv2.putText(frame, "Awaiting Camera Signal / Reconnecting...", (175, 285), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 110, 125), 1)
+        cv2.putText(frame, "STANDBY / CONNECTING", (170, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (80, 140, 255), 2)
+        cv2.putText(frame, f"Awaiting Video Stream Signal...", (185, 255), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 170, 185), 1)
+        cv2.putText(frame, "Auto-Reconnecting Ingestion Engine Active", (155, 285), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 190, 130), 1)
+
+        # Bottom HUD bar
+        cv2.rectangle(frame, (0, 450), (640, 480), (10, 14, 18), -1)
+        cv2.putText(frame, "STATUS: SEARCHING PROTOCOL // RTSP • WEBCAM • HTTP • UDP", (15, 470), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (120, 135, 150), 1)
         
         _, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
         return jpeg.tobytes()
@@ -191,6 +202,9 @@ class StreamManager:
         
         while True:
             streamer = self.get_streamer(camera_id)
+            if not streamer or not getattr(streamer, "_running", False):
+                streamer = self.ensure_camera_running(camera_id)
+
             if not streamer or not getattr(streamer, "_running", False) or streamer.status == "OFFLINE":
                 offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
                 yield (
@@ -199,7 +213,7 @@ class StreamManager:
                     b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
                     offline_jpeg + b"\r\n"
                 )
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.08)
                 continue
 
             jpeg_bytes = streamer.get_latest_jpeg()
@@ -218,7 +232,7 @@ class StreamManager:
                     b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
                     offline_jpeg + b"\r\n"
                 )
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.05)
                 continue
             await asyncio.sleep(frame_interval)
 

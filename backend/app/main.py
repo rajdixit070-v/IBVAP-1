@@ -52,6 +52,7 @@ from app.models.bop_dispatch import BOPDispatch
 
 from app.core.security import get_password_hash, encrypt_credential
 from app.api.v1.auth import router as auth_router
+from app.api.v1.users import router as users_router
 from app.api.v1.cameras import router as cameras_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.zones import router as zones_router
@@ -291,6 +292,38 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                 assigned_by="system"
             )
             db.add(admin_scope)
+            db.commit()
+
+        # Create default Checkpost Officer if not exists
+        officer = db.query(User).filter(User.username == settings.DEFAULT_OFFICER_USERNAME).first()
+        if not officer:
+            officer = User(
+                username=settings.DEFAULT_OFFICER_USERNAME,
+                email=settings.DEFAULT_OFFICER_EMAIL,
+                hashed_password=get_password_hash(settings.DEFAULT_OFFICER_PASSWORD),
+                role="COMMANDER",
+                is_active=True
+            )
+            db.add(officer)
+            db.commit()
+            logger.info(f"Default officer user '{settings.DEFAULT_OFFICER_USERNAME}' created.")
+        else:
+            # Ensure active and password updated if needed
+            if not officer.is_active:
+                officer.is_active = True
+                db.commit()
+
+        # Assign BOP-ALPHA scope to officer
+        officer_scope = db.query(SiteUserScope).filter(SiteUserScope.username == settings.DEFAULT_OFFICER_USERNAME).first()
+        if not officer_scope:
+            officer_scope = SiteUserScope(
+                username=settings.DEFAULT_OFFICER_USERNAME,
+                scope_type="BOP",
+                scope_id="BOP-ALPHA",
+                role="BOP_OPERATOR",
+                assigned_by="system"
+            )
+            db.add(officer_scope)
             db.commit()
 
         # Seed initial Behaviour Rules (Phase 8)
@@ -547,6 +580,7 @@ app.add_middleware(
 
 # Mount API Routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
+app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(cameras_router, prefix=settings.API_V1_STR)
 app.include_router(ai_router, prefix=settings.API_V1_STR)
 app.include_router(zones_router, prefix=settings.API_V1_STR)

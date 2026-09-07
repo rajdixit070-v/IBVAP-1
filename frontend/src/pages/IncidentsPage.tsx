@@ -17,10 +17,15 @@ import {
   Flame,
   Sparkles,
   Maximize2,
-  Trash2
+  Trash2,
+  ArrowLeft
 } from 'lucide-react';
 
-export const IncidentsPage: React.FC = () => {
+interface IncidentsPageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const IncidentsPage: React.FC<IncidentsPageProps> = ({ onBackToDashboard }) => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [analytics, setAnalytics] = useState<IncidentAnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +144,16 @@ export const IncidentsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-mono font-bold transition border border-slate-700 cursor-pointer"
+              title="Return to Central Dashboard"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>DASHBOARD</span>
+            </button>
+          )}
           {incidents.length > 0 && (
             <button
               onClick={handleClearAllIncidents}

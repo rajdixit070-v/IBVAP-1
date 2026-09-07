@@ -20,11 +20,16 @@ import {
   ShieldCheck,
   Sparkles,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft
 } from 'lucide-react';
 import { useCameras } from '../context/CameraContext';
 
-export const PredictiveIntelligencePage: React.FC = () => {
+interface PredictiveIntelligencePageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProps> = ({ onBackToDashboard }) => {
   const { cameras } = useCameras();
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [timeSeries, setTimeSeries] = useState<ActivityTimeSeriesResponse | null>(null);
@@ -92,13 +97,23 @@ export const PredictiveIntelligencePage: React.FC = () => {
     <div className="p-6 space-y-6">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-[#172138] via-[#10192b] to-[#0a101d] border border-cyan-500/30 rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2.5">
+            {onBackToDashboard && (
+              <button
+                onClick={onBackToDashboard}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-xl text-xs font-mono font-bold border border-slate-700 transition cursor-pointer shadow-sm group"
+                title="Return to Central Dashboard"
+              >
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform text-cyan-400" />
+                <span>Back to Dashboard</span>
+              </button>
+            )}
             <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[11px] font-bold border border-cyan-500/30 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
               PREDICTIVE FORECASTING MATRIX
             </span>
-            <span className="text-slate-400 font-mono text-xs">• ANOMALY FORECASTING & EARLY WARNING</span>
+            <span className="text-slate-400 font-mono text-xs hidden sm:inline">• ANOMALY FORECASTING & EARLY WARNING</span>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wide">
             Predictive Intelligence & Early Warning Decision Console

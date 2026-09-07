@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Wrench, AlertTriangle } from 'lucide-react';
 import { healthService } from '../../services/healthService';
 
@@ -24,7 +24,16 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setTargetType(defaultTargetType);
+      setTargetId(defaultTargetId);
+      setError(null);
+    }
+  }, [isOpen, defaultTargetType, defaultTargetId]);
+
   if (!isOpen) return null;
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

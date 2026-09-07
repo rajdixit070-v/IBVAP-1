@@ -138,15 +138,17 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       setAndroidIp('192.168.1.15');
       setAndroidPort('8080');
 
+      const defaultBop = user?.scope_id && user?.scope_id !== '*' ? user.scope_id : 'BOP-ALPHA';
+
       setFormData({
         camera_id: '',
         camera_name: '',
         description: '',
-        bop_site: '',
-        sector: '',
-        location: '',
-        latitude: undefined,
-        longitude: undefined,
+        bop_site: defaultBop,
+        sector: 'Sector-North',
+        location: 'Perimeter Gate Tower 1',
+        latitude: 31.6245,
+        longitude: 74.8725,
         rtsp_url: '',
         username: '',
         password: '',
@@ -155,7 +157,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       });
     }
     setError(null);
-  }, [cameraToEdit, isOpen]);
+  }, [cameraToEdit, isOpen, user]);
 
   // Handle source category change
   const handleSelectSourceCategory = (cat: SourceCategory) => {
@@ -329,28 +331,55 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
     try {
       const chosenEdgeId = isEdgeManaged ? (selectedEdgeNodeId || (edgeNodes[0]?.node_id || 'EDGE-BOP-001')) : 'CENTRAL';
+      const cleanBopSite = formData.bop_site?.trim() || 'BOP-ALPHA';
+      const cleanSector = formData.sector?.trim() || 'Sector-North';
+      const cleanCameraId = formData.camera_id?.trim().toUpperCase();
+
+      if (!isEditing && !cleanCameraId) {
+        setError('Please enter a valid Camera ID (e.g. CAM-NORTH-01).');
+        setSaving(false);
+        return;
+      }
+      if (!formData.rtsp_url?.trim()) {
+        setError('Please enter a valid Stream URL (e.g. rtsp://, http://, or webcam://0).');
+        setSaving(false);
+        return;
+      }
+
       if (isEditing) {
         const updatePayload: any = {
-          camera_name: formData.camera_name,
-          description: formData.description,
-          bop_site: formData.bop_site,
-          sector: formData.sector,
-          location: formData.location,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
-          rtsp_url: formData.rtsp_url,
-          username: formData.username,
-          stream_type: formData.stream_type,
+          camera_name: formData.camera_name.trim(),
+          description: formData.description?.trim() || undefined,
+          bop_site: cleanBopSite,
+          sector: cleanSector,
+          location: formData.location?.trim() || undefined,
+          latitude: formData.latitude ?? 31.6245,
+          longitude: formData.longitude ?? 74.8725,
+          rtsp_url: formData.rtsp_url.trim(),
+          username: formData.username?.trim() || undefined,
+          stream_type: formData.stream_type || 'main',
           enabled: formData.enabled,
           edge_node_id: chosenEdgeId
         };
         if (formData.password?.trim()) {
-          updatePayload.password = formData.password;
+          updatePayload.password = formData.password.trim();
         }
         await cameraService.updateCamera(cameraToEdit!.camera_id, updatePayload);
       } else {
         const createPayload: any = {
-          ...formData,
+          camera_id: cleanCameraId,
+          camera_name: formData.camera_name.trim(),
+          description: formData.description?.trim() || undefined,
+          bop_site: cleanBopSite,
+          sector: cleanSector,
+          location: formData.location?.trim() || undefined,
+          latitude: formData.latitude ?? 31.6245,
+          longitude: formData.longitude ?? 74.8725,
+          rtsp_url: formData.rtsp_url.trim(),
+          username: formData.username?.trim() || undefined,
+          password: formData.password?.trim() || undefined,
+          stream_type: formData.stream_type || 'main',
+          enabled: formData.enabled,
           edge_node_id: chosenEdgeId
         };
         await cameraService.createCamera(createPayload);

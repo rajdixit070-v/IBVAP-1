@@ -77,11 +77,15 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
       return;
     }
 
+    let isSubscribed = true;
+    let ws: LiveFeedWebSocket | null = null;
+
     if (!useFallbackMjpeg) {
       try {
-        const ws = new LiveFeedWebSocket(
+        ws = new LiveFeedWebSocket(
           camera.camera_id,
           (blobUrl) => {
+            if (!isSubscribed) return;
             setFrameSrc(blobUrl);
 
             frameCountRef.current += 1;
@@ -94,18 +98,27 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           },
           (err) => {
             console.warn(`WebSocket stream issue for ${camera.camera_id}, switching to MJPEG:`, err);
-            setUseFallbackMjpeg(true);
+            if (isSubscribed) {
+              setUseFallbackMjpeg(true);
+              setFrameSrc(null);
+            }
           }
         );
         wsVideoRef.current = ws;
-
-        return () => {
-          ws.close();
-        };
       } catch (e) {
-        setUseFallbackMjpeg(true);
+        if (isSubscribed) {
+          setUseFallbackMjpeg(true);
+          setFrameSrc(null);
+        }
       }
     }
+
+    return () => {
+      isSubscribed = false;
+      if (ws) {
+        ws.close();
+      }
+    };
   }, [camera.camera_id, camera.enabled, autoPlay, useFallbackMjpeg]);
 
   // AI Telemetry WebSocket

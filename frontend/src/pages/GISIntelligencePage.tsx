@@ -26,7 +26,7 @@ import { SecurityEvent } from '../types/event';
 import { useCameras } from '../context/CameraContext';
 import { useAuth } from '../context/AuthContext';
 import { TacticalLeafletMap } from '../components/common/TacticalLeafletMap';
-import { Locate, Navigation } from 'lucide-react';
+import { Locate, Navigation, ArrowLeft } from 'lucide-react';
 
 
 const SECTOR_PRESETS: Record<string, { name: string; lat: number; lng: number; sectorName: string; description: string }> = {
@@ -60,7 +60,11 @@ const SECTOR_PRESETS: Record<string, { name: string; lat: number; lng: number; s
   }
 };
 
-export const GISIntelligencePage: React.FC = () => {
+interface GISIntelligencePageProps {
+  onBackToDashboard?: () => void;
+}
+
+export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = ({ onBackToDashboard }) => {
   const { user } = useAuth();
   const { cameras } = useCameras();
   const [layers, setLayers] = useState<GISLayer[]>([]);
@@ -183,6 +187,16 @@ export const GISIntelligencePage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-sm transition cursor-pointer font-mono font-medium"
+              title="Return to Central Dashboard"
+            >
+              <ArrowLeft className="w-4 h-4 text-cyan-400" />
+              <span>Dashboard</span>
+            </button>
+          )}
           <span className="text-xs font-mono px-2.5 py-1 rounded bg-black/40 border border-slate-700 text-emerald-400 hidden sm:inline-block">
             OPERATOR: {user?.username?.toUpperCase() || 'OFFICER'} ({user?.role?.toUpperCase() || 'COMMAND'})
           </span>
@@ -332,6 +346,7 @@ export const GISIntelligencePage: React.FC = () => {
               cameras={cameras}
               events={liveEvents}
               blindSpots={blindSpots}
+              layers={layers}
               center={currentCenter}
               zoom={currentZoom}
               height="480px"

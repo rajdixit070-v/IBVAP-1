@@ -115,6 +115,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
           badge: '24H'
         }
       ]
+    },
+    {
+      title: 'TACTICAL SENSORS & GROUND CONTROLS',
+      items: [
+        {
+          id: 'ptz-control',
+          label: 'PTZ Joystick & Optical Zoom',
+          icon: Crosshair,
+          badge: 'JOYSTICK'
+        },
+        {
+          id: 'thermal-fusion',
+          label: 'Thermal + Night IR Fusion',
+          icon: Flame,
+          badge: 'NIGHT IR'
+        },
+        {
+          id: 'drone-operations',
+          label: 'Drone Fleet & Patrol',
+          icon: Plane,
+          badge: 'UAV'
+        },
+        {
+          id: 'behaviour',
+          label: 'Behaviour Intelligence',
+          icon: Activity,
+          badge: 'RULES'
+        },
+        {
+          id: 'gis-intelligence',
+          label: 'Checkpost GIS & Terrain Map',
+          icon: Map,
+          badge: 'GPS'
+        }
+      ]
     }
   ];
 

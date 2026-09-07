@@ -19,12 +19,12 @@ import { TacticalLeafletMap } from '../common/TacticalLeafletMap';
 
 
 interface SituationalMapModalProps {
-
   isOpen: boolean;
   onClose: () => void;
   incidents?: Incident[];
   onSelectIncident: (inc: Incident) => void;
   onInspectCamera?: (cam: Camera) => void;
+  targetCamera?: Camera | null;
 }
 
 export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
@@ -32,13 +32,20 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
   onClose,
   incidents = [],
   onSelectIncident,
-  onInspectCamera
+  onInspectCamera,
+  targetCamera
 }) => {
   const { cameras } = useCameras();
   const [liveIncidents, setLiveIncidents] = useState<Incident[]>(incidents);
-  const [selectedCam, setSelectedCam] = useState<Camera | null>(null);
+  const [selectedCam, setSelectedCam] = useState<Camera | null>(targetCamera || null);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'INCIDENT' | 'ONLINE'>('ALL');
   const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
+
+  useEffect(() => {
+    if (targetCamera) {
+      setSelectedCam(targetCamera);
+    }
+  }, [targetCamera]);
 
   useEffect(() => {
     if (isOpen) {
@@ -143,6 +150,9 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
           <TacticalLeafletMap
             cameras={filteredCameras}
             onCameraSelect={(cam) => setSelectedCam(cam)}
+            center={targetCamera?.latitude && targetCamera?.longitude ? [targetCamera.latitude, targetCamera.longitude] : undefined}
+            zoom={targetCamera ? 16 : 13}
+            selectedCameraId={selectedCam?.camera_id}
             height="420px"
           />
         ) : (
@@ -227,6 +237,11 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
 
                   <div className="text-xs font-semibold text-white truncate">{cam.camera_name}</div>
                   
+                  {/* Live Video Preview in Grid Tile */}
+                  <div className="my-2 aspect-video bg-black rounded-lg overflow-hidden border border-slate-800/80 relative shadow-inner">
+                    <LiveVideoPlayer camera={cam} autoPlay showControls={false} />
+                  </div>
+
                   {activeInc && (
                     <div className="mt-1.5 p-1.5 bg-rose-900/50 border border-rose-500/40 rounded-lg text-[10px] font-mono text-rose-200">
                       <div className="font-bold flex items-center justify-between">

@@ -94,6 +94,35 @@ class DroneService:
         db.refresh(drone)
         return drone
 
+    @staticmethod
+    def delete_drone(db: Session, drone_id: str) -> bool:
+        drone = db.query(Drone).filter(Drone.drone_id == drone_id).first()
+        if not drone:
+            return False
+        db.query(DroneMission).filter(DroneMission.drone_id == drone_id).delete()
+        db.delete(drone)
+        db.commit()
+        logger.info(f"Deleted Drone: {drone_id}")
+        return True
+
+    @staticmethod
+    def delete_mission(db: Session, mission_id: str) -> bool:
+        mission = db.query(DroneMission).filter(DroneMission.mission_id == mission_id).first()
+        if not mission:
+            return False
+        db.delete(mission)
+        db.commit()
+        logger.info(f"Deleted DroneMission: {mission_id}")
+        return True
+
+    @staticmethod
+    def clear_all_drones(db: Session) -> int:
+        db.query(DroneMission).delete()
+        count = db.query(Drone).delete()
+        db.commit()
+        logger.info(f"Cleared all {count} drones and missions")
+        return count
+
     # --- Mission Lifecycle State Machine ---
     @staticmethod
     def create_mission(db: Session, data: DroneMissionCreate, user_id: str = "operator") -> DroneMission:

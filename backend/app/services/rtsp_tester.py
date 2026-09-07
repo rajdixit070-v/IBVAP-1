@@ -180,16 +180,16 @@ def test_rtsp_connection(
                 ])
 
             # 1. Fast probe via direct HTTP request (handles shot.jpg and multipart /video)
-            import urllib.request
+            from app.services.rtsp_streamer import RTSPStreamer
             for cu in candidate_urls:
                 try:
-                    req = urllib.request.Request(cu, headers={"User-Agent": "IBVAP-Tester/2.0"})
-                    with urllib.request.urlopen(req, timeout=3.5) as stream:
-                        ctype = stream.headers.get("Content-Type", "")
-                        if "html" not in ctype.lower():
+                    req = RTSPStreamer._build_http_request(cu, username, password)
+                    with urllib.request.urlopen(req, timeout=3.0) as stream:
+                        ctype = stream.headers.get("Content-Type", "").lower()
+                        if "html" not in ctype:
                             buf = b""
-                            for _ in range(16):
-                                c = stream.read(16384)
+                            for _ in range(24):
+                                c = stream.read(8192)
                                 if not c:
                                     break
                                 buf += c

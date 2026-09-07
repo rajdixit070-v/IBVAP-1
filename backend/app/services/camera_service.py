@@ -210,9 +210,19 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
 
     return format_camera_response(db_camera)
 
-def delete_camera(db: Session, db_camera: Camera):
-    """Stops streamer, unregisters AI worker, cleans up dependent records, and deletes camera record."""
-    cam_id = db_camera.camera_id
+def delete_camera(db: Session, db_camera: Any):
+    """Stops streamer, unregisters AI worker, cleans up all dependent records across all modules, and deletes camera record."""
+    if isinstance(db_camera, str):
+        cam_id = db_camera
+        db_camera = db.query(Camera).filter(Camera.camera_id == cam_id).first()
+    elif hasattr(db_camera, "camera_id") and not hasattr(db_camera, "_sa_instance_state"):
+        cam_id = db_camera.camera_id
+        db_camera = db.query(Camera).filter(Camera.camera_id == cam_id).first()
+    else:
+        cam_id = getattr(db_camera, "camera_id", None)
+
+    if not cam_id or not db_camera:
+        return
 
     # 1. Stop streamer and AI worker
     stream_manager.stop_camera(cam_id)
@@ -222,29 +232,54 @@ def delete_camera(db: Session, db_camera: Camera):
     except Exception as e:
         logger.debug(f"AI pipeline unregister notice for {cam_id}: {e}")
 
-    # 2. Cascade delete dependent configurations & logs
+    # 2. Cascade delete dependent configurations & models
+    models_with_camera_id = [
+        ("app.models.ai_config", "CameraAIConfig", "camera_id"),
+        ("app.models.multimodal_models", "CameraAIProfile", "camera_id"),
+        ("app.models.multimodal_models", "AIObservation", "camera_id"),
+        ("app.models.multimodal_models", "AIOperatorFeedback", "camera_id"),
+        ("app.models.zone", "SecurityZone", "camera_id"),
+        ("app.models.health_log", "CameraHealthLog", "camera_id"),
+        ("app.models.gis_models", "CameraFOV", "camera_id"),
+        ("app.models.ptz_models", "PTZDevice", "camera_id"),
+        ("app.models.ptz_models", "PTZPreset", "camera_id"),
+        ("app.models.ptz_models", "PTZAuditLog", "camera_id"),
+        ("app.models.track_observation", "TrackObservation", "camera_id"),
+        ("app.models.security_event", "SecurityEvent", "camera_id"),
+        ("app.models.alert", "Alert", "camera_id"),
+        ("app.models.evidence", "Evidence", "camera_id"),
+        ("app.models.anpr_event", "ANPREvent", "camera_id"),
+        ("app.models.face_event", "FaceEvent", "camera_id"),
+        ("app.models.notification", "Notification", "camera_id"),
+    ]
+
+    for mod_name, cls_name, col_name in models_with_camera_id:
+        try:
+            import importlib
+            mod = importlib.import_module(mod_name)
+            cls_obj = getattr(mod, cls_name, None)
+            if cls_obj is not None:
+                col = getattr(cls_obj, col_name, None)
+                if col is not None:
+                    db.query(cls_obj).filter(col == cam_id).delete(synchronize_session=False)
+        except Exception as err:
+            logger.debug(f"Could not cascade delete from {cls_name}: {err}")
+
+    # Clean camera pairs (thermal + RGB)
     try:
-        from app.models.ai_config import CameraAIConfig
-        db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == cam_id).delete(synchronize_session=False)
+        from app.models.thermal_fusion_models import CameraPair
+        db.query(CameraPair).filter(
+            (CameraPair.rgb_camera_id == cam_id) | (CameraPair.thermal_camera_id == cam_id)
+        ).delete(synchronize_session=False)
     except Exception:
         pass
 
-    try:
-        from app.models.zone import SecurityZone
-        db.query(SecurityZone).filter(SecurityZone.camera_id == cam_id).delete(synchronize_session=False)
-    except Exception:
-        pass
-
+    # Clean transitions
     try:
         from app.models.camera_transition import CameraTransition
         db.query(CameraTransition).filter(
             (CameraTransition.from_camera_id == cam_id) | (CameraTransition.to_camera_id == cam_id)
         ).delete(synchronize_session=False)
-    except Exception:
-        pass
-
-    try:
-        db.query(CameraHealthLog).filter(CameraHealthLog.camera_id == cam_id).delete(synchronize_session=False)
     except Exception:
         pass
 

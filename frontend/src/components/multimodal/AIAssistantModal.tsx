@@ -8,9 +8,23 @@ import {
   RotateCcw,
   AlertTriangle,
   User,
-  ExternalLink
+  ExternalLink,
+  Volume2,
+  Copy,
+  Check,
+  Sparkles,
+  Building2,
+  Radio,
+  Camera as CameraIcon,
+  Flame,
+  MapPin,
+  BellRing,
+  Lock,
+  Car,
+  Rocket
 } from 'lucide-react';
 import { multimodalService } from '../../services/multimodalService';
+import { alertSoundService } from '../../services/alertSoundService';
 import { MultimodalSecurityEvent } from '../../types/multimodal';
 
 interface ChatMessage {
@@ -32,24 +46,149 @@ interface AIAssistantModalProps {
   onSelectEvent?: (event: MultimodalSecurityEvent) => void;
 }
 
-const SAMPLE_QUERIES = [
-  'Admin ka kya kaam hai aur kaise use kare?',
-  'Officer ka kya kaam hai aur kaise use kare?',
-  'What is system status?',
-  'Camera kaise add karege?',
-  'PTZ, Drone aur Thermal features kaise use kare?',
-  'Evidence aur Daily SITREP dispatch kaise kare?',
-  'How to draw a geofence zone?',
-  'Kaise run krege starting se?'
-];
+interface QueryCategory {
+  id: string;
+  label: string;
+  icon: any;
+  color: string;
+  queries: string[];
+}
 
+const QUERY_CATEGORIES: QueryCategory[] = [
+  {
+    id: 'top',
+    label: '🌟 Top Queries',
+    icon: Sparkles,
+    color: 'text-amber-400 border-amber-500/30 bg-amber-950/20',
+    queries: [
+      'System status aur live fleet health report dikhao',
+      'Project ka overview aur operational architecture kya hai?',
+      'Sabhi 17 operational modules ka kya use hai?',
+      'Admin ka kya kaam hai aur kaise use kare?',
+      'Officer ka kya kaam hai aur kaise use kare?',
+      'Kaise run krege starting se?'
+    ]
+  },
+  {
+    id: 'admin',
+    label: '🏢 HQ Admin Guide',
+    icon: Building2,
+    color: 'text-sky-400 border-sky-500/30 bg-sky-950/20',
+    queries: [
+      'Admin ka kya kaam hai aur HQ Command Center kaise chalayein?',
+      'New Field Officers aur User permissions kaise manage karein?',
+      'Multi-Site Federation aur National Map kaise monitor karein?',
+      'Field officers se aane wale Daily SITREPs aur Evidence kaise review karein?',
+      'Major intrusion par Quick Reaction Team (QRT) response kaise authorize karein?'
+    ]
+  },
+  {
+    id: 'officer',
+    label: '🛰️ Field Officer Duties',
+    icon: Radio,
+    color: 'text-emerald-400 border-emerald-500/30 bg-emerald-950/20',
+    queries: [
+      'Checkpost Field Officer ki primary duties kya hain?',
+      'Ground checkpost par new physical camera kaise integrate karein?',
+      'Live Video Wall aur PTZ Joystick zoom kaise operate karein?',
+      'Perimeter Zero-Line par Virtual Tripwire / Geofence kaise banayein?',
+      'Sandigh movement par Evidence snapshot aur HQ Dispatch kaise karein?'
+    ]
+  },
+  {
+    id: 'camera',
+    label: '📹 Cameras & Video',
+    icon: CameraIcon,
+    color: 'text-cyan-400 border-cyan-500/30 bg-cyan-950/20',
+    queries: [
+      'Camera kaise add karege?',
+      'RTSP Stream URL format kya hai aur credentials kaise secure hote hain?',
+      'Live Multi-View Video Wall me 1x1, 2x2, 3x3 grids kaise switch karein?',
+      'PTZ Camera ke preset positions aur optical zoom kaise set karein?',
+      'Camera status OFFLINE hone par troubleshoot kaise karein?'
+    ]
+  },
+  {
+    id: 'drone_thermal',
+    label: '⚡ Drone & Thermal',
+    icon: Flame,
+    color: 'text-rose-400 border-rose-500/30 bg-rose-950/20',
+    queries: [
+      'Drone Fleet Operations me autonomous patrol mission kaise launch karein?',
+      'Target Handoff kya hai aur ground camera se drone ko target kaise transfer hota hai?',
+      'Thermal Vision me 5 Tactical Shader Palettes (FLIR Ironbow, NVG, White Hot) kaise use karein?',
+      'Spot Pyrometer kya hai aur surface temperature kaise measure karein?',
+      'Multi-Sensor Bayesian Fusion me Optical, Radar aur Seismic sensors kaise correlate hote hain?'
+    ]
+  },
+  {
+    id: 'gis',
+    label: '🗺️ GIS Intelligence',
+    icon: MapPin,
+    color: 'text-indigo-400 border-indigo-500/30 bg-indigo-950/20',
+    queries: [
+      'GIS Layer Stack kya hai aur map par satellite, thermal, terrain overlays kaise enable karein?',
+      'GIS Coordinate Finder se Latitude/Longitude par direct jump kaise karein?',
+      'Border blind spots aur elevation terrain analysis kaise karein?'
+    ]
+  },
+  {
+    id: 'alerts',
+    label: '🚨 Siren & Alerts',
+    icon: BellRing,
+    color: 'text-orange-400 border-orange-500/30 bg-orange-950/20',
+    queries: [
+      'Alert aane par Tactical Siren aur Voice Announcement kaise bachta hai?',
+      'Alert ko acknowledge karke Incident case file me escalate kaise karein?',
+      'QRT (Quick Reaction Team) dispatch aur SOP checklist execution kaise karein?',
+      'Voice Alert sound ko Mute ya Unmute kaise karein?'
+    ]
+  },
+  {
+    id: 'forensics',
+    label: '🔐 Forensics & Security',
+    icon: Lock,
+    color: 'text-violet-400 border-violet-500/30 bg-violet-950/20',
+    queries: [
+      'Forensic Evidence Vault kya hai aur SHA-256 digital signature kaise verify hota hai?',
+      'Court-admissible tamper-proof incident evidence report kaise export karein?',
+      'Zero-Trust RBAC roles aur Encrypted Audit Logs kaise inspect karein?'
+    ]
+  },
+  {
+    id: 'anpr_face',
+    label: '🚗 ANPR & Biometrics',
+    icon: Car,
+    color: 'text-teal-400 border-teal-500/30 bg-teal-950/20',
+    queries: [
+      'Stolen ya suspect vehicles ki ANPR watchlist me plate number kaise add karein?',
+      'Suspect face photograph upload karke 128D biometric recognition kaise karein?',
+      'Loitering aur sprint running jaise behaviour anomalies kaise detect hote hain?'
+    ]
+  },
+  {
+    id: 'setup',
+    label: '🚀 Setup & Maintenance',
+    icon: Rocket,
+    color: 'text-pink-400 border-pink-500/30 bg-pink-950/20',
+    queries: [
+      'Starting se project run aur access kaise karein?',
+      'System CPU, RAM, GPU aur AI Model Engines status kaise check karein?',
+      'Database dummy data purge / clean kaise karein?'
+    ]
+  }
+];
 
 const INITIAL_WELCOME: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
-  text: `👋 **Jai Hind, Commander!** I am your tactical AI Virtual Assistant.\n\nAap mujhse platform ke kisi bhi module, live telemetry, setup, cameras, geofencing ya threat intelligence ke bare me kuch bhi puch sakte hain.\n\n💡 *Neeche diye gaye quick prompts click karein ya apna sawal type karein:*`,
+  text: `👋 **Jai Hind, Commander!** I am your Tactical AI Copilot.
+
+Aap **HQ Admin** ya **Field Officer** kisi bhi role ke anusaar platform ke kisi bhi module, live telemetry, cameras, drone fleet, thermal vision, GIS layers, voice alerts ya forensic evidence ke bare me kuch bhi puch sakte hain.
+
+💡 *Neeche di gayi categories me se direct question select karein ya apna custom question niche type karein:*`,
   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  safety_notice: 'Zero-trust verified intelligence assistant. Read-only database citations.'
+  safety_notice: 'Zero-trust verified intelligence copilot. Read-only database citations & tactical workflows.'
 };
 
 export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
@@ -60,6 +199,10 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME]);
+  const [activeCategory, setActiveCategory] = useState<string>('top');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -128,28 +271,62 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const handleResetChat = () => {
     setMessages([INITIAL_WELCOME]);
     setQuery('');
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingId(null);
+  };
+
+  const handleCopyText = (msgId: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(msgId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleSpeakText = (msgId: string, text: string) => {
+    if (speakingId === msgId) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setSpeakingId(null);
+      return;
+    }
+
+    setSpeakingId(msgId);
+    alertSoundService.speakVoiceAlert(text);
+    // Reset speaking indicator after rough duration
+    const words = text.split(' ').length;
+    const durationMs = Math.min(30000, Math.max(3000, words * 320));
+    setTimeout(() => {
+      setSpeakingId((prev) => (prev === msgId ? null : prev));
+    }, durationMs);
   };
 
   if (!isOpen) return null;
 
+  const currentCategoryData = QUERY_CATEGORIES.find((c) => c.id === activeCategory) || QUERY_CATEGORIES[0];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-      <div className="bg-[#0f172a] border border-cyan-500/30 rounded-2xl w-full max-w-3xl h-[85vh] flex flex-col shadow-2xl shadow-cyan-950/50 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 md:p-6 animate-in fade-in duration-150">
+      <div className="bg-[#0b101c] border border-cyan-500/30 rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl shadow-cyan-950/60 overflow-hidden">
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/80 shrink-0">
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400 shadow-sm">
               <Bot className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                IBVAP Tactical AI Copilot
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-semibold">
-                  ONLINE • LIVE
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white tracking-wide">
+                  IBVAP Tactical AI Copilot
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-bold">
+                  ADMIN & OFFICER COPILOT
                 </span>
-              </h3>
-              <p className="text-xs text-slate-400">
-                Natural Language Intelligence, Operational Guidance & Verified Citations
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Multi-Domain Tactical Intelligence, Operational Guidance & Instant Telemetry
               </p>
             </div>
           </div>
@@ -157,13 +334,18 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             <button
               onClick={handleResetChat}
               title="Reset conversation"
-              className="p-2 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded-lg transition"
+              className="p-2 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded-lg transition cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
             <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+              onClick={() => {
+                if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                  window.speechSynthesis.cancel();
+                }
+                onClose();
+              }}
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -171,48 +353,82 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         </div>
 
         {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#090d16]/80 font-sans text-xs">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#080d18] font-sans text-xs">
           {messages.map((msg) => (
             <div
               key={msg.id}
               className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {msg.role === 'assistant' && (
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                  msg.isError
-                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                    : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                }`}>
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow ${
+                    msg.isError
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                      : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  }`}
+                >
                   {msg.isError ? <AlertTriangle className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                 </div>
               )}
 
               <div
-                className={`max-w-[85%] rounded-2xl p-4 space-y-3 leading-relaxed shadow-lg ${
+                className={`max-w-[88%] rounded-2xl p-4 space-y-3 leading-relaxed shadow-lg ${
                   msg.role === 'user'
                     ? 'bg-gradient-to-br from-cyan-600 to-sky-700 text-white rounded-tr-none'
                     : msg.isError
                     ? 'bg-rose-950/40 border border-rose-800/60 text-rose-200 rounded-tl-none'
-                    : 'bg-slate-900/90 border border-slate-800 text-slate-200 rounded-tl-none'
+                    : 'bg-slate-900/95 border border-slate-800 text-slate-200 rounded-tl-none'
                 }`}
               >
                 {/* Message Header */}
                 <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-slate-400 pb-1 border-b border-white/10">
-                  <span className="font-semibold uppercase tracking-wider text-slate-300">
-                    {msg.role === 'user' ? 'Commander (You)' : 'IBVAP AI Copilot'}
+                  <span className="font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    {msg.role === 'user' ? (
+                      <>
+                        <User className="w-3 h-3 text-cyan-300" />
+                        Commander (You)
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="w-3 h-3 text-cyan-400" />
+                        IBVAP AI Copilot
+                      </>
+                    )}
                   </span>
-                  <span>{msg.timestamp}</span>
+                  <div className="flex items-center gap-2">
+                    {msg.role === 'assistant' && !msg.isError && (
+                      <>
+                        <button
+                          onClick={() => handleSpeakText(msg.id, msg.text)}
+                          className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                            speakingId === msg.id ? 'text-cyan-300 animate-pulse' : 'text-slate-400 hover:text-white'
+                          }`}
+                          title="Read aloud with Voice"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleCopyText(msg.id, msg.text)}
+                          className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/10 transition cursor-pointer"
+                          title="Copy text"
+                        >
+                          {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </>
+                    )}
+                    <span>{msg.timestamp}</span>
+                  </div>
                 </div>
 
                 {/* Text Body */}
-                <div className="text-xs text-slate-100 whitespace-pre-line leading-relaxed font-sans">
+                <div className="text-xs text-slate-100 whitespace-pre-line leading-relaxed font-sans selection:bg-cyan-500/30">
                   {msg.text}
                 </div>
 
                 {/* Cited Evidence IDs */}
                 {msg.cited_event_ids && msg.cited_event_ids.length > 0 && (
                   <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
-                    <span className="text-slate-400">Evidence Citations:</span>
+                    <span className="text-slate-400 font-semibold">Evidence Citations:</span>
                     {msg.cited_event_ids.map((id) => (
                       <span
                         key={id}
@@ -245,13 +461,15 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-cyan-300 font-bold">{ev.event_id}</span>
-                              <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
-                                ev.risk_level === 'CRITICAL'
-                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                  : ev.risk_level === 'HIGH'
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                  : 'bg-cyan-500/20 text-cyan-300'
-                              }`}>
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                                  ev.risk_level === 'CRITICAL'
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : ev.risk_level === 'HIGH'
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                    : 'bg-cyan-500/20 text-cyan-300'
+                                }`}
+                              >
                                 {ev.risk_level} ({ev.risk_score})
                               </span>
                               <span className="text-slate-400 text-[11px] font-mono">
@@ -279,7 +497,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
               </div>
 
               {msg.role === 'user' && (
-                <div className="w-7 h-7 rounded-lg bg-sky-600/30 text-sky-200 border border-sky-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-xl bg-sky-600/30 text-sky-200 border border-sky-500/40 flex items-center justify-center shrink-0 mt-0.5 shadow">
                   <User className="w-4 h-4" />
                 </div>
               )}
@@ -289,12 +507,12 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           {/* Loading Indicator */}
           {loading && (
             <div className="flex gap-3 items-start">
-              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center justify-center shrink-0 animate-pulse">
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center justify-center shrink-0 animate-pulse">
                 <Bot className="w-4 h-4" />
               </div>
-              <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl rounded-tl-none p-3 shadow-lg flex items-center gap-3 text-cyan-400 font-mono text-xs">
-                <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
-                <span>Analyzing telemetry & synthesizing factual guidance...</span>
+              <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl rounded-tl-none p-3.5 shadow-lg flex items-center gap-3 text-cyan-400 font-mono text-xs">
+                <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                <span>Analyzing tactical telemetry, cameras & synthesizing verified operational guidance...</span>
               </div>
             </div>
           )}
@@ -302,18 +520,44 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Suggestion Chips */}
-        <div className="px-4 py-2 bg-slate-900/90 border-t border-slate-800 flex gap-2 overflow-x-auto shrink-0 scrollbar-thin">
-          {SAMPLE_QUERIES.map((sq, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSearch(sq)}
-              disabled={loading}
-              className="text-[11px] px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 active:bg-cyan-900/50 border border-slate-700/80 text-slate-300 hover:text-white whitespace-nowrap transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-            >
-              {sq}
-            </button>
-          ))}
+        {/* Categorized Suggested Questions Section */}
+        <div className="bg-slate-900/95 border-t border-slate-800 p-2.5 space-y-2 shrink-0">
+          {/* Category Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+            {QUERY_CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = activeCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer border ${
+                    isActive
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
+                      : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:text-slate-200 hover:bg-slate-700/80'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Question Chips for Active Category */}
+          <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-thin">
+            {currentCategoryData.queries.map((qText, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSearch(qText)}
+                disabled={loading}
+                className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-950/80 hover:bg-cyan-950/40 active:bg-cyan-900/60 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-200 whitespace-nowrap transition-all cursor-pointer shrink-0 disabled:opacity-50 flex items-center gap-1.5 group shadow-sm"
+              >
+                <span className="text-cyan-400 font-mono text-[10px] group-hover:translate-x-0.5 transition">›</span>
+                <span>{qText}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Input Bar */}
@@ -326,13 +570,13 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             className="flex gap-2"
           >
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
               <input
                 ref={inputRef}
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ask e.g. 'Operational modules ka use btao', 'How to add a camera?', 'System status'..."
+                placeholder="Ask any question (Admin or Officer) e.g. 'How to add camera?', 'Thermal palettes', 'System health'..."
                 disabled={loading}
                 className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-sans"
               />
@@ -340,10 +584,10 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             <button
               type="submit"
               disabled={loading || !query.trim()}
-              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 shadow-lg shadow-cyan-900/30 transition-all cursor-pointer"
+              className="px-5 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 shadow-lg shadow-cyan-900/30 transition-all cursor-pointer shrink-0"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Ask AI</span>
+              <span>Ask Copilot</span>
             </button>
           </form>
         </div>

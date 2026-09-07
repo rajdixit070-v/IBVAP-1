@@ -6,7 +6,7 @@ import { Notification } from '../../types/incident';
 import { ShieldAlert, User, Car, PawPrint, Plane, X, ExternalLink, MapPin, Volume2 } from 'lucide-react';
 
 interface LiveAlertToastProps {
-  onOpenMap?: () => void;
+  onOpenMap?: (cameraId?: string) => void;
   onOpenIncident?: (incidentId?: string) => void;
 }
 
@@ -14,7 +14,7 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
   const [activeAlert, setActiveAlert] = useState<Notification | null>(null);
   const shownIds = useRef<Set<string | number>>(new Set());
 
-  // Trigger alert and siren
+  // Trigger alert, tactical siren and spoken voice alert
   const triggerAlertDisplay = (notif: Notification) => {
     const key = notif.notification_id || notif.alert_id || notif.id;
     if (shownIds.current.has(key)) return;
@@ -22,7 +22,13 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
 
     setActiveAlert(notif);
     const sev = notif.severity === 'CRITICAL' || notif.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
-    alertSoundService.playAlarm(sev);
+    alertSoundService.playAlertWithVoice({
+      title: notif.title,
+      message: notif.message,
+      severity: sev,
+      cameraId: notif.camera_id,
+      location: notif.location_description
+    });
   };
 
   // Real-time WebSocket Alert Push
@@ -171,10 +177,16 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
             <button
               onClick={() => {
                 const sev = isCritical ? 'CRITICAL' : 'HIGH';
-                alertSoundService.playAlarm(sev);
+                alertSoundService.playAlertWithVoice({
+                  title: activeAlert.title,
+                  message: activeAlert.message,
+                  severity: sev,
+                  cameraId: activeAlert.camera_id,
+                  location: activeAlert.location_description
+                });
               }}
               className="text-amber-300 hover:text-amber-100 p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
-              title="Replay Tactical Audio Siren"
+              title="Replay Voice Alert & Tactical Siren"
             >
               <Volume2 className="w-4 h-4" />
             </button>
@@ -212,10 +224,22 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
         )}
 
         {/* Exact Tactical Location Strip */}
-        <div className="p-2.5 rounded-xl bg-black/50 border border-white/10 flex items-start gap-2 text-xs font-mono">
-          <MapPin className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-          <div className="space-y-0.5 leading-tight">
-            <span className="text-[10px] text-slate-400 uppercase">LOCATION SENSOR & SECTOR:</span>
+        <div
+          onClick={() => {
+            if (onOpenMap) {
+              setActiveAlert(null);
+              onOpenMap(activeAlert.camera_id);
+            }
+          }}
+          className="p-2.5 rounded-xl bg-black/50 border border-white/10 hover:border-sky-500/50 flex items-start gap-2 text-xs font-mono transition cursor-pointer group"
+          title="Click to Locate on Tactical Map"
+        >
+          <MapPin className="w-4 h-4 text-rose-400 group-hover:text-sky-400 shrink-0 mt-0.5 transition" />
+          <div className="space-y-0.5 leading-tight flex-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 uppercase">LOCATION SENSOR & SECTOR:</span>
+              <span className="text-[10px] text-sky-400 font-bold group-hover:underline">VIEW ON MAP ↗</span>
+            </div>
             <div className="text-emerald-300 font-bold text-[11px]">
               {activeAlert.location_description || activeAlert.camera_id || 'BOP Alpha // Perimeter Sector 1'}
             </div>
@@ -232,9 +256,9 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
               <button
                 onClick={() => {
                   setActiveAlert(null);
-                  onOpenMap();
+                  onOpenMap(activeAlert.camera_id);
                 }}
-                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 transition flex items-center gap-1 cursor-pointer text-[11px]"
+                className="px-2.5 py-1 bg-white/10 hover:bg-sky-600/30 text-white rounded-lg border border-white/20 hover:border-sky-500/40 transition flex items-center gap-1 cursor-pointer text-[11px]"
               >
                 <MapPin className="w-3 h-3 text-sky-400" />
                 Map

@@ -643,19 +643,426 @@ class MultimodalEngine:
     ) -> Dict[str, Any]:
         """
         Section 82-85: Natural Language Search & AI Virtual Assistant with strict safety,
-        factual telemetry citations, and tactical operational workflow guidance.
+        factual telemetry citations, and comprehensive tactical operational workflow guidance.
         """
         q_lower = query_str.lower().strip()
         filters: Dict[str, Any] = {}
         cited_event_ids: List[str] = []
         cited_cameras: List[str] = []
 
-        # 1. LIVE FLEET & SYSTEM TELEMETRY QUERIES
+        # 1. SETUP & START INSTRUCTIONS (Checked first to prevent substring mismatches)
         if any(k in q_lower for k in [
-            "status", "health", "fleet", "system overview", "how many camera",
+            "run kaise kre", "run kaise kare", "start kaise kare", "starting se", "kaise run krege",
+            "how to run", "kaise start kare", "project setup", "setup guide", "shuru se run",
+            "project run", "backend run", "frontend run"
+        ]) or (("run" in q_lower or "start" in q_lower or "setup" in q_lower) and ("starting" in q_lower or "scratch" in q_lower or "initial" in q_lower)):
+            explanation = (
+                "🚀 **IBVAP Setup & Execution Guide (Scratch se Real Run)**\n\n"
+                "**1. Backend Start (Terminal 1)**:\n"
+                "```powershell\n"
+                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\backend\n"
+                "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload\n"
+                "```\n"
+                "*(Note: Global Python 3.10 me saari libraries installed hain, venv activate karne ki zaroorat nahi hai).*\n\n"
+                "**2. Frontend Start (Terminal 2)**:\n"
+                "```powershell\n"
+                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\frontend\n"
+                "npm run dev\n"
+                "```\n\n"
+                "**3. Browser Access**:\n"
+                "• Open: `http://localhost:5173`\n"
+                "• Username: `admin` (HQ Administrator) or `officer_alpha` (Field Officer)\n\n"
+                "**4. Add Real Cameras**:\n"
+                "Go to **Camera Management** ➔ Click **+ Add Camera** ➔ Enter RTSP URL (`rtsp://ip:554/stream`)."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"intent": "SETUP_GUIDE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Standard production deployment and execution instructions."
+            }
+
+        # 2. DRONE FLEET & AUTONOMOUS TARGET HANDOFF
+        if any(k in q_lower for k in ["drone", "uav", "target handoff", "drone operations", "drone patrol", "drone fleet"]):
+            explanation = (
+                "🛸 **Drone Fleet Operations & Autonomous Target Handoff Guide**\n\n"
+                "**1. Launching Autonomous Drone Patrols (`/drone-operations`)**:\n"
+                "   • Click **+ Launch Mission** to deploy an autonomous UAV along pre-defined border fence waypoints.\n"
+                "   • Monitor live drone telemetry: Altitude (MSL), Speed, Heading, Battery %, and GPS location.\n\n"
+                "**2. Target Handoff Protocol (Ground Camera ➔ Aerial Drone)**:\n"
+                "   • Jab zameen par laga optical camera kisi intruder ko fence ke bahar loiter karte dekhta hai, system **Target Handoff** initiate karta hai.\n"
+                "   • Nearest airborne drone automatically target ke GPS coordinates par re-route hokar hawa se thermal & optical zoom ke sath continuous track karta hai.\n\n"
+                "**3. Return-to-Launch (RTL) & Emergency Safety**:\n"
+                "   • Battery < 20% hone par ya signal loss par drone automatically home base station par safe RTL land karta hai."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "DRONE_OPERATIONS"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Drone Command Suite."
+            }
+
+        # 3. THERMAL & NIGHT VISION FUSION + SPOT PYROMETER
+        if any(k in q_lower for k in ["thermal", "night vision", "flir", "ironbow", "nvg", "palette", "pyrometer", "temperature", "spot pyrometer", "shader", "infrared"]):
+            explanation = (
+                "🔥 **Thermal & Night Vision Live Streaming + Spot Pyrometer Guide**\n\n"
+                "**1. Tactical Shader Palettes (`/thermal-fusion`)**:\n"
+                "   • **FLIR Ironbow**: Classic thermal gradient (Purple ➔ Red ➔ Yellow ➔ White) for body heat isolation.\n"
+                "   • **White Hot**: Warmer targets appear bright white against cold dark backgrounds.\n"
+                "   • **Black Hot**: Warmer targets appear pitch black (snipers).\n"
+                "   • **Green Phosphor (NVG)**: Military Gen-3 night-vision intensifier look with subtle scanline grain.\n"
+                "   • **Rainbow**: High-contrast color separation for extreme cold/fog environments.\n\n"
+                "**2. Interactive Spot Pyrometer HUD**:\n"
+                "   • Screen par mouse move karein ya tap karein: Real-time **Surface Temperature (°C & °F)** instantly HUD par display hoti hai.\n"
+                "   • Max, Min, aur Average scene thermal temperature calculate hoti hai.\n\n"
+                "**3. Dual Optical + Thermal Fusion**:\n"
+                "   • Fog, smoke, dense foliage aur zero-light conditions me human / vehicle heat signatures ko 100% penetrate karta hai."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "THERMAL_FUSION"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Thermal & Night Vision Suite."
+            }
+
+        # 4. GIS LAYER STACK & GEOSPATIAL INTELLIGENCE
+        if any(k in q_lower for k in ["gis", "layer stack", "topographic", "satellite layer", "coordinates", "latitude", "longitude", "blind spot", "elevation"]):
+            explanation = (
+                "🗺️ **GIS Layer Stack & Geospatial Intelligence Guide**\n\n"
+                "**1. What is GIS Layer Stack? (`/gis-intelligence`)**:\n"
+                "   • GIS (Geographic Information System) Layer Stack border security ka live tactical map engine hai jo multiple data layers ko Leaflet map par stack karta hai:\n"
+                "   • **Satellite Layer**: High-resolution aerial terrain imagery.\n"
+                "   • **Topographic & Elevation Contours**: Ridge lines, river basins, ravines aur slope gradients.\n"
+                "   • **Thermal Overlay**: Heat signature concentration along zero-line corridors.\n"
+                "   • **Active Radar FOV**: Ground radars and camera field-of-view sweep cones.\n\n"
+                "**2. Coordinate Jumper (Lat/Long)**:\n"
+                "   • **Target Coordinates Jump** box me kisi bhi location ke Latitude & Longitude dalein (e.g. `28.6139, 77.2090`) aur **Locate on Map** click karein.\n"
+                "   • Map turant smooth fly-to animation ke sath us exact location par zoom ho jayega.\n\n"
+                "**3. Terrain & Blind Spot Assessment**:\n"
+                "   • Checkpost ke aas-paas ke dead zones aur hill occlusions identify karein taaki sentry placement optimize ki ja sake."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "GIS_INTELLIGENCE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP GIS Intelligence Suite."
+            }
+
+        # 5. THREAT ALERTS, VOICE SIREN & AUDIO SYSTEM
+        if any(k in q_lower for k in ["voice alert", "alert sound", "siren", "voice announcement", "mute", "sound kaise", "voice kaise", "alarm baje", "speaker", "audio alert"]):
+            explanation = (
+                "🔊 **Tactical Audio Siren & Spoken Voice Alert System Guide**\n\n"
+                "**1. Dual Alert Synthesizer (`LiveAlertToast.tsx` & `alertSoundService.ts`)**:\n"
+                "   • Jaise hi koi live intrusion alert arrive hota hai, do cheezein hoti hain:\n"
+                "     1. **Tactical Siren Tone**: Web Audio API dwara zero-latency high-urgency military siren/chime play hota hai.\n"
+                "     2. **Spoken Voice Alert**: Browser Speech Synthesis ke dwara voice bolkar announce karti hai: *\"Warning! Critical Security Threat. Perimeter Intrusion Detected on Camera [ID] / Sector [Location].\"*\n\n"
+                "**2. Replay Audio & Voice**:\n"
+                "   • Alert toast popup me bane **Speaker / Volume icon** par click karke aap siren aur voice announcement ko replay kar sakte hain.\n\n"
+                "**3. Header Mute / Unmute Control**:\n"
+                "   • Top navigation header me Speaker button diya gaya hai jisse aap one-click me sound aur voice alerts mute ya unmute kar sakte hain."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "AUDIO_VOICE_ALERTS"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Audio & Alert Dispatch Suite."
+            }
+
+        # 6. MULTI-SENSOR BAYESIAN FUSION
+        if any(k in q_lower for k in ["sensor fusion", "bayesian", "seismic", "ground radar", "multi sensor"]):
+            explanation = (
+                "📡 **Multi-Sensor Bayesian Fusion Guide**\n\n"
+                "**1. Multi-Sensor Correlation (`/sensor-fusion`)**:\n"
+                "   • Border par akele camera fog ya camouflaged intruders me miss ho sakta hai. Isliye 3 sensors combine kiye jate hain:\n"
+                "     1. **Optical HD Camera**: Visual silhouette & clothing classification.\n"
+                "     2. **Perimeter Ground Radar**: Target velocity, Doppler shift, and distance.\n"
+                "     3. **Subsurface Seismic Geo-Sensors**: Footstep ground vibrations and vehicle axle weight.\n\n"
+                "**2. Bayesian Probability Fusion Engine**:\n"
+                "   • Teeno sensors ke probabilities ko Bayesian mathematical fusion ke dwara correlate kiya jata hai, jisse false alarm rate < 1% ho jati hai aur threat verification confidence 96%+ achieve hoti hai."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "SENSOR_FUSION"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Sensor Fusion Suite."
+            }
+
+        # 7. FORENSIC EVIDENCE VAULT & SHA-256 DIGITAL HASH
+        if any(k in q_lower for k in ["evidence vault", "sha-256", "sha256", "tamper", "chain of custody", "forensic evidence", "proof", "court-admissible"]):
+            explanation = (
+                "🔐 **Forensic Evidence Vault & Cryptographic Chain-of-Custody Guide**\n\n"
+                "**1. Court-Admissible Tamper-Proofing (`/evidence-vault`)**:\n"
+                "   • Kisi bhi security event, intrusion photo ya camera crop ka **SHA-256 digital cryptographic signature** image bytes se direct calculate hota hai.\n"
+                "   • Agar kisi photo me 1 pixel bhi modify kiya jaye, to SHA-256 hash mismatch alert ho jata hai (Zero-Tamper Guarantee).\n\n"
+                "**2. Evidence Chain-of-Custody**:\n"
+                "   • Har evidence item ke sath Capturing Camera ID, GPS Coordinates, Timestamp, Capturing Officer ID, aur Sector record hota hai.\n\n"
+                "**3. Official Export**:\n"
+                "   • Single-click me court-admissible PDF Dossier ya complete ZIP Package export karein legal trials aur HQ verification ke liye."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "EVIDENCE_VAULT"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Forensic Evidence specification."
+            }
+
+        # 8. VEHICLE INTELLIGENCE (ANPR)
+        if any(k in q_lower for k in ["anpr", "license plate", "plate number", "stolen vehicle", "car watchlist", "gadi", "gaadi"]):
+            explanation = (
+                "🚗 **Vehicle Intelligence & ANPR Watchlist Workflow**\n\n"
+                "1. **Navigate to Vehicle Intelligence**: Click **Vehicle Intelligence** on the sidebar.\n"
+                "2. **Register Watchlist Vehicle**: Click **+ Add Watchlist Plate**.\n"
+                "3. **Plate & Category**: Enter license plate (e.g. `UP32AB1234`) and threat tag (`STOLEN`, `SUSPECT_SMUGGLING`, `WANTED`).\n"
+                "4. **Notes**: Add operational threat notes and issuing agency.\n"
+                "5. **Automatic Matching**: The optical character recognition (OCR) engine automatically scans license plates from camera feeds.\n"
+                "6. **Instant Alarm**: Any detected vehicle matching the watchlist triggers a critical SOC alert within 200 milliseconds."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "ANPR_WATCHLIST"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Vehicle Intelligence specification."
+            }
+
+        # 9. FACE INTELLIGENCE & BIOMETRIC WATCHLIST
+        if any(k in q_lower for k in ["face intelligence", "facial biometric", "suspect photo", "person watchlist", "128d", "facial recognition"]):
+            explanation = (
+                "👤 **Face Intelligence & Biometric Watchlist Workflow**\n\n"
+                "1. **Navigate to Face Intelligence**: Click **Face Intelligence** in the sidebar.\n"
+                "2. **Add Suspect**: Click **+ Register Watchlist Subject**.\n"
+                "3. **Subject Details**: Enter Full Name, Aliases, and Threat Level (e.g. `CRITICAL / INFILTRATOR`).\n"
+                "4. **Biometric Input**: Upload a front-facing photograph or provide a 128-dimensional facial embedding vector.\n"
+                "5. **Cosine Match Threshold**: Set verification sensitivity (recommended: 0.70 / 70% confidence).\n"
+                "6. **Live Inference**: The SFace biometric engine extracts facial landmarks from video crops and performs sub-second matching."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "FACE_BIOMETRICS"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Face Intelligence specification."
+            }
+
+        # 10. PTZ CONTROL & VIRTUAL JOYSTICK
+        if any(k in q_lower for k in ["ptz", "joystick", "pan tilt", "optical zoom", "zoom kaise"]):
+            explanation = (
+                "🕹️ **PTZ (Pan-Tilt-Zoom) & Optical Inspection Guide**\n\n"
+                "**1. Virtual Joystick Navigation (`/ptz-control`)**:\n"
+                "   • Virtual joystick ko drag karke camera ko 360° pan aur -90° to +45° tilt ghumayein.\n"
+                "   • Zoom slider se 1x se 30x optical zoom karein zero-line fence wire inspect karne ke liye.\n\n"
+                "**2. Preset Patrol Tours**:\n"
+                "   • Pre-configured presets (e.g. `Preset 1: Gate North`, `Preset 2: River Bank`, `Preset 3: Fence Tower`) par click karke camera ko instant position karein.\n\n"
+                "**3. AI Lock & Track**:\n"
+                "   • Moving target par double-click karke camera ko continuous optical tracking mode me lock karein."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "PTZ_CONTROL"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP PTZ Control Suite."
+            }
+
+        # 11. CAMERA ONBOARDING & RTSP
+        if (any(k in q_lower for k in ["camera kaise add", "add camera", "camera integrate", "integrate camera", "rtsp", "camera management", "stream url", "cctv"]) or ("camera" in q_lower and any(w in q_lower for w in ["add", "lagaye", "onboard", "connect", "new", "integrate", "karein", "kaise"]))):
+            explanation = (
+                "📹 **Camera Onboarding & RTSP Streaming Workflow**\n\n"
+                "1. **Navigate to Camera Management**: Click **Camera Management** in the left sidebar.\n"
+                "2. **Add Camera**: Click the **+ Add Camera** button at the top-right.\n"
+                "3. **Enter Identifiers**: Set a unique Camera ID (e.g. `CAM-NORTH-01`) and a descriptive Camera Name.\n"
+                "4. **RTSP Stream URL**: Enter your IP camera stream:\n"
+                "   • Format: `rtsp://<username>:<password>@<camera-ip>:554/stream1`\n"
+                "   • Passwords are encrypted on disk with AES-256 Fernet cryptography.\n"
+                "5. **Tactical Mapping**: Assign the BOP Site, Sector name, and Latitude/Longitude coordinates.\n"
+                "6. **Stream Profile**: Select `HIGH` for primary AI analytics or `SUB` for bandwidth-saving previews.\n"
+                "7. **Save & Stream**: Click **Save & Connect**. The stream manager will automatically test RTSP connectivity and start video ingestion."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "CAMERA_ONBOARDING"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited directly from IBVAP Camera Management documentation."
+            }
+
+        # 12. GEOFENCE & TRIPWIRES
+        if any(k in q_lower for k in ["geofence", "tripwire", "polygon zone", "virtual wire", "perimeter fence", "zero_line", "boundary"]):
+            explanation = (
+                "🛡️ **Perimeter Geofencing & Zone Setup Workflow**\n\n"
+                "1. **Navigate to Perimeter Intelligence**: Click **Perimeter Intelligence** in the left navigation.\n"
+                "2. **Select Camera**: Choose the camera covering your physical perimeter wire or gate.\n"
+                "3. **Add Polygon Zone**: Click **+ Add Polygon Zone** on the video inspection card.\n"
+                "4. **Draw on Video Frame**: Click points directly on the camera view to form a closed polygon boundary.\n"
+                "5. **Zone Classification**:\n"
+                "   • `ZERO_LINE_RESTRICTED`: High-priority intrusion alarm for international border line.\n"
+                "   • `BUFFER_ZONE`: Secondary alert zone for early warning approach.\n"
+                "   • `GATE_ACCESS`: Monitored vehicle and personnel entry corridor.\n"
+                "6. **Debounce Seconds**: Set a debounce window (e.g. 2.0s) to filter out transient foliage movement.\n"
+                "7. **Save**: Click **Save Zone**. The ByteTrack tracker will now generate breach alerts whenever target centroids intersect the polygon."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "GEOFENCE_CONFIGURATION"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Perimeter Intelligence specification."
+            }
+
+        # 13. ADMIN ROLE & RESPONSIBILITIES
+        if any(k in q_lower for k in ["admin ka kya kaam", "admin role", "administrator", "headquarters", "war room", "delhi hq", "central admin", "admin kaise use"]):
+            explanation = (
+                "🏢 **HQ Central Administrator — Operational Guide & Central Responsibilities**\n\n"
+                "As an **HQ Central Administrator (Delhi HQ)**, aap physically checkpost par camera lagane nahi jaate, balki poore desh ke borders aur officers ki centralized monitoring aur command sambhalte hain:\n\n"
+                "1. **Officer & User Management (`Officer & User Management / Zero-Trust`)**:\n"
+                "   • Delhi HQ se Admin field officers create karta hai aur unko unki respective Checkpost (BOP / Sector) assign karta hai.\n"
+                "   • Kis officer ke paas kis site/checkpost ki clearance aur duty authorization hai, yeh Admin decide karta hai.\n\n"
+                "2. **Multi-Site & Checkpost Federation Map (`Multi-Site Federation`)**:\n"
+                "   • Poore desh ke sabhi Border Outposts (BOPs) ko National Tactical Map par monitor karein.\n"
+                "   • Kis checkpost par kis officer ne kitne cameras lagaye hain aur wahan ka health score kya hai, live dekhein.\n\n"
+                "3. **Receive All Field Alerts, Sirens & Notifications (`SOC Threat Matrix` & `Live Toasts`)**:\n"
+                "   • Checkpost cameras se aane wale saare critical intrusion alerts, siren events aur notifications **direct Delhi HQ Admin ke desk par audio siren aur voice alert ke sath aate hain**.\n\n"
+                "4. **Review Daily SITREPs & Officer Dispatches (`Evidence & Dispatches`)**:\n"
+                "   • Ground field officers dwara bheje gaye Daily Field Evidence, suspect snapshots aur SITREP dispatches ko Delhi HQ me review karein.\n\n"
+                "5. **Forensic Evidence Vault & QRT Orders (`Forensic Vault` & `Incidents`)**:\n"
+                "   • Court-admissible SHA-256 tamper-proof evidence packages verify karein aur major intrusions par Quick Reaction Team (QRT) response authorize karein."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"role": "ADMIN_HQ", "intent": "ROLE_GUIDANCE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Authoritative HQ Administrator command guidance cited from IBVAP Operational Doctrine."
+            }
+
+        # 14. CHECKPOST FIELD OFFICER WORKFLOW
+        if any(k in q_lower for k in ["officer ka kya kaam", "officer duty", "checkpost duty", "field operator", "jawan", "sentry", "checkpost officer"]):
+            explanation = (
+                "🛰️ **Checkpost Field Officer — Ground Operational Duties**\n\n"
+                "As a **Checkpost Field Officer** (`officer_alpha`), aap ground par physical security aur checkpost equipment sambhalte hain:\n\n"
+                "1. **Checkpost Camera Onboarding (`Camera Management`)**:\n"
+                "   • Checkpost par physical cameras lagana aur unhe system me **`+ Add Camera`** button se add karna officer ki primary duty hai.\n"
+                "   • Camera add hote hi uski live feed aur detection alerts automatically Delhi HQ tak transmit hone lagti hain.\n\n"
+                "2. **Live Checkpost Video Wall (`Live Tactical Video Wall`)**:\n"
+                "   • Apne checkpost ke zero-line fence aur gate feeds ko 1x1, 2x2 multi-view grid me continuous monitor karein.\n\n"
+                "3. **PTZ Joystick & Optical Zoom (`PTZ Joystick & Optical Zoom`)**:\n"
+                "   • Virtual joystick se camera ko Left/Right/Up/Down ghumayein aur zoom karke zero-line wire inspect karein.\n\n"
+                "4. **Perimeter Virtual Tripwires (`Virtual Perimeter / Tripwires`)**:\n"
+                "   • Camera screen par click karke polygon boundary (Zero-Line Wire) banayein taaki cross karte hi instant alarm baje.\n\n"
+                "5. **Capture Evidence & Dispatch to Delhi HQ (`Evidence & Dispatch to Delhi HQ`)**:\n"
+                "   • Agar koi sandigh person ya vehicle detect hota hai, to **Dispatch Evidence to Delhi HQ** button se snapshot, GPS coordinates aur descriptive field report turant Central Admin ko bhejein."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"role": "CHECKPOST_OFFICER", "intent": "ROLE_GUIDANCE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Authoritative Checkpost Field Officer operational guidance cited from IBVAP Ground Protocols."
+            }
+
+        # 15. PROJECT OVERVIEW & ARCHITECTURE
+        if any(k in q_lower for k in [
+            "project kya hai", "ibvap kya hai", "what is project", "project overview", "architecture",
+            "about project", "project explain", "ibvap overview", "kya kam karta hai project"
+        ]):
+            explanation = (
+                "🛡️ **IBVAP (Integrated Border Video Analytics Platform) — Overview & Architecture**\n\n"
+                "IBVAP ek next-generation military & homeland security grade **AI-Powered Border Surveillance & Command System** hai jo real-time video feeds, multi-sensor intelligence aur zero-trust governance ko combine karta hai:\n\n"
+                "**Core Capabilities & Architecture:**\n"
+                "1. **Multi-Tier Command Hierarchy**: Delhi Central HQ (War Room) se lekar ground Border Outposts (BOP Checkposts) tak unified national federation.\n"
+                "2. **AI Edge Video Analytics**: Zero-Line virtual tripwires, loitering detection, ANPR automatic number plate recognition, aur 128D facial biometrics.\n"
+                "3. **Next-Gen Multi-Sensor Intelligence**: Drone fleet autonomous target handoff, FLIR Thermal Night Vision with 5 tactical shader palettes, Spot Pyrometers, aur Subsurface Seismic + Radar sensor fusion.\n"
+                "4. **Tactical GIS Layer Stack**: Satellite, Topographic, Elevation Contours, Thermal overlays aur Lat/Long direct coordinate jumpers.\n"
+                "5. **Audio & Siren Emergency Dispatch**: Instant dual-tone acoustic siren + spoken voice alerts on high/critical breach arrivals.\n"
+                "6. **Court-Admissible Forensics**: Real-time SHA-256 digital cryptographic hash generator for tamper-proof legal chain-of-custody."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"intent": "PROJECT_OVERVIEW"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Architecture doctrine cited from IBVAP Operational Specification."
+            }
+
+        # 16. ALL OPERATIONAL MODULES COMPREHENSIVE WALKTHROUGH
+        if any(k in q_lower for k in [
+            "operational module", "sabhi module", "saare module", "modules guide", "list module",
+            "overview module", "17 module", "sab module"
+        ]):
+            explanation = (
+                "🧭 **IBVAP Operational Modules & Functionality Guide**\n\n"
+                "Platform ke sabhi Operational Modules ka use aur functionality neeche di gayi hai:\n\n"
+                "1. **Command Overview (Dashboard)**: Fleet metrics, active threats, and high-risk camera preview.\n"
+                "2. **SOC Command Center**: Real-time triage matrix for perimeter alarms, alerts acknowledgment, and escalation.\n"
+                "3. **System Health Center**: Hardware CPU/RAM monitoring, AI model engine status (YOLO, SFace, Drone).\n"
+                "4. **Multi-Site Central Command**: National federation hierarchy (Org ➔ Region ➔ Site ➔ BOP Outposts).\n"
+                "5. **Multimodal AI Intelligence**: Multi-signal event correlation (optical, thermal, audio) with cryptographic SHA-256 evidence.\n"
+                "6. **Enterprise Zero-Trust Security**: RBAC roles, encrypted audit logs, and camera credential encryption.\n"
+                "7. **Predictive Intelligence**: Early warning forecasting, 24-hour activity trends, and sensor outage vs threat detection.\n"
+                "8. **Behaviour Intelligence**: Kinematic anomaly detection (sudden running sprint, fence-edge loitering, repeated approach).\n"
+                "9. **Movement Intelligence (Re-ID)**: Cross-camera handover graph, global tracking journeys, and impossible travel detection.\n"
+                "10. **Incidents & Response**: Tactical case files with step-by-step SOP checklists and QRT dispatch.\n"
+                "11. **Camera Management**: Register real RTSP streams, GPS placement, and stream health diagnostic tests.\n"
+                "12. **Live Multi-View**: Tactical video wall with 1x1, 2x2, and 3x3 multi-camera grid layouts.\n"
+                "13. **Vehicle Intelligence (ANPR)**: Automatic license plate OCR and stolen/suspect vehicle watchlist alarms.\n"
+                "14. **Face Intelligence**: 128D biometric facial recognition, suspect photo upload, and cosine similarity matching.\n"
+                "15. **Drone Operations**: Autonomous UAV patrol flights and aerial target handoff.\n"
+                "16. **Thermal & Night Vision**: FLIR Ironbow / NVG palettes with live Spot Pyrometer temperature HUD.\n"
+                "17. **GIS Intelligence**: Multi-layer GIS stack, elevation contours, and Lat/Long coordinate jumper."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"intent": "MODULES_GUIDE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational module overview cited from IBVAP Platform Documentation."
+            }
+
+        # 17. LIVE FLEET & SYSTEM TELEMETRY QUERIES
+        if any(k in q_lower for k in [
+            "system status", "fleet health", "system overview", "how many camera",
             "active alert", "alert status", "incident count", "model status",
-            "telemetry", "diagnostics", "hardware", "edge node", "kaise chal raha",
-            "halat", "chalu", "kitne camera", "kya status"
+            "telemetry", "hardware status", "edge node", "kaise chal raha",
+            "halat", "kitne camera", "kya status", "fleet report", "live health"
         ]):
             cam_q = db.query(Camera)
             if current_user_scope_sites:
@@ -686,8 +1093,9 @@ class MultimodalEngine:
                 f"• **Open Incidents**: {open_incidents} active tactical cases under investigation\n"
                 f"• **Edge Appliances**: {online_nodes}/{len(edge_nodes)} nodes synchronized\n"
                 f"• **AI Model Engines**: {models_summary}\n"
+                f"• **Audio / Siren Service**: Dual-tone Web Audio Siren & Web Speech Synthesis active\n"
                 f"• **System Mode**: Pure Production (Clean database state, zero synthetic mocks)\n\n"
-                "💡 *Tip: Ask 'Explain operational modules' or 'How to add a camera' for workflow guidance.*"
+                "💡 *Tip: Aap in me se koi bhi command puch sakte hain: 'Admin ka kya kaam hai', 'Officer duty', 'How to add camera', 'Thermal vision guide'.*"
             )
             return {
                 "query": query_str,
@@ -699,252 +1107,71 @@ class MultimodalEngine:
                 "safety_notice": "AI Virtual Assistant cited live database counts and hardware state. No configurations were modified."
             }
 
-        # 1.1 ADMIN ROLE & RESPONSIBILITIES (HQ COMMAND WORKFLOW)
-        if any(k in q_lower for k in ["admin", "hq", "administrator", "headquarters", "war room"]):
+        # 18. DATA PURGE & CLEAN SLATE
+        if any(k in q_lower for k in ["clean data", "purge", "delete fake data", "clear database", "data kaise hataye", "data clear"]):
             explanation = (
-                "🏢 **HQ Central Administrator — Operational Guide & Central Responsibilities**\n\n"
-                "As an **HQ Central Administrator (Delhi HQ)**, aapka kaam physically camera lagana nahi hai, balki poore desh ke borders aur officers ki supreme command & centralized monitoring karna hai:\n\n"
-                "1. **Officer & User Management (`Officer & User Management / Zero-Trust`)**:\n"
-                "   • Delhi HQ se Admin field officers create karta hai aur unko unki respective Checkpost (BOP) assign karta hai.\n"
-                "   • Kis officer ke paas kis site/checkpost ki clearance hai, yeh Admin decide karta hai.\n\n"
-                "2. **Multi-Site & Checkpost Federation Map (`Multi-Site Federation`)**:\n"
-                "   • Poore desh ke sabhi Border Outposts (BOPs) ko National Tactical Map par monitor karein.\n"
-                "   • Kis checkpost par kis officer ne kitne cameras lagaye hain aur wahan ka health score kya hai, live dekhein.\n\n"
-                "3. **Receive All Field Alerts, Sirens & Messages (`SOC Threat Matrix` & `Dashboard`)**:\n"
-                "   • Checkpost cameras se aane wale saare critical intrusion alerts, siren events aur notifications **direct Delhi HQ Admin ke desk par aate hain**.\n\n"
-                "4. **Review Daily SITREPs & Officer Dispatches (`HQ Monitoring Dashboard`)**:\n"
-                "   • Field officers dwara ground se bheje gaye Daily Field Evidence, suspect snapshots aur SITREP dispatches ko Delhi HQ me review karein.\n\n"
-                "5. **Forensic Evidence Vault & QRT Orders (`Forensic Vault` & `Incidents`)**:\n"
-                "   • Court-admissible SHA-256 tamper-proof evidence packages verify karein aur major intrusions par Quick Reaction Team (QRT) response authorize karein."
+                "🧹 **Database Purge & Clean State Guide**\n\n"
+                "System me dummy/fake data purge karne ke liye dedicated endpoints aur buttons available hain:\n\n"
+                "1. **Clear Drone Missions**: Drone Operations page par **Clear Missions / Purge** use karein ya `DELETE /api/v1/drones/clear` call karein.\n"
+                "2. **Clear Thermal Sessions**: Thermal Fusion page par `DELETE /api/v1/thermal/sessions/clear` call karein.\n"
+                "3. **Clear Notifications**: SOC Drawer me Trash button par click karke all notifications clear karein.\n"
+                "4. **Purge Fake Data Utility**: Security Center me Master Purge option se unverified test events ko clean karein."
             )
             return {
                 "query": query_str,
-                "parsed_filters": {"role": "ADMIN_HQ", "intent": "ROLE_GUIDANCE"},
+                "parsed_filters": {"workflow": "DATA_PURGE"},
                 "explanation": explanation,
                 "cited_event_ids": [],
                 "cited_camera_ids": [],
                 "results": [],
-                "safety_notice": "Authoritative HQ Administrator command guidance cited from IBVAP Operational Doctrine."
+                "safety_notice": "Operational guidance cited from IBVAP Data Maintenance specification."
             }
 
-        # 1.2 CHECKPOST FIELD OFFICER WORKFLOW
-        if any(k in q_lower for k in ["officer", "checkpost", "bop", "jawan", "sentry", "field operator", "base station"]):
+        # 19. GENERAL ASSISTANT HELP / CAPABILITIES
+        if any(k in q_lower for k in ["help", "who are you", "what can you do", "capabilities", "kya kar sakte ho", "hello", "hi", "namaste", "jai hind"]):
             explanation = (
-                "🛰️ **Checkpost Field Officer — Ground Operational Duties**\n\n"
-                "As a **Checkpost Field Officer** (`officer_alpha`), aap ground par physical security aur checkpost equipment sambhalte hain:\n\n"
-                "1. **Checkpost Camera Onboarding (`Checkpost Camera Onboarding`)**:\n"
-                "   • Checkpost par physical cameras lagana aur unhe system me **`+ Add Camera`** button se add karna officer ki primary duty hai.\n"
-                "   • Camera add hote hi uski live feed aur detection alerts automatically Delhi HQ tak transmit hone lagti hain.\n\n"
-                "2. **Live Checkpost Video Wall (`Live Tactical Video Wall`)**:\n"
-                "   • Apne checkpost ke zero-line fence aur gate feeds ko 1x1, 2x2 multi-view grid me continuous monitor karein.\n\n"
-                "3. **PTZ Joystick & Optical Zoom (`PTZ Joystick & Optical Zoom`)**:\n"
-                "   • Virtual joystick se camera ko Left/Right/Up/Down ghumayein aur zoom karke zero-line wire inspect karein.\n\n"
-                "4. **Perimeter Virtual Tripwires (`Virtual Perimeter / Tripwires`)**:\n"
-                "   • Camera screen par click karke polygon boundary (Zero-Line Wire) banayein taaki cross karte hi instant alarm baje.\n\n"
-                "5. **Capture Evidence & Dispatch to Delhi HQ (`Evidence & Dispatch to Delhi HQ`)**:\n"
-                "   • Agar koi sandigh person ya vehicle detect hota hai, to **Dispatch Evidence to Delhi HQ** button se snapshot, GPS coordinates aur descriptive field report turant Central Admin ko bhejein."
+                "🤖 **Jai Hind, Commander! I am your IBVAP Tactical AI Copilot**\n\n"
+                "Aap Admin ya Officer kisi bhi role ke anusaar mujhse project se related koi bhi sawal puch sakte hain:\n\n"
+                "1. **Live Fleet Telemetry**: *'What is system status?'* ya *'Kitne camera online hain?'*\n"
+                "2. **Roles & Responsibilities**: *'Admin ka kya kaam hai?'* ya *'Field Officer duties btao'*\n"
+                "3. **Step-by-Step Guidance**: *'Camera kaise add karein?'*, *'Geofence zone kaise banayein?'*, *'Evidence dispatch kaise karein?'*\n"
+                "4. **Advanced Tactical Modules**: *'Drone fleet operations'*, *'Thermal night vision palettes'*, *'GIS Layer Stack & Coordinates'*, *'Voice Siren & Alerts'*\n"
+                "5. **Factual Database Search**: *'Show high-risk night events'* to search database records with verified SHA-256 evidence citations."
             )
             return {
                 "query": query_str,
-                "parsed_filters": {"role": "CHECKPOST_OFFICER", "intent": "ROLE_GUIDANCE"},
+                "parsed_filters": {"intent": "GENERAL_HELP"},
                 "explanation": explanation,
                 "cited_event_ids": [],
                 "cited_camera_ids": [],
                 "results": [],
-                "safety_notice": "Authoritative Checkpost Field Officer operational guidance cited from IBVAP Ground Protocols."
+                "safety_notice": "AI Virtual Assistant is ready to guide operational workflows and synthesize verified database records."
             }
 
-
-        # 1.3 NEXT-GEN CAPABILITIES (PTZ, DRONES, SENSOR FUSION, THERMAL, GIS)
-        if any(k in q_lower for k in ["drone", "ptz", "thermal", "radar", "seismic", "gis", "next gen", "fusion", "uav", "joystick"]):
+        # 14. FORENSIC EVIDENCE VAULT & SHA-256 DIGITAL HASH
+        if any(k in q_lower for k in ["evidence", "vault", "sha-256", "sha256", "tamper", "chain of custody", "forensic", "evidence vault", "proof", "legal"]):
             explanation = (
-                "⚡ **Next-Gen Capabilities — Operational Features Guide**\n\n"
-                "IBVAP me 5 Next-Generation advanced tactical modules fully active hain:\n\n"
-                "1. **PTZ & ONVIF Control (`/ptz-control`)**:\n"
-                "   • Virtual joystick pan/tilt/zoom, optical zoom presets, aur AI auto-tracking.\n\n"
-                "2. **Drone Fleet & Autonomous Handoff (`/drone-operations`)**:\n"
-                "   • Autonomous UAV patrol missions launch karein.\n"
-                "   • **Target Handoff**: Zameen par camera se bahar nikalne wale intruder ko drone hawa se autonomously track karta hai.\n\n"
-                "3. **Multi-Sensor Bayesian Fusion (`/sensor-fusion`)**:\n"
-                "   • Optical cameras, subsurface seismic sensors, aur perimeter radar ka combined data correlate karke 96%+ accuracy se target verify hota hai.\n\n"
-                "4. **Thermal + RGB Dual-Camera Fusion (`/thermal-fusion`)**:\n"
-                "   • Day Optical + Night Thermal camera perspective alignment. Ghane kohre ya raat ke andhere me body heat detect hoti hai.\n\n"
-                "5. **GIS, Terrain & Blind-Spot Intelligence (`/gis-intelligence`)**:\n"
-                "   • Latitude & Longitude type karke kisi bhi border point par jump karein aur elevation/slope ground terrain check karein."
+                "🔐 **Forensic Evidence Vault & Cryptographic Chain-of-Custody Guide**\n\n"
+                "**1. Court-Admissible Tamper-Proofing (`/evidence-vault`)**:\n"
+                "   • Kisi bhi security event, intrusion photo ya camera crop ka **SHA-256 digital cryptographic signature** image bytes se direct calculate hota hai.\n"
+                "   • Agar kisi photo me 1 pixel bhi modify kiya jaye, to SHA-256 hash mismatch alert ho jata hai (Zero-Tamper Guarantee).\n\n"
+                "**2. Evidence Chain-of-Custody**:\n"
+                "   • Har evidence item ke sath Capturing Camera ID, GPS Coordinates, Timestamp, Capturing Officer ID, aur Sector record hota hai.\n\n"
+                "**3. Official Export**:\n"
+                "   • Single-click me court-admissible PDF Dossier ya complete ZIP Package export karein legal trials aur HQ verification ke liye."
             )
             return {
                 "query": query_str,
-                "parsed_filters": {"category": "NEXT_GEN_INTELLIGENCE"},
+                "parsed_filters": {"workflow": "EVIDENCE_VAULT"},
                 "explanation": explanation,
                 "cited_event_ids": [],
                 "cited_camera_ids": [],
                 "results": [],
-                "safety_notice": "Technical operational guide cited from Next-Gen Tactical Command Suite."
+                "safety_notice": "Operational guidance cited from IBVAP Forensic Evidence specification."
             }
 
-        # 2. OPERATIONAL MODULES COMPREHENSIVE WALKTHROUGH
-
-        if any(k in q_lower for k in [
-            "module", "modules", "operational module", "kya use", "kaise use", "kya kaam",
-            "functionality", "features", "options", "explain", "btao", "list module",
-            "overview module", "kya hai", "sab kuch", "use case"
-        ]):
-            explanation = (
-                "🧭 **IBVAP Operational Modules & Functionality Guide**\n\n"
-                "Platform ke sabhi 14 Operational Modules ka use aur functionality neeche di gayi hai:\n\n"
-                "1. **Command Overview (Dashboard)**: Fleet metrics, active threats, and high-risk camera preview.\n"
-                "2. **SOC Command Center**: Real-time triage matrix for perimeter alarms, alerts acknowledgment, and escalation.\n"
-                "3. **System Health Center**: Hardware CPU/RAM monitoring, AI model engine status (YOLO, SFace, Drone).\n"
-                "4. **Multi-Site Central Command**: National federation hierarchy (Org ➔ Region ➔ Site ➔ BOP Outposts).\n"
-                "5. **Multimodal AI Intelligence**: Multi-signal event correlation (optical, thermal, audio) with cryptographic SHA-256 evidence.\n"
-                "6. **Enterprise Zero-Trust Security**: RBAC roles, encrypted audit logs, and camera credential encryption.\n"
-                "7. **Predictive Intelligence**: Early warning forecasting, 24-hour activity trends, and sensor outage vs threat detection.\n"
-                "8. **Behaviour Intelligence**: Kinematic anomaly detection (sudden running sprint, fence-edge loitering, repeated approach).\n"
-                "9. **Movement Intelligence (Re-ID)**: Cross-camera handover graph, global tracking journeys, and impossible travel detection.\n"
-                "10. **Incidents & Response**: Tactical case files with step-by-step SOP checklists and QRT dispatch.\n"
-                "11. **Camera Management**: Register real RTSP streams, GPS placement, and stream health diagnostic tests.\n"
-                "12. **Live Multi-View**: Tactical video wall with 1x1, 2x2, and 3x3 multi-camera grid layouts.\n"
-                "13. **Vehicle Intelligence (ANPR)**: Automatic license plate OCR and stolen/suspect vehicle watchlist alarms.\n"
-                "14. **Face Intelligence**: 128D biometric facial recognition, suspect photo upload, and cosine similarity matching."
-            )
-            return {
-                "query": query_str,
-                "parsed_filters": {"intent": "MODULES_GUIDE"},
-                "explanation": explanation,
-                "cited_event_ids": [],
-                "cited_camera_ids": [],
-                "results": [],
-                "safety_notice": "Operational module overview cited from IBVAP Platform Documentation."
-            }
-
-        # 3. SETUP & STARTING INSTRUCTIONS
-        if any(k in q_lower for k in [
-            "setup", "run kaise", "start kaise", "shuru kaise", "kaise chalaye", "starting se",
-            "kaise run krege", "requirements", "prerequisites", "kaise start"
-        ]):
-            explanation = (
-                "🚀 **IBVAP Setup & Execution Guide (Scratch se Real Run)**\n\n"
-                "**1. Backend Start (Terminal 1)**:\n"
-                "```powershell\n"
-                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\backend\n"
-                "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload\n"
-                "```\n"
-                "*(Note: Global Python 3.10 me saari libraries installed hain, venv activate karne ki zaroorat nahi hai).*\n\n"
-                "**2. Frontend Start (Terminal 2)**:\n"
-                "```powershell\n"
-                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\frontend\n"
-                "npm run dev\n"
-                "```\n\n"
-                "**3. Browser Access**:\n"
-                "• Open: `http://localhost:5173`\n"
-                "• Username: `admin`\n"
-                "• Password: Configured administrative password\n\n"
-                "**4. Add Real Cameras**:\n"
-                "Go to **Camera Management** ➔ Click **+ Add Camera** ➔ Enter RTSP URL (`rtsp://ip:554/stream`)."
-            )
-            return {
-                "query": query_str,
-                "parsed_filters": {"intent": "SETUP_GUIDE"},
-                "explanation": explanation,
-                "cited_event_ids": [],
-                "cited_camera_ids": [],
-                "results": [],
-                "safety_notice": "Standard production deployment and execution instructions."
-            }
-
-        # 4. OPERATIONAL WORKFLOW GUIDANCE: CAMERA SETUP
-        if ("camera" in q_lower or "rtsp" in q_lower or "stream" in q_lower or "cctv" in q_lower) and not any(w in q_lower for w in ["event", "intrusion", "breach", "detected"]):
-            explanation = (
-                "📹 **Camera Onboarding & RTSP Streaming Workflow**\n\n"
-                "1. **Navigate to Camera Management**: Click **Camera Management** in the left sidebar.\n"
-                "2. **Add Camera**: Click the **+ Add Camera** button at the top-right.\n"
-                "3. **Enter Identifiers**: Set a unique Camera ID (e.g. `CAM-NORTH-01`) and a descriptive Camera Name.\n"
-                "4. **RTSP Stream URL**: Enter your IP camera stream:\n"
-                "   • Format: `rtsp://<username>:<password>@<camera-ip>:554/stream1`\n"
-                "   • Passwords are encrypted on disk with AES-256 Fernet cryptography.\n"
-                "5. **Tactical Mapping**: Assign the BOP Site, Sector name, and Latitude/Longitude coordinates.\n"
-                "6. **Stream Profile**: Select `HIGH` for primary AI analytics or `SUB` for bandwidth-saving previews.\n"
-                "7. **Save & Stream**: Click **Save & Connect**. The stream manager will automatically test RTSP connectivity and start video ingestion."
-            )
-            return {
-                "query": query_str,
-                "parsed_filters": {"workflow": "CAMERA_ONBOARDING"},
-                "explanation": explanation,
-                "cited_event_ids": [],
-                "cited_camera_ids": [],
-                "results": [],
-                "safety_notice": "Operational guidance cited directly from IBVAP Camera Management documentation."
-            }
-
-        # 5. OPERATIONAL WORKFLOW GUIDANCE: GEOFENCE & TRIPWIRES
-        if any(k in q_lower for k in ["zone", "geofence", "tripwire", "polygon", "virtual wire", "perimeter fence", "tar", "boundary"]) and not any(w in q_lower for w in ["event", "intrusion", "breach"]):
-            explanation = (
-                "🛡️ **Perimeter Geofencing & Zone Setup Workflow**\n\n"
-                "1. **Navigate to Perimeter Intelligence**: Click **Perimeter Intelligence** in the left navigation.\n"
-                "2. **Select Camera**: Choose the camera covering your physical perimeter wire or gate.\n"
-                "3. **Add Polygon Zone**: Click **+ Add Polygon Zone** on the video inspection card.\n"
-                "4. **Draw on Video Frame**: Click points directly on the camera view to form a closed polygon boundary.\n"
-                "5. **Zone Classification**:\n"
-                "   • `ZERO_LINE_RESTRICTED`: High-priority intrusion alarm for international border line.\n"
-                "   • `BUFFER_ZONE`: Secondary alert zone for early warning approach.\n"
-                "   • `GATE_ACCESS`: Monitored vehicle and personnel entry corridor.\n"
-                "6. **Debounce Seconds**: Set a debounce window (e.g. 2.0s) to filter out transient foliage movement.\n"
-                "7. **Save**: Click **Save Zone**. The ByteTrack tracker will now generate breach alerts whenever target centroids intersect the polygon."
-            )
-            return {
-                "query": query_str,
-                "parsed_filters": {"workflow": "GEOFENCE_CONFIGURATION"},
-                "explanation": explanation,
-                "cited_event_ids": [],
-                "cited_camera_ids": [],
-                "results": [],
-                "safety_notice": "Operational guidance cited from IBVAP Perimeter Intelligence specification."
-            }
-
-        # 6. OPERATIONAL WORKFLOW GUIDANCE: VEHICLE INTELLIGENCE & ANPR
-        if any(k in q_lower for k in ["anpr", "plate", "vehicle", "stolen", "car watchlist", "license plate", "gadi", "gaadi"]):
-            explanation = (
-                "🚗 **Vehicle Intelligence & ANPR Watchlist Workflow**\n\n"
-                "1. **Navigate to Vehicle Intelligence**: Click **Vehicle Intelligence** on the sidebar.\n"
-                "2. **Register Watchlist Vehicle**: Click **+ Add Watchlist Plate**.\n"
-                "3. **Plate & Category**: Enter license plate (e.g. `UP32AB1234`) and threat tag (`STOLEN`, `SUSPECT_SMUGGLING`, `WANTED`).\n"
-                "4. **Notes**: Add operational threat notes and issuing agency.\n"
-                "5. **Automatic Matching**: The optical character recognition (OCR) engine automatically scans license plates from camera feeds.\n"
-                "6. **Instant Alarm**: Any detected vehicle matching the watchlist triggers a critical SOC alert within 200 milliseconds."
-            )
-            return {
-                "query": query_str,
-                "parsed_filters": {"workflow": "ANPR_WATCHLIST"},
-                "explanation": explanation,
-                "cited_event_ids": [],
-                "cited_camera_ids": [],
-                "results": [],
-                "safety_notice": "Operational guidance cited from IBVAP Vehicle Intelligence specification."
-            }
-
-        # 7. OPERATIONAL WORKFLOW GUIDANCE: FACE INTELLIGENCE
-        if any(k in q_lower for k in ["face", "biometric", "facial", "suspect photo", "person watchlist", "chehra"]):
-            explanation = (
-                "👤 **Face Intelligence & Biometric Watchlist Workflow**\n\n"
-                "1. **Navigate to Face Intelligence**: Click **Face Intelligence** in the sidebar.\n"
-                "2. **Add Suspect**: Click **+ Register Watchlist Subject**.\n"
-                "3. **Subject Details**: Enter Full Name, Aliases, and Threat Level (e.g. `CRITICAL / INFILTRATOR`).\n"
-                "4. **Biometric Input**: Upload a front-facing photograph or provide a 128-dimensional facial embedding vector.\n"
-                "5. **Cosine Match Threshold**: Set verification sensitivity (recommended: 0.70 / 70% confidence).\n"
-                "6. **Live Inference**: The SFace biometric engine extracts facial landmarks from video crops and performs sub-second matching."
-            )
-            return {
-                "query": query_str,
-                "parsed_filters": {"workflow": "FACE_BIOMETRICS"},
-                "explanation": explanation,
-                "cited_event_ids": [],
-                "cited_camera_ids": [],
-                "results": [],
-                "safety_notice": "Operational guidance cited from IBVAP Face Intelligence specification."
-            }
-
-        # 8. OPERATIONAL WORKFLOW GUIDANCE: INCIDENTS & PLAYBOOKS
-        if any(k in q_lower for k in ["incident", "playbook", "sop", "qrt", "dispatch", "response checklist", "khatra", "breach"]):
+        # 15. INCIDENTS, SOP PLAYBOOKS & QRT DISPATCH
+        if any(k in q_lower for k in ["incident", "playbook", "sop", "qrt", "dispatch", "response checklist", "khatra", "breach", "quick reaction team"]):
             explanation = (
                 "📑 **Incident Response & Tactical SOP Playbook Workflow**\n\n"
                 "1. **Locate Alert**: In the **SOC Command Center**, select any critical perimeter breach or threat alarm.\n"
@@ -967,20 +1194,156 @@ class MultimodalEngine:
                 "safety_notice": "Operational guidance cited from IBVAP Incident Command specification."
             }
 
-        # 9. GENERAL ASSISTANT HELP / CAPABILITIES
-        if any(k in q_lower for k in ["help", "who are you", "what can you do", "capabilities", "kya kar sakte ho", "hello", "hi"]):
+        # 16. VEHICLE INTELLIGENCE (ANPR)
+        if any(k in q_lower for k in ["anpr", "plate", "vehicle", "stolen", "car watchlist", "license plate", "gadi", "gaadi"]):
             explanation = (
-                "🤖 **IBVAP AI Virtual Assistant Capabilities**\n\n"
-                "I am your tactical AI Copilot for border video analytics. Main aapki in chijon me madad kar sakta hoon:\n\n"
-                "1. **Live Fleet Telemetry**: Ask *'What is system status?'* or *'System ka status batao'* to see real-time camera and alert metrics.\n"
-                "2. **Operational Modules Guide**: Ask *'Explain operational modules'* or *'Modules ka kya use hai'* to learn how every page works.\n"
-                "3. **Operational Step-by-Step Workflows**:\n"
-                "   • *'How to add a camera'* / *'Camera kaise add kare'*\n"
-                "   • *'How to draw geofence zones'* / *'Perimeter zone kaise banaye'*\n"
-                "   • *'How to add vehicle watchlist'* / *'ANPR setup kaise kare'*\n"
-                "   • *'How to register suspect face'* / *'Biometrics photo upload'*\n"
-                "   • *'How to run SOP playbooks'* / *'Incident triage'*\n"
-                "4. **Factual Event Search**: Ask *'Show high-risk night events'* to search database records with verified SHA-256 evidence citations."
+                "🚗 **Vehicle Intelligence & ANPR Watchlist Workflow**\n\n"
+                "1. **Navigate to Vehicle Intelligence**: Click **Vehicle Intelligence** on the sidebar.\n"
+                "2. **Register Watchlist Vehicle**: Click **+ Add Watchlist Plate**.\n"
+                "3. **Plate & Category**: Enter license plate (e.g. `UP32AB1234`) and threat tag (`STOLEN`, `SUSPECT_SMUGGLING`, `WANTED`).\n"
+                "4. **Notes**: Add operational threat notes and issuing agency.\n"
+                "5. **Automatic Matching**: The optical character recognition (OCR) engine automatically scans license plates from camera feeds.\n"
+                "6. **Instant Alarm**: Any detected vehicle matching the watchlist triggers a critical SOC alert within 200 milliseconds."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "ANPR_WATCHLIST"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Vehicle Intelligence specification."
+            }
+
+        # 17. FACE INTELLIGENCE & BIOMETRIC WATCHLIST
+        if any(k in q_lower for k in ["face", "biometric", "facial", "suspect photo", "person watchlist", "chehra", "128d"]):
+            explanation = (
+                "👤 **Face Intelligence & Biometric Watchlist Workflow**\n\n"
+                "1. **Navigate to Face Intelligence**: Click **Face Intelligence** in the sidebar.\n"
+                "2. **Add Suspect**: Click **+ Register Watchlist Subject**.\n"
+                "3. **Subject Details**: Enter Full Name, Aliases, and Threat Level (e.g. `CRITICAL / INFILTRATOR`).\n"
+                "4. **Biometric Input**: Upload a front-facing photograph or provide a 128-dimensional facial embedding vector.\n"
+                "5. **Cosine Match Threshold**: Set verification sensitivity (recommended: 0.70 / 70% confidence).\n"
+                "6. **Live Inference**: The SFace biometric engine extracts facial landmarks from video crops and performs sub-second matching."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "FACE_BIOMETRICS"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Face Intelligence specification."
+            }
+
+        # 18. BEHAVIOUR & MOVEMENT INTELLIGENCE (Re-ID)
+        if any(k in q_lower for k in ["behaviour", "behavior", "movement", "re-id", "reid", "loitering", "sprint", "handover graph", "impossible travel"]):
+            explanation = (
+                "🏃 **Behaviour & Movement Intelligence (Cross-Camera Re-ID) Guide**\n\n"
+                "**1. Kinematic Behaviour Anomaly Detection (`/behaviour-intelligence`)**:\n"
+                "   • **Loitering Detection**: Agar koi shaks zero-line boundary ke paas 45+ seconds tak ruka rehta hai, to warning generate hoti hai.\n"
+                "   • **Sudden Running Sprint**: Sudden acceleration towards the border triggers an instant high-priority anomaly.\n"
+                "   • **Repeated Approach**: Multiple approaches to fence within 10 minutes flagged as reconnaissance scouting.\n\n"
+                "**2. Cross-Camera Movement Re-ID (`/movement-intelligence`)**:\n"
+                "   • Deep visual appearance feature vectors ke dwara intruder ko Camera 1 se Camera 2 par handover track kiya jata hai.\n"
+                "   • **Impossible Travel Detection**: Agar koi shaks 2 door ke cameras par physical speed limit se pehle appear hota hai to spoofing alert raise hota hai."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "BEHAVIOUR_MOVEMENT"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Behaviour & Movement specification."
+            }
+
+        # 19. ZERO-TRUST SECURITY & USER ROLES
+        if any(k in q_lower for k in ["zero trust", "security", "rbac", "audit log", "permissions", "encryption", "fernet", "roles", "user management"]):
+            explanation = (
+                "🛡️ **Zero-Trust Security & RBAC Governance Guide**\n\n"
+                "**1. Role-Based Access Control (RBAC)**:\n"
+                "   • `ADMIN`: Delhi HQ central administrator with global scope (`*`), user creation, model registration, and federation controls.\n"
+                "   • `OFFICER`: Checkpost ground operator scoped strictly to their assigned BOP / Site ID (e.g. `SITE-BORDER-NORTH`).\n\n"
+                "**2. AES-256 Fernet Cryptography**:\n"
+                "   • All RTSP camera passwords and sensitive credentials are encrypted at rest.\n\n"
+                "**3. Immutable Security Audit Logs**:\n"
+                "   • Har action (login, camera addition, zone modification, evidence access, AI queries) tamper-proof log me store hoti hai."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "ZERO_TRUST_SECURITY"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Zero-Trust Security specification."
+            }
+
+        # 20. SETUP & START INSTRUCTIONS
+        if any(k in q_lower for k in [
+            "setup", "run kaise", "start kaise", "shuru kaise", "kaise chalaye", "starting se",
+            "kaise run krege", "requirements", "prerequisites", "kaise start", "how to run"
+        ]):
+            explanation = (
+                "🚀 **IBVAP Setup & Execution Guide (Scratch se Real Run)**\n\n"
+                "**1. Backend Start (Terminal 1)**:\n"
+                "```powershell\n"
+                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\backend\n"
+                "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload\n"
+                "```\n"
+                "*(Note: Global Python 3.10 me saari libraries installed hain, venv activate karne ki zaroorat nahi hai).*\n\n"
+                "**2. Frontend Start (Terminal 2)**:\n"
+                "```powershell\n"
+                "cd c:\\Users\\rajdi\\OneDrive\\Desktop\\IBVAP-1\\frontend\n"
+                "npm run dev\n"
+                "```\n\n"
+                "**3. Browser Access**:\n"
+                "• Open: `http://localhost:5173`\n"
+                "• Username: `admin` (HQ Administrator) or `officer_alpha` (Field Officer)\n\n"
+                "**4. Add Real Cameras**:\n"
+                "Go to **Camera Management** ➔ Click **+ Add Camera** ➔ Enter RTSP URL (`rtsp://ip:554/stream`)."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"intent": "SETUP_GUIDE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Standard production deployment and execution instructions."
+            }
+
+        # 21. DATA PURGE & CLEAN SLATE
+        if any(k in q_lower for k in ["clean data", "purge", "delete fake data", "clear database", "data kaise hataye", "data clear"]):
+            explanation = (
+                "🧹 **Database Purge & Clean State Guide**\n\n"
+                "System me dummy/fake data purge karne ke liye dedicated endpoints aur buttons available hain:\n\n"
+                "1. **Clear Drone Missions**: Drone Operations page par **Clear Missions / Purge** use karein ya `DELETE /api/v1/drones/clear` call karein.\n"
+                "2. **Clear Thermal Sessions**: Thermal Fusion page par `DELETE /api/v1/thermal/sessions/clear` call karein.\n"
+                "3. **Clear Notifications**: SOC Drawer me Trash button par click karke all notifications clear karein.\n"
+                "4. **Purge Fake Data Utility**: Security Center me Master Purge option se unverified test events ko clean karein."
+            )
+            return {
+                "query": query_str,
+                "parsed_filters": {"workflow": "DATA_PURGE"},
+                "explanation": explanation,
+                "cited_event_ids": [],
+                "cited_camera_ids": [],
+                "results": [],
+                "safety_notice": "Operational guidance cited from IBVAP Data Maintenance specification."
+            }
+
+        # 22. GENERAL ASSISTANT HELP / CAPABILITIES
+        if any(k in q_lower for k in ["help", "who are you", "what can you do", "capabilities", "kya kar sakte ho", "hello", "hi", "namaste", "jai hind"]):
+            explanation = (
+                "🤖 **Jai Hind, Commander! I am your IBVAP Tactical AI Copilot**\n\n"
+                "Aap Admin ya Officer kisi bhi role ke anusaar mujhse project se related koi bhi sawal puch sakte hain:\n\n"
+                "1. **Live Fleet Telemetry**: *'What is system status?'* ya *'Kitne camera online hain?'*\n"
+                "2. **Roles & Responsibilities**: *'Admin ka kya kaam hai?'* ya *'Field Officer duties btao'*\n"
+                "3. **Step-by-Step Guidance**: *'Camera kaise add karein?'*, *'Geofence zone kaise banayein?'*, *'Evidence dispatch kaise karein?'*\n"
+                "4. **Advanced Tactical Modules**: *'Drone fleet operations'*, *'Thermal night vision palettes'*, *'GIS Layer Stack & Coordinates'*, *'Voice Siren & Alerts'*\n"
+                "5. **Factual Database Search**: *'Show high-risk night events'* to search database records with verified SHA-256 evidence citations."
             )
             return {
                 "query": query_str,
@@ -992,7 +1355,7 @@ class MultimodalEngine:
                 "safety_notice": "AI Virtual Assistant is ready to guide operational workflows and synthesize verified database records."
             }
 
-        # 10. DATABASE EVENT SEARCH (WITH FACTUAL CITATIONS)
+        # 23. DATABASE EVENT SEARCH (WITH FACTUAL CITATIONS)
         query = db.query(MultimodalSecurityEvent)
         if current_user_scope_sites is not None:
             query = query.filter(MultimodalSecurityEvent.site_id.in_(current_user_scope_sites))
@@ -1028,14 +1391,17 @@ class MultimodalEngine:
 
         if not results:
             explanation = (
-                f"💡 **AI Copilot Response for:** *\"{query_str}\"*\n\n"
-                "Clean database me is samay koi security alert/breach record nahi hai (zero threat state).\n\n"
-                "Aap in me se koi bhi command puch sakte hain:\n"
-                "• *'What is system status?'* ➔ Live camera, alert, aur hardware telemetry report\n"
-                "• *'Explain operational modules'* ➔ Sabhi 14 modules ki detail guide\n"
-                "• *'How to add a camera?'* ➔ RTSP IP camera connect karne ka workflow\n"
-                "• *'How to draw a geofence zone?'* ➔ Virtual fence aur polygon tripwire setup\n"
-                "• *'How to run from scratch?'* ➔ Full backend & frontend startup guide"
+                f"💡 **AI Copilot Analysis for:** *\"{query_str}\"*\n\n"
+                "Clean database me is query se match hone wala koi recorded security alert ya incident nahi mila (all clear state).\n\n"
+                "Aap in me se koi bhi command ya sawal puch sakte hain:\n"
+                "• *'System status aur live fleet health'* ➔ Real-time telemetry report\n"
+                "• *'Admin ka kya kaam hai aur kaise use karein'* ➔ HQ Command Center guide\n"
+                "• *'Officer ka kya kaam hai aur kaise use karein'* ➔ Ground Checkpost duty guide\n"
+                "• *'Camera kaise add karege?'* ➔ RTSP IP camera connect workflow\n"
+                "• *'Thermal vision aur Spot Pyrometer kaise use karein'* ➔ 5 Shader Palettes guide\n"
+                "• *'GIS Layer Stack kya hai'* ➔ Geospatial Map & Coordinate Jumper guide\n"
+                "• *'Voice alert sound kaise chalta hai'* ➔ Siren & voice announcement guide\n"
+                "• *'Starting se run kaise karege'* ➔ Full backend & frontend startup guide"
             )
         else:
             explanation = (

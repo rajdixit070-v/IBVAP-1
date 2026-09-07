@@ -148,6 +148,32 @@ export const droneService = {
       params: { global_track_id: globalTrackId, limit }
     });
     return res.data;
+  },
+
+  async deleteHandoff(handoffId: string): Promise<{ message: string }> {
+    const res = await api.delete<{ message: string }>(`/drones/handoff/${handoffId}`);
+    return res.data;
+  },
+
+  async clearHandoffHistory(): Promise<{ message: string; deleted_count: number }> {
+    const res = await api.delete<{ message: string; deleted_count: number }>('/drones/handoff/clear');
+    return res.data;
+  },
+
+  async deleteDrone(droneId: string): Promise<{ message: string }> {
+    const res = await api.delete<{ message: string }>(`/drones/${droneId}`);
+    return res.data;
+  },
+
+  async deleteMission(missionId: string): Promise<{ message: string }> {
+    const res = await api.delete<{ message: string }>(`/drones/missions/${missionId}`);
+    return res.data;
+  },
+
+  async clearAllDrones(): Promise<{ message: string }> {
+    const res = await api.delete<{ message: string }>('/drones/clear-all');
+    return res.data;
   }
 };
+
 
