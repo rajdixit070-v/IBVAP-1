@@ -76,11 +76,23 @@ def update_sensor(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Sensor '{sensor_id}' not found.")
     return sensor
 
+@router.delete("/fusion/events")
+def clear_fusion_events(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear all fused sensor event logs.
+    """
+    count = db.query(SensorFusionEvent).delete()
+    db.commit()
+    return {"status": "SUCCESS", "message": f"Cleared {count} fusion events.", "deleted_count": count}
+
 @router.delete("/{sensor_id}")
 def delete_sensor(
     sensor_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     success = SensorService.delete_sensor(db, sensor_id)
     if not success:

@@ -10,17 +10,21 @@ import {
   Play,
   ArrowLeft as BackIcon,
   RotateCcw,
-  Eye
+  Eye,
+  Trash2
 } from 'lucide-react';
 import { ptzService, PTZDevice, PTZPreset, ONVIFDevice } from '../services/ptzService';
 import { cameraService } from '../services/cameraService';
 import { useCameras } from '../context/CameraContext';
+import { useAuth } from '../context/AuthContext';
 
 interface PTZControlPageProps {
   onBackToDashboard?: () => void;
 }
 
 export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboard }) => {
+  const { user } = useAuth();
+  const isHQCommand = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
   const { cameras } = useCameras();
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
 
@@ -271,6 +275,17 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
     }
   };
 
+  const handleDeletePreset = async (token: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete preset "${name}"?`)) return;
+    try {
+      await ptzService.deletePreset(selectedCameraId, token);
+      fetchStatusAndPresets();
+    } catch (err) {
+      console.error('Failed to delete preset:', err);
+      alert('Failed to delete preset.');
+    }
+  };
+
   const handleDiscover = async () => {
     try {
       setDiscovering(true);
@@ -346,6 +361,63 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
           </button>
         </div>
       </div>
+
+      {/* Context-Aware Tactical Operational Mode HUD Banner */}
+      {isHQCommand ? (
+        <div className="p-4 bg-purple-950/40 border border-purple-500/40 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-500/20 text-purple-300 rounded-lg border border-purple-500/30 shrink-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-400 inline-block animate-ping" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-sm">🏢 HQ CENTRAL REMOTE OBSERVATION & OVERRIDE</span>
+                <span className="px-2 py-0.5 rounded bg-purple-900/80 text-purple-300 border border-purple-600 text-[10px] font-bold">
+                  WAN TELEMETRY TUNNEL
+                </span>
+              </div>
+              <p className="text-slate-300 text-[11px] mt-0.5">
+                Operating over Defence VPN. Primary tactile turret steering is handled on-site by field officers at BOP Alpha; HQ commands execute via secure remote override.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="px-3 py-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-slate-300 text-[11px]">
+              WAN LATENCY: <strong className="text-emerald-400">38ms</strong>
+            </div>
+            <div className="px-3 py-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-slate-300 text-[11px]">
+              LINK: <strong className="text-purple-300">LEASED FIBER</strong>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 bg-emerald-950/40 border border-emerald-500/40 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/20 text-emerald-300 rounded-lg border border-emerald-500/30 shrink-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block animate-ping" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-sm">🪖 ACTIVE LOCAL GROUND CONTROL</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-900/80 text-emerald-300 border border-emerald-600 text-[10px] font-bold">
+                  ZERO-LATENCY PoE
+                </span>
+              </div>
+              <p className="text-slate-300 text-[11px] mt-0.5">
+                Direct ONVIF / PELCO-D local link active. Immediate physical joystick & optical zoom response on Checkpost Bunker LAN.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="px-3 py-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-slate-300 text-[11px]">
+              LOCAL LAN: <strong className="text-emerald-400">&lt; 2ms</strong>
+            </div>
+            <div className="px-3 py-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-slate-300 text-[11px]">
+              DESK JOYSTICK: <strong className="text-cyan-300">CONNECTED</strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -606,12 +678,22 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
                         P: {p.pan}° | T: {p.tilt}° | Z: {p.zoom}x
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleGotoPreset(p.preset_token)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-blue-600 text-white rounded font-medium text-xs transition cursor-pointer"
-                    >
-                      <Play className="w-3 h-3" /> Drive
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleGotoPreset(p.preset_token)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-blue-600 text-white rounded font-medium text-xs transition cursor-pointer"
+                        title="Drive PTZ to this preset"
+                      >
+                        <Play className="w-3 h-3" /> Drive
+                      </button>
+                      <button
+                        onClick={() => handleDeletePreset(p.preset_token, p.preset_name)}
+                        className="p-1.5 bg-slate-800 hover:bg-red-950/80 hover:text-red-400 text-slate-400 rounded transition cursor-pointer border border-transparent hover:border-red-800"
+                        title="Delete Preset"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

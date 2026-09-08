@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Save } from 'lucide-react';
+import { X, Shield, Save, MapPin, Compass, Locate } from 'lucide-react';
 import { BOP, Site } from '../../types/federation';
 
 interface BOPModalProps {
@@ -20,7 +20,7 @@ export const BOPModal: React.FC<BOPModalProps> = ({
   defaultSiteId
 }) => {
   const [bopId, setBopId] = useState('');
-  const [siteId, setSiteId] = useState(defaultSiteId || 'SITE-BORDER-NORTH');
+  const [siteId, setSiteId] = useState(defaultSiteId || (sites[0]?.site_id || ''));
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
@@ -46,18 +46,47 @@ export const BOPModal: React.FC<BOPModalProps> = ({
       setOperationalPriority(bopToEdit.operational_priority);
     } else {
       setBopId(`BOP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
-      setSiteId(defaultSiteId || (sites[0]?.site_id || 'SITE-BORDER-NORTH'));
+      setSiteId(defaultSiteId || (sites[0]?.site_id || ''));
       setName('');
       setCode('');
       setDescription('');
       setLocation('');
-      setLatitude(32.7266);
-      setLongitude(74.8570);
+      setLatitude('');
+      setLongitude('');
       setStatus('ACTIVE');
       setOperationalPriority('NORMAL');
     }
     setError(null);
   }, [bopToEdit, defaultSiteId, sites, isOpen]);
+
+  const [isLocating, setIsLocating] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+
+  const handleAutoDetectGPS = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('GPS not supported on this browser/device');
+      return;
+    }
+    setIsLocating(true);
+    setGpsStatus('Acquiring live GPS signal...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setLatitude(lat);
+        setLongitude(lng);
+        setGpsStatus(`GPS Locked: ${lat}° N, ${lng}° E`);
+        setTimeout(() => setGpsStatus(null), 4000);
+      },
+      (err) => {
+        setIsLocating(false);
+        setGpsStatus(`GPS error: ${err.message || 'Permission denied'}`);
+        setTimeout(() => setGpsStatus(null), 4000);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   if (!isOpen) return null;
 
@@ -92,8 +121,8 @@ export const BOPModal: React.FC<BOPModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#0f172a] border border-slate-700 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
+      <div className="bg-[#0f172a] border border-slate-700 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#1e293b]/60">
           <div className="flex items-center gap-3">
             <Shield className="w-5 h-5 text-emerald-400" />
@@ -143,7 +172,7 @@ export const BOPModal: React.FC<BOPModalProps> = ({
                 disabled={!!bopToEdit}
                 onChange={(e) => setBopId(e.target.value)}
                 className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500 disabled:opacity-50"
-                placeholder="BOP-ALPHA"
+                placeholder="Enter Outpost ID"
               />
             </div>
           </div>
@@ -156,7 +185,7 @@ export const BOPModal: React.FC<BOPModalProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                placeholder="BOP Delta"
+                placeholder="Enter Outpost Name"
               />
             </div>
             <div>
@@ -166,7 +195,7 @@ export const BOPModal: React.FC<BOPModalProps> = ({
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500 uppercase"
-                placeholder="BOP-D"
+                placeholder="Enter Code (e.g. BOP-01)"
               />
             </div>
           </div>
@@ -178,7 +207,7 @@ export const BOPModal: React.FC<BOPModalProps> = ({
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 mb-2"
-              placeholder="Ridge Top Point 4, Sector Bravo"
+              placeholder="Outpost location, sector, landmark details..."
             />
             <textarea
               rows={2}
@@ -187,6 +216,71 @@ export const BOPModal: React.FC<BOPModalProps> = ({
               className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
               placeholder="Operational responsibilities, watch duty post notes..."
             />
+          </div>
+
+          {/* Geospatial GPS Positioning & Live Locate */}
+          <div className="p-3.5 bg-emerald-950/20 border border-emerald-500/30 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-300 text-xs font-mono font-semibold">
+                <MapPin className="w-4 h-4 text-emerald-400" />
+                <span>Geospatial GPS Coordinates & Outpost Placement</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoDetectGPS}
+                disabled={isLocating}
+                className="px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+                <span>{isLocating ? 'Detecting...' : 'Live GPS Locate'}</span>
+              </button>
+            </div>
+
+            {gpsStatus && (
+              <div className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 rounded px-2.5 py-1 flex items-center gap-2">
+                <Compass className="w-3.5 h-3.5 animate-spin" />
+                <span>{gpsStatus}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Latitude (North) <span className="text-emerald-400 font-mono">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  placeholder="e.g. 31.6048"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="w-full bg-[#0d131f] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Longitude (East) <span className="text-emerald-400 font-mono">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  placeholder="e.g. 74.5727"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="w-full bg-[#0d131f] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span>Enter coordinates manually or click Live GPS Locate to plot on GIS Tactical Map.</span>
+              {latitude !== '' && longitude !== '' && (
+                <span className="font-mono text-emerald-400 font-bold">
+                  Target: {Number(latitude).toFixed(4)}° N, {Number(longitude).toFixed(4)}° E
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

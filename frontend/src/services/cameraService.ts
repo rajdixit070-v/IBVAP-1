@@ -77,6 +77,12 @@ export const cameraService = {
     return response.data;
   },
 
+  async clearCameraLogs(id: string | number): Promise<{ success: boolean; message: string }> {
+    const response = await api.delete<{ success: boolean; message: string }>(`/cameras/${id}/logs`);
+    return response.data;
+  },
+
+
   getLiveStreamUrl(cameraId: string, fps = 25): string {
     const token = localStorage.getItem('ibvap_token');
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';

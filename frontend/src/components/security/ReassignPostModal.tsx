@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { userService, Officer } from '../../services/userService';
+import { federationService } from '../../services/federationService';
 import { MapPin, Shield, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface ReassignPostModalProps {
@@ -10,25 +11,45 @@ interface ReassignPostModalProps {
   onSuccess: () => void;
 }
 
-const POST_OPTIONS = [
-  { id: 'BOP-ALPHA', name: 'BOP Alpha (Sector 4 - Jammu Front)', type: 'BOP' },
-  { id: 'BOP-BRAVO', name: 'BOP Bravo (Sector 7 - Samba Ridge)', type: 'BOP' },
-  { id: 'BOP-CHARLIE', name: 'BOP Charlie (Sector 2 - Kathua Riverine)', type: 'BOP' },
-  { id: 'BOP-DELTA', name: 'BOP Delta (Sector 9 - Akhnoor Desert)', type: 'BOP' },
-  { id: 'SITE-BORDER-NORTH', name: 'Site Border North (Central Sector HQ)', type: 'SITE' },
-  { id: '*', name: 'All National Sectors (Headquarters Central)', type: 'GLOBAL' }
-];
-
 export const ReassignPostModal: React.FC<ReassignPostModalProps> = ({
   isOpen,
   onClose,
   officer,
   onSuccess
 }) => {
-  const [selectedPostId, setSelectedPostId] = useState(officer?.scope_id || 'BOP-ALPHA');
+  const [postOptions, setPostOptions] = useState<{ id: string; name: string; type: string }[]>([
+    { id: '*', name: 'All National Sectors (Headquarters Central)', type: 'GLOBAL' }
+  ]);
+  const [selectedPostId, setSelectedPostId] = useState(officer?.scope_id || '*');
   const [selectedRole, setSelectedRole] = useState(officer?.role || 'OFFICER');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      Promise.all([
+        federationService.listSites().catch(() => []),
+        federationService.listBOPs().catch(() => [])
+      ]).then(([sites, bops]) => {
+        const opts: { id: string; name: string; type: string }[] = [
+          { id: '*', name: 'All National Sectors (Headquarters Central)', type: 'GLOBAL' }
+        ];
+        sites.forEach((s) => {
+          opts.push({ id: s.site_id, name: `${s.name} (${s.code}) [Site Command]`, type: 'SITE' });
+        });
+        bops.forEach((b) => {
+          opts.push({ id: b.bop_id, name: `${b.name} (${b.code}) [Outpost]`, type: 'BOP' });
+        });
+        setPostOptions(opts);
+      });
+
+      if (officer) {
+        setSelectedPostId(officer.scope_id || '*');
+        setSelectedRole(officer.role || 'OFFICER');
+      }
+      setError(null);
+    }
+  }, [isOpen, officer]);
 
   if (!officer) return null;
 
@@ -37,10 +58,10 @@ export const ReassignPostModal: React.FC<ReassignPostModalProps> = ({
     try {
       setSaving(true);
       setError(null);
-      const postMatch = POST_OPTIONS.find((p) => p.id === selectedPostId);
+      const postMatch = postOptions.find((p) => p.id === selectedPostId);
       await userService.updateOfficer(officer.id, {
         post_scope_id: selectedPostId,
-        post_scope_type: postMatch?.type || 'BOP',
+        post_scope_type: postMatch?.type || (selectedPostId === '*' ? 'GLOBAL' : 'BOP'),
         role: selectedRole
       });
       onSuccess();
@@ -81,9 +102,9 @@ export const ReassignPostModal: React.FC<ReassignPostModalProps> = ({
           <select
             value={selectedPostId}
             onChange={(e) => setSelectedPostId(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-emerald-500 font-mono"
+            className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-emerald-500 font-mono cursor-pointer"
           >
-            {POST_OPTIONS.map((p) => (
+            {postOptions.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -99,13 +120,14 @@ export const ReassignPostModal: React.FC<ReassignPostModalProps> = ({
           <select
             value={selectedRole}
             onChange={(e) => setSelectedRole(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-purple-500 font-mono"
+            className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-purple-500 font-mono cursor-pointer"
           >
             <option value="OFFICER">OFFICER (Checkpost Duty)</option>
             <option value="COMMANDER">COMMANDER (BOP Head)</option>
             <option value="BOP_OPERATOR">BOP_OPERATOR (Camera Monitor)</option>
             <option value="OPERATOR">OPERATOR (Triage & ANPR)</option>
             <option value="ADMIN">ADMIN (Central HQ Supreme Authority)</option>
+            <option value="VIEWER">VIEWER (Read-Only Observer)</option>
           </select>
         </div>
 
@@ -113,14 +135,14 @@ export const ReassignPostModal: React.FC<ReassignPostModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition"
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition shadow-lg disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition shadow-lg disabled:opacity-50 cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4" />
             {saving ? 'Transferring...' : 'Confirm Post Transfer'}

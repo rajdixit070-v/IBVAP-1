@@ -222,6 +222,27 @@ export const EnterpriseSecurityPage: React.FC<EnterpriseSecurityPageProps> = ({ 
     }
   };
 
+  const handleClearAuditLogs = async () => {
+    if (window.confirm('Are you sure you want to clear all security audit logs?')) {
+      try {
+        await securityService.clearAuditLogs();
+        setAuditLogs([]);
+      } catch (err: any) {
+        alert(`Failed to clear audit logs: ${err.response?.data?.detail || err.message}`);
+      }
+    }
+  };
+
+  const handleDeleteAuditLog = async (id: number) => {
+    try {
+      await securityService.deleteAuditLog(id);
+      setAuditLogs((prev) => prev.filter((a) => a.id !== id));
+    } catch (err: any) {
+      alert(`Failed to delete audit log: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+
   const filteredThreats = threats.filter((t) => {
 
     if (severityFilter !== 'ALL' && t.severity !== severityFilter) return false;
@@ -892,10 +913,22 @@ export const EnterpriseSecurityPage: React.FC<EnterpriseSecurityPageProps> = ({ 
 
       {/* Sub-Tab 5: Security Audit Logs */}
       {activeSubTab === 'audit' && (
-        <div className="bg-[#0e1626] border border-slate-800 p-5 rounded-xl">
-          <h3 className="text-sm font-semibold text-slate-100 mb-4 flex items-center gap-2">
-            <FileCheck className="w-4 h-4 text-cyan-400" /> Tamper-Evident Administrative Audit Log Explorer
-          </h3>
+        <div className="bg-[#0e1626] border border-slate-800 p-5 rounded-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <FileCheck className="w-4 h-4 text-cyan-400" /> Tamper-Evident Administrative Audit Log Explorer ({auditLogs.length})
+            </h3>
+            {auditLogs.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearAuditLogs}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-mono font-bold transition cursor-pointer"
+                title="Clear all recorded audit logs"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear All Audit Logs
+              </button>
+            )}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead className="text-[11px] font-mono text-slate-400 bg-slate-950/80 border-b border-slate-800 uppercase">
@@ -906,24 +939,44 @@ export const EnterpriseSecurityPage: React.FC<EnterpriseSecurityPageProps> = ({ 
                   <th className="p-3">Resource</th>
                   <th className="p-3">IP Address</th>
                   <th className="p-3">Timestamp</th>
+                  <th className="p-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
-                {auditLogs.map((a) => (
-                  <tr key={a.id} className="hover:bg-slate-900/40">
-                    <td className="p-3 text-cyan-400">{a.audit_id}</td>
-                    <td className="p-3 text-slate-200">{a.actor_username}</td>
-                    <td className="p-3 font-semibold text-slate-300">{a.action_type}</td>
-                    <td className="p-3 text-slate-400">{a.resource_type}: {a.resource_id}</td>
-                    <td className="p-3 text-slate-400">{a.ip_address}</td>
-                    <td className="p-3 text-slate-500">{new Date(a.created_at).toLocaleString()}</td>
+                {auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-500 text-xs">
+                      No administrative audit logs recorded in current window.
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  auditLogs.map((a) => (
+                    <tr key={a.id} className="hover:bg-slate-900/40">
+                      <td className="p-3 text-cyan-400">{a.audit_id}</td>
+                      <td className="p-3 text-slate-200">{a.actor_username}</td>
+                      <td className="p-3 font-semibold text-slate-300">{a.action_type}</td>
+                      <td className="p-3 text-slate-400">{a.resource_type}: {a.resource_id}</td>
+                      <td className="p-3 text-slate-400">{a.ip_address}</td>
+                      <td className="p-3 text-slate-500">{new Date(a.created_at).toLocaleString()}</td>
+                      <td className="p-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAuditLog(a.id)}
+                          className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition cursor-pointer"
+                          title="Delete this audit record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
+
 
       {/* Sub-Tab 6: Password Policy Simulator */}
       {activeSubTab === 'policy' && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { userService, OfficerCreate, Officer } from '../../services/userService';
 import {
@@ -15,35 +15,57 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
+import { federationService } from '../../services/federationService';
+
 interface RegisterOfficerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const POST_OPTIONS = [
-  { id: 'BOP-ALPHA', name: 'BOP Alpha (Sector 4 - Jammu Front)', type: 'BOP' },
-  { id: 'BOP-BRAVO', name: 'BOP Bravo (Sector 7 - Samba Ridge)', type: 'BOP' },
-  { id: 'BOP-CHARLIE', name: 'BOP Charlie (Sector 2 - Kathua Riverine)', type: 'BOP' },
-  { id: 'BOP-DELTA', name: 'BOP Delta (Sector 9 - Akhnoor Desert)', type: 'BOP' },
-  { id: 'SITE-BORDER-NORTH', name: 'Site Border North (Central Sector HQ)', type: 'SITE' },
-  { id: '*', name: 'All National Sectors (Headquarters Central)', type: 'GLOBAL' }
-];
-
 export const RegisterOfficerModal: React.FC<RegisterOfficerModalProps> = ({
   isOpen,
   onClose,
   onSuccess
 }) => {
+  const [postOptions, setPostOptions] = useState<{ id: string; name: string; type: string }[]>([
+    { id: '*', name: 'All National Sectors (Headquarters Central)', type: 'GLOBAL' }
+  ]);
+
   const [formData, setFormData] = useState<OfficerCreate>({
     username: '',
     email: '',
     password: '',
     role: 'OFFICER',
-    post_scope_id: 'BOP-ALPHA',
-    post_scope_type: 'BOP',
+    post_scope_id: '*',
+    post_scope_type: 'GLOBAL',
     full_name: ''
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      Promise.all([
+        federationService.listSites().catch(() => []),
+        federationService.listBOPs().catch(() => [])
+      ]).then(([sites, bops]) => {
+        const opts: { id: string; name: string; type: string }[] = [
+          { id: '*', name: 'All National Sectors (Headquarters Central)', type: 'GLOBAL' }
+        ];
+        sites.forEach((s) => {
+          opts.push({ id: s.site_id, name: `${s.name} (${s.code}) [Site Command]`, type: 'SITE' });
+        });
+        bops.forEach((b) => {
+          opts.push({ id: b.bop_id, name: `${b.name} (${b.code}) [Outpost]`, type: 'BOP' });
+        });
+        setPostOptions(opts);
+        if (bops.length > 0) {
+          setFormData((prev) => ({ ...prev, post_scope_id: bops[0].bop_id, post_scope_type: 'BOP' }));
+        } else if (sites.length > 0) {
+          setFormData((prev) => ({ ...prev, post_scope_id: sites[0].site_id, post_scope_type: 'SITE' }));
+        }
+      });
+    }
+  }, [isOpen]);
 
   const [showPassword, setShowPassword] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
@@ -91,7 +113,7 @@ export const RegisterOfficerModal: React.FC<RegisterOfficerModalProps> = ({
     try {
       setSaving(true);
       setError(null);
-      const selectedPost = POST_OPTIONS.find((p) => p.id === formData.post_scope_id);
+      const selectedPost = postOptions.find((p) => p.id === formData.post_scope_id);
       const postType = selectedPost?.type || 'BOP';
 
       const payload: OfficerCreate = {
@@ -259,9 +281,9 @@ export const RegisterOfficerModal: React.FC<RegisterOfficerModalProps> = ({
               <select
                 value={formData.post_scope_id}
                 onChange={(e) => setFormData({ ...formData, post_scope_id: e.target.value })}
-                className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-emerald-500 font-mono cursor-pointer"
               >
-                {POST_OPTIONS.map((p) => (
+                {postOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
@@ -277,13 +299,14 @@ export const RegisterOfficerModal: React.FC<RegisterOfficerModalProps> = ({
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-purple-500 font-mono"
+                className="w-full px-3 py-2 bg-[#090d16] border border-[#1e293b] rounded-xl text-white focus:outline-none focus:border-purple-500 font-mono cursor-pointer"
               >
                 <option value="OFFICER">OFFICER (Checkpost Duty)</option>
                 <option value="COMMANDER">COMMANDER (BOP Head)</option>
                 <option value="BOP_OPERATOR">BOP_OPERATOR (Camera Monitor)</option>
                 <option value="OPERATOR">OPERATOR (Triage & ANPR)</option>
                 <option value="ADMIN">ADMIN (Central HQ Supreme Authority)</option>
+                <option value="VIEWER">VIEWER (Read-Only Observer)</option>
               </select>
             </div>
           </div>

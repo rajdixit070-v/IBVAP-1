@@ -149,26 +149,27 @@ def update_bop(
     return bop
 
 @router.delete("/{bop_id}")
-def deactivate_bop(
+def delete_bop(
     bop_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """Deactivates a BOP (Admin only)."""
+    """Permanently deletes a BOP (Admin only)."""
     bop = db.query(BOP).filter((BOP.bop_id == bop_id) | (BOP.name == bop_id)).first()
     if not bop:
         raise HTTPException(status_code=404, detail=f"BOP '{bop_id}' not found.")
 
-    bop.status = "INACTIVE"
+    actual_id = bop.bop_id
+    db.delete(bop)
     db.add(SecurityAuditLog(
-        action="BOP_DEACTIVATED",
+        action="BOP_DELETED",
         username=current_user.username,
         resource_type="BOP",
-        resource_id=bop.bop_id,
-        details=f"Deactivated BOP '{bop.bop_id}'"
+        resource_id=actual_id,
+        details=f"Deleted BOP '{actual_id}'"
     ))
     db.commit()
-    return {"message": f"BOP '{bop_id}' deactivated successfully."}
+    return {"message": f"BOP '{actual_id}' deleted successfully.", "status": "DELETED"}
 
 @router.get("/{bop_id}/overview", response_model=BOPOverviewResponse)
 def get_bop_overview(
@@ -301,3 +302,38 @@ def get_bop_incidents(
         query = query.filter(Incident.status == status)
     query = ScopeService.filter_query_by_scope(query, Incident, current_user, db)
     return query.order_by(Incident.created_at.desc()).all()
+
+@router.delete("/{bop_id}", status_code=status.HTTP_200_OK)
+def delete_bop(
+    bop_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """Deletes a Border Outpost (BOP) and updates associated scopes/cameras (Admin only)."""
+    bop = db.query(BOP).filter((BOP.bop_id == bop_id) | (BOP.name == bop_id)).first()
+    if not bop:
+        raise HTTPException(status_code=404, detail=f"BOP '{bop_id}' not found.")
+
+    bid = bop.bop_id
+    bop_name = bop.name
+
+    # Clean user scopes
+    from app.models.federation_models import SiteUserScope
+    db.query(SiteUserScope).filter(
+        (SiteUserScope.scope_type == "BOP") & (SiteUserScope.scope_id == bid)
+    ).delete(synchronize_session=False)
+
+    db.delete(bop)
+
+    audit = SecurityAuditLog(
+        username=current_user.username,
+        action="BOP_DELETED",
+        resource_type="BOP",
+        resource_id=bid,
+        details=f'{{"bop_id": "{bid}", "name": "{bop_name}"}}'
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"success": True, "message": f"BOP '{bop_name}' ({bid}) successfully deleted."}
+

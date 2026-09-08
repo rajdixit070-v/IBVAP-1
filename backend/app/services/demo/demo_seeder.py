@@ -375,52 +375,9 @@ def seed_demo_data(db: Session) -> dict:
         db.add_all(demo_zones)
         db.commit()
 
-    # 6. Physical Forensic Evidence JPEGs & Records
-    evd_dir = "./storage/evidence"
-    evd1_path = os.path.join(evd_dir, "CAM-001", "EVD-DEMO-001.jpg")
-    evd2_path = os.path.join(evd_dir, "CAM-002", "EVD-DEMO-002.jpg")
-    evd3_path = os.path.join(evd_dir, "CAM-004", "EVD-DEMO-003.jpg")
-    _create_synthetic_jpeg(evd1_path, "CAM-001", "Zero-Line Perimeter Fence Infiltration", 94)
-    _create_synthetic_jpeg(evd2_path, "CAM-002", "Thermal Target Crossing Riverbed", 88)
-    _create_synthetic_jpeg(evd3_path, "CAM-004", "Watchlist Vehicle Inbound at High Speed", 82)
-
-    if db.query(Evidence).count() == 0:
-        db.add_all([
-            Evidence(
-                evidence_id="EVD-DEMO-001",
-                source_event_id="EVT-DEMO-001",
-                camera_id="CAM-001",
-                evidence_type="SNAPSHOT",
-                file_path=evd1_path,
-                checksum_sha256="a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0",
-                mime_type="image/jpeg",
-                file_size_bytes=os.path.getsize(evd1_path) if os.path.exists(evd1_path) else 1024,
-                created_at=now - timedelta(minutes=15)
-            ),
-            Evidence(
-                evidence_id="EVD-DEMO-002",
-                source_event_id="EVT-DEMO-002",
-                camera_id="CAM-002",
-                evidence_type="SNAPSHOT",
-                file_path=evd2_path,
-                checksum_sha256="b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01a",
-                mime_type="image/jpeg",
-                file_size_bytes=os.path.getsize(evd2_path) if os.path.exists(evd2_path) else 1024,
-                created_at=now - timedelta(minutes=10)
-            ),
-            Evidence(
-                evidence_id="EVD-DEMO-003",
-                source_event_id="EVT-DEMO-003",
-                camera_id="CAM-004",
-                evidence_type="SNAPSHOT",
-                file_path=evd3_path,
-                checksum_sha256="c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01ab2",
-                mime_type="image/jpeg",
-                file_size_bytes=os.path.getsize(evd3_path) if os.path.exists(evd3_path) else 1024,
-                created_at=now - timedelta(minutes=4)
-            )
-        ])
-        db.commit()
+    # 6. Physical Forensic Evidence
+    # No fake evidence records are pre-seeded into the vault.
+    # Evidence is strictly populated via actual camera captures or user-uploaded forensic dossiers.
 
     # 7. Security Threat Events
     if db.query(SecurityEvent).count() == 0:
@@ -451,8 +408,8 @@ def seed_demo_data(db: Session) -> dict:
                 last_bbox_json=json.dumps({"x": 480, "y": 220, "w": 200, "h": 340}),
                 last_direction="SOUTH",
                 last_speed=2.4,
-                evidence_id="EVD-DEMO-001",
-                evidence_file_path=evd1_path,
+                evidence_id=None,
+                evidence_file_path=None,
                 started_at=now - timedelta(minutes=15),
                 last_updated_at=now - timedelta(minutes=15)
             ),
@@ -474,8 +431,8 @@ def seed_demo_data(db: Session) -> dict:
                 last_bbox_json=json.dumps({"x": 320, "y": 210, "w": 140, "h": 280}),
                 last_direction="EAST",
                 last_speed=1.8,
-                evidence_id="EVD-DEMO-002",
-                evidence_file_path=evd2_path,
+                evidence_id=None,
+                evidence_file_path=None,
                 started_at=now - timedelta(minutes=10),
                 last_updated_at=now - timedelta(minutes=10)
             ),
@@ -497,8 +454,8 @@ def seed_demo_data(db: Session) -> dict:
                 last_bbox_json=json.dumps({"x": 400, "y": 300, "w": 280, "h": 180}),
                 last_direction="SOUTH_WEST",
                 last_speed=65.0,
-                evidence_id="EVD-DEMO-003",
-                evidence_file_path=evd3_path,
+                evidence_id=None,
+                evidence_file_path=None,
                 started_at=now - timedelta(minutes=4),
                 last_updated_at=now - timedelta(minutes=4)
             )
@@ -629,7 +586,7 @@ def seed_demo_data(db: Session) -> dict:
                 match_status="WATCHLIST_MATCH",
                 matched_owner="Suspect Arms Transporter",
                 watchlist_notes="Flagged by intelligence: suspected weapon contraband transport.",
-                snapshot_url="/api/v1/evidence/EVD-DEMO-003/file",
+                snapshot_url=None,
                 timestamp=now - timedelta(minutes=4)
             ),
             ANPREvent(
@@ -680,7 +637,7 @@ def seed_demo_data(db: Session) -> dict:
                 quality_score=0.94,
                 verification_status="PENDING",
                 verification_notes="High cosine similarity with cross-border intrusion suspect watchlist.",
-                snapshot_url="/api/v1/evidence/EVD-DEMO-001/file",
+                snapshot_url=None,
                 timestamp=now - timedelta(minutes=14)
             ),
             FaceEvent(

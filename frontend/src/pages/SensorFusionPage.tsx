@@ -9,11 +9,12 @@ import {
   Cpu,
   Layers,
   Wifi,
-  MapPin
+  MapPin,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { sensorService, Sensor, SensorFusionEvent } from '../services/sensorService';
 import { RegisterSensorModal } from '../components/sensors/RegisterSensorModal';
-import { Plus } from 'lucide-react';
 
 export const SensorFusionPage: React.FC = () => {
   const [sensors, setSensors] = useState<Sensor[]>([]);
@@ -23,6 +24,29 @@ export const SensorFusionPage: React.FC = () => {
   const [correlating, setCorrelating] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<SensorFusionEvent | null>(null);
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
+
+  const handleDeleteSensor = async (sensorId: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete sensor ${name} (${sensorId})?`)) return;
+    try {
+      await sensorService.deleteSensor(sensorId);
+      await fetchSensorsAndEvents();
+    } catch (err) {
+      console.error('Failed to delete sensor:', err);
+      alert('Failed to delete sensor. Please check backend logs.');
+    }
+  };
+
+  const handleClearFusionEvents = async () => {
+    if (!window.confirm('Are you sure you want to clear all sensor fusion event logs?')) return;
+    try {
+      await sensorService.clearFusionEvents();
+      setSelectedEvent(null);
+      await fetchSensorsAndEvents();
+    } catch (err) {
+      console.error('Failed to clear fusion events:', err);
+      alert('Failed to clear fusion events.');
+    }
+  };
 
 
   const fetchSensorsAndEvents = async () => {
@@ -221,62 +245,89 @@ export const SensorFusionPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {filteredSensors.map(sensor => (
-                <div
-                  key={sensor.sensor_id}
-                  className="bg-slate-950/60 border border-slate-800 hover:border-slate-700 p-4 rounded-xl transition space-y-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
+            {filteredSensors.length === 0 ? (
+              <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 text-slate-500 text-sm">
+                No {filterType === 'ALL' ? '' : filterType} sensors registered yet. Click &quot;Register Sensor&quot; above to connect your perimeter devices.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {filteredSensors.map(sensor => (
+                  <div
+                    key={sensor.sensor_id}
+                    className="bg-slate-950/60 border border-slate-800 hover:border-slate-700 p-4 rounded-xl transition space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white text-sm">{sensor.name}</span>
+                        </div>
+                        <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 text-slate-500" />
+                          {sensor.location || sensor.sector}
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSensorBadgeColor(sensor.sensor_type)}`}>
+                        {sensor.sensor_type}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-800/80 text-xs">
+                      <div>
+                        <div className="text-slate-500 text-[10px]">Health</div>
+                        <div className="font-semibold text-emerald-400">{sensor.health_score}%</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500 text-[10px]">Reliability</div>
+                        <div className="font-semibold text-cyan-400">{Math.round(sensor.reliability_weight * 100)}%</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500 text-[10px]">Latency</div>
+                        <div className="font-semibold text-slate-300">{sensor.latency_ms}ms</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        {sensor.status}
+                      </span>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-sm">{sensor.name}</span>
+                        <span className="text-[11px] text-slate-500">ID: {sensor.sensor_id}</span>
+                        <button
+                          onClick={() => handleDeleteSensor(sensor.sensor_id, sensor.name)}
+                          className="p-1 rounded hover:bg-red-950/60 text-slate-500 hover:text-red-400 transition"
+                          title="Delete Sensor"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-slate-500" />
-                        {sensor.location || sensor.sector}
-                      </div>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSensorBadgeColor(sensor.sensor_type)}`}>
-                      {sensor.sensor_type}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-800/80 text-xs">
-                    <div>
-                      <div className="text-slate-500 text-[10px]">Health</div>
-                      <div className="font-semibold text-emerald-400">{sensor.health_score}%</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500 text-[10px]">Reliability</div>
-                      <div className="font-semibold text-cyan-400">{Math.round(sensor.reliability_weight * 100)}%</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500 text-[10px]">Latency</div>
-                      <div className="font-semibold text-slate-300">{sensor.latency_ms}ms</div>
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      {sensor.status}
-                    </span>
-                    <span className="text-[11px] text-slate-500">ID: {sensor.sensor_id}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right Col: Bayesian Evidence Analysis Panel */}
         <div className="space-y-4">
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-              <Cpu className="w-5 h-5 text-emerald-400" />
-              Bayesian Fusion Analysis
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-emerald-400" />
+                Bayesian Fusion Analysis
+              </h2>
+              {events.length > 0 && (
+                <button
+                  onClick={handleClearFusionEvents}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 text-red-300 text-xs rounded-lg transition"
+                  title="Clear all fused event history"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Clear Logs
+                </button>
+              )}
+            </div>
 
             {selectedEvent ? (
               <div className="space-y-4">

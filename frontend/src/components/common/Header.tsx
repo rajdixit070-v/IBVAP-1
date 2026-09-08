@@ -130,17 +130,13 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-emerald-400 font-semibold">BUS ONLINE</span>
           </div>
 
-          {/* Real-time Tactical Digital Clock HUD */}
+          {/* Real-time Tactical Digital Clock HUD (Locked to Indian Standard Time IST) */}
           <div className="hidden md:flex items-center gap-2 bg-[#0c1424] px-3 py-1 rounded-lg border border-cyan-500/30 text-xs font-mono shadow-inner">
             <Clock className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-            <span className="text-slate-300 font-semibold uppercase">
-              {currentTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
-            </span>
-            <span className="text-cyan-600">|</span>
             <span className="text-cyan-300 font-bold tracking-wider">
-              {currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              {currentTime.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </span>
-            <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-700 font-bold">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-700 font-bold">
               IST
             </span>
           </div>

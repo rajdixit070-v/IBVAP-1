@@ -93,6 +93,18 @@ def goto_ptz_preset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Preset '{token}' not found on camera '{camera_id}'.")
     return {"status": "SUCCESS", "camera_id": camera_id, "preset_token": token}
 
+@router.delete("/{camera_id}/presets/{token}")
+def delete_ptz_preset(
+    camera_id: str,
+    token: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    success = PTZTrackingService.delete_preset(db, camera_id, token, user_id=current_user.username)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Preset '{token}' not found on camera '{camera_id}'.")
+    return {"status": "DELETED", "camera_id": camera_id, "preset_token": token}
+
 @router.post("/{camera_id}/auto-track")
 def auto_track_target(
     camera_id: str,
@@ -104,4 +116,16 @@ def auto_track_target(
     Engages ByteTrack-driven proportional steering and auto-zoom centering on target.
     """
     return PTZTrackingService.execute_auto_track_step(db, camera_id, request, user_id=current_user.username)
+
+@router.delete("/audit-logs", status_code=status.HTTP_200_OK)
+def clear_ptz_audit_logs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """Purges all PTZ steering and preset audit logs (Admin only)."""
+    from app.models.ptz_models import PTZAuditLog
+    count = db.query(PTZAuditLog).delete()
+    db.commit()
+    return {"success": True, "message": f"Cleared {count} PTZ audit log entries."}
+
 

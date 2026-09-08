@@ -13,8 +13,10 @@ import {
   Sliders,
   ArrowUpRight,
   ArrowLeft,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react';
+
 import { healthService } from '../services/healthService';
 import {
   SystemHealthSummary,
@@ -135,7 +137,19 @@ export const SystemHealthCenterPage: React.FC<SystemHealthCenterPageProps> = ({ 
     }
   };
 
+  const handleClearHealthEvents = async () => {
+    if (window.confirm('Are you sure you want to clear all recorded infrastructure health logs?')) {
+      try {
+        await healthService.clearHealthEvents();
+        await fetchAllHealthData();
+      } catch (err) {
+        console.error('Failed to clear health events', err);
+      }
+    }
+  };
+
   const fetchAllHealthData = async () => {
+
     setLoading(true);
     try {
       const [
@@ -882,13 +896,26 @@ export const SystemHealthCenterPage: React.FC<SystemHealthCenterPageProps> = ({ 
         <div className="space-y-3">
           <div className="flex justify-between items-center pb-1">
             <span className="text-xs text-slate-400 font-mono">Continuous Event Log ({events.length} records)</span>
-            <button
-              onClick={handleTriggerTestEvent}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs font-mono font-semibold border border-slate-700 transition cursor-pointer"
-            >
-              + Log Diagnostics Probe Event
-            </button>
+            <div className="flex items-center gap-2">
+              {events.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearHealthEvents}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-mono font-bold transition cursor-pointer"
+                  title="Clear all recorded health failure logs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Clear Health Logs
+                </button>
+              )}
+              <button
+                onClick={handleTriggerTestEvent}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs font-mono font-semibold border border-slate-700 transition cursor-pointer"
+              >
+                + Log Diagnostics Probe Event
+              </button>
+            </div>
           </div>
+
 
           {events.length === 0 ? (
             <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-xl space-y-3">

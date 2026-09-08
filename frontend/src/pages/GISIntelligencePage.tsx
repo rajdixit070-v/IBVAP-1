@@ -119,6 +119,8 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = ({ onBack
     }
   };
 
+  const [isLocatingGPS, setIsLocatingGPS] = useState(false);
+
   const handleJumpToCustomCoords = () => {
     if (!isNaN(inputLat) && !isNaN(inputLng)) {
       setActivePreset('CUSTOM');
@@ -126,6 +128,32 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = ({ onBack
       setCurrentZoom(15);
       queryTerrainLocation(inputLat, inputLng);
     }
+  };
+
+  const handleLiveGPSLocate = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      alert('Geolocation is not supported by your browser / device.');
+      return;
+    }
+    setIsLocatingGPS(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocatingGPS(false);
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setInputLat(lat);
+        setInputLng(lng);
+        setActivePreset('CUSTOM');
+        setCurrentCenter([lat, lng]);
+        setCurrentZoom(16);
+        queryTerrainLocation(lat, lng);
+      },
+      (err) => {
+        setIsLocatingGPS(false);
+        alert('Could not acquire live GPS: ' + (err.message || 'Permission denied'));
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const queryTerrainLocation = async (lat: number, lng: number) => {
@@ -309,11 +337,21 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = ({ onBack
                   />
                   <button
                     onClick={handleJumpToCustomCoords}
-                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-xs flex items-center gap-1 cursor-pointer transition shadow-md"
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-xs flex items-center gap-1 cursor-pointer transition shadow-md"
                     title="Jump to Location on Map"
                   >
                     <Locate className="w-3.5 h-3.5" />
                     Locate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLiveGPSLocate}
+                    disabled={isLocatingGPS}
+                    className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded text-xs flex items-center gap-1 cursor-pointer transition shadow-md disabled:opacity-50"
+                    title="Detect Current Live GPS & Fly to Map Location"
+                  >
+                    <Crosshair className={`w-3.5 h-3.5 ${isLocatingGPS ? 'animate-spin' : ''}`} />
+                    <span>{isLocatingGPS ? 'Locating...' : 'Live GPS'}</span>
                   </button>
                 </div>
               </div>
@@ -350,6 +388,11 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = ({ onBack
               center={currentCenter}
               zoom={currentZoom}
               height="480px"
+              onLocationFound={(lat, lng) => {
+                setInputLat(lat);
+                setInputLng(lng);
+                queryTerrainLocation(lat, lng);
+              }}
             />
 
 

@@ -209,6 +209,28 @@ class PTZTrackingService:
         db.commit()
         return success
 
+    @staticmethod
+    def delete_preset(
+        db: Session,
+        camera_id: str,
+        preset_token: str,
+        user_id: str = "operator"
+    ) -> bool:
+        preset = db.query(PTZPreset).filter(PTZPreset.camera_id == camera_id, PTZPreset.preset_token == preset_token).first()
+        if not preset:
+            return False
+        db.delete(preset)
+        audit = PTZAuditLog(
+            camera_id=camera_id,
+            user_id=user_id,
+            action="DELETE_PRESET",
+            params_json=json.dumps({"token": preset_token}),
+            result="SUCCESS"
+        )
+        db.add(audit)
+        db.commit()
+        return True
+
     @classmethod
     def execute_auto_track_step(
         cls,

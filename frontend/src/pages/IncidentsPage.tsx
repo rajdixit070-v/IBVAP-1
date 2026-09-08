@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Incident, IncidentAnalyticsSummary } from '../types/incident';
 import { incidentService } from '../services/incidentService';
+import { alertSoundService } from '../services/alertSoundService';
+import { useAuth } from '../context/AuthContext';
 import { CreateIncidentModal } from '../components/incidents/CreateIncidentModal';
 import { IncidentDetailModal } from '../components/incidents/IncidentDetailModal';
 import { LiveIncidentWorkspace } from '../components/incidents/LiveIncidentWorkspace';
@@ -26,6 +28,8 @@ interface IncidentsPageProps {
 }
 
 export const IncidentsPage: React.FC<IncidentsPageProps> = ({ onBackToDashboard }) => {
+  const { user } = useAuth();
+  const isHQCommand = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [analytics, setAnalytics] = useState<IncidentAnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +50,28 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ onBackToDashboard 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [clusterModalOpen, setClusterModalOpen] = useState(false);
+
+  const handleBroadcastQRT = async () => {
+    if (!window.confirm("BROADCAST NATIONAL QRT ALERT: Issue emergency Quick Reaction Team deployment order to Border Outposts?")) {
+      return;
+    }
+    try {
+      await incidentService.createIncident({
+        title: "EMERGENCY NATIONAL QRT BROADCAST - CODE RED",
+        description: "Immediate tactical mobilization commanded by Delhi HQ Central War Room. Quick Reaction Team (QRT) dispatched with SOP Bravo across active border sectors.",
+        priority: "CRITICAL",
+        incident_type: "SECURITY",
+        camera_id: "HQ-WAR-ROOM",
+        bop_site: "BOP Alpha",
+        zone_name: "North Sector",
+        risk_score: 98
+      });
+      alertSoundService.playAlarm('CRITICAL');
+      loadIncidents();
+    } catch (e) {
+      console.error("Failed to broadcast QRT", e);
+    }
+  };
 
   useEffect(() => {
     loadIncidents();
@@ -134,6 +160,13 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ onBackToDashboard 
               TACTICAL INCIDENT COMMAND & RESPONSE ORCHESTRATION
             </span>
             <span className="text-slate-400 font-mono text-xs">• MISSION CONTROL WORKSPACE</span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+              isHQCommand
+                ? 'bg-purple-950/70 text-purple-300 border-purple-600/50'
+                : 'bg-emerald-950/70 text-emerald-300 border-emerald-600/50'
+            }`}>
+              {isHQCommand ? '🏢 HQ WAR ROOM ORCHESTRATION' : '🪖 BOP FIELD SOP CHECKLIST'}
+            </span>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wide">
             Tactical Security Incident Directory & Command Orchestration
@@ -164,6 +197,16 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ onBackToDashboard 
               CLEAR ALL
             </button>
           )}
+          {/* Emergency QRT Broadcast Trigger */}
+          <button
+            onClick={handleBroadcastQRT}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg shadow-rose-950/60 cursor-pointer animate-pulse"
+            title="Broadcast Emergency QRT Mobilization to Border Outposts"
+          >
+            <Flame className="w-4 h-4" />
+            <span>BROADCAST QRT</span>
+          </button>
+
           <button
             onClick={() => setCreateModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg cursor-pointer"

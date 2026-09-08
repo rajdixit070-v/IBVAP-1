@@ -113,6 +113,11 @@ export const sensorService = {
   async getFusionEvents(params?: { site_id?: string; bop_id?: string; limit?: number }): Promise<SensorFusionEvent[]> {
     const res = await api.get<SensorFusionEvent[]>('/sensors/fusion/events', { params });
     return res.data;
+  },
+
+  async clearFusionEvents(): Promise<{ status: string; message: string; deleted_count: number }> {
+    const res = await api.delete<{ status: string; message: string; deleted_count: number }>('/sensors/fusion/events');
+    return res.data;
   }
 };
 

@@ -82,6 +82,12 @@ export const healthService = {
     return res.data;
   },
 
+  clearHealthEvents: async (): Promise<{ success: boolean; message: string }> => {
+    const res = await axios.delete(`${API_BASE}/events/clear-all`);
+    return res.data;
+  },
+
+
   getMaintenanceWindows: async (): Promise<MaintenanceWindow[]> => {
     const res = await axios.get(`${API_BASE}/maintenance`);
     return res.data;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { CameraProvider, useCameras } from './context/CameraContext';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
@@ -36,14 +36,29 @@ import { LiveAlertToast } from './components/common/LiveAlertToast';
 import { Camera } from './types/camera';
 import { Bot } from 'lucide-react';
 
+const ADMIN_ONLY_TABS = ['federation', 'security', 'edge', 'health', 'predictive'];
+
 const MainLayout: React.FC = () => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
+
   const getInitialTab = () => {
     const hash = window.location.hash.replace(/^#\/?/, '');
+    if (!isSuperAdmin && ADMIN_ONLY_TABS.includes(hash)) {
+      return 'dashboard';
+    }
     return hash || 'dashboard';
   };
   const [activeTab, setActiveTabState] = useState(getInitialTab);
 
   const setActiveTab = (tab: string) => {
+    if (!isSuperAdmin && ADMIN_ONLY_TABS.includes(tab)) {
+      setActiveTabState('dashboard');
+      if (window.location.hash !== '#dashboard') {
+        window.location.hash = '#dashboard';
+      }
+      return;
+    }
     setActiveTabState(tab);
     if (window.location.hash !== `#${tab}`) {
       window.location.hash = `#${tab}`;
@@ -51,8 +66,18 @@ const MainLayout: React.FC = () => {
   };
 
   useEffect(() => {
+    if (user && !isSuperAdmin && ADMIN_ONLY_TABS.includes(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [user, isSuperAdmin, activeTab]);
+
+  useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
+      if (!isSuperAdmin && ADMIN_ONLY_TABS.includes(hash)) {
+        setActiveTabState('dashboard');
+        return;
+      }
       setActiveTabState(hash);
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -131,6 +156,9 @@ const MainLayout: React.FC = () => {
               onNavigateToPredictive={() => setActiveTab('predictive')}
               onNavigateToDrones={() => setActiveTab('drone-operations')}
               onNavigateToGIS={() => setActiveTab('gis-intelligence')}
+              onNavigateToPTZ={() => setActiveTab('ptz-control')}
+              onNavigateToThermal={() => setActiveTab('thermal-fusion')}
+              onNavigateToBehaviour={() => setActiveTab('behaviour')}
               onInspectCamera={handleInspect}
             />
           )}
@@ -215,7 +243,6 @@ const MainLayout: React.FC = () => {
 };
 
 import { LoginPage } from './pages/LoginPage';
-import { useAuth } from './context/AuthContext';
 
 const AuthenticatedApp: React.FC = () => {
   const { user, isAuthenticated, loading } = useAuth();

@@ -90,6 +90,11 @@ export const ptzService = {
     return res.data;
   },
 
+  async deletePreset(cameraId: string, token: string): Promise<any> {
+    const res = await api.delete(`/ptz/${cameraId}/presets/${token}`);
+    return res.data;
+  },
+
   async setAutoTrack(cameraId: string, data: {
     enable: boolean;
     target_id?: string;

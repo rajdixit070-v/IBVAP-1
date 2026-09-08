@@ -350,6 +350,33 @@ def list_security_audit_logs(
 
     return query.order_by(SecurityAuditLogEntry.created_at.desc()).limit(limit).all()
 
+@router.delete("/audit-logs", status_code=status.HTTP_200_OK)
+def clear_all_security_audit_logs(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Purges all security audit log records (Admin only)."""
+    from app.models.audit_log import SecurityAuditLog
+    cnt1 = db.query(SecurityAuditLogEntry).delete()
+    cnt2 = db.query(SecurityAuditLog).delete()
+    db.commit()
+    return {"success": True, "message": f"Cleared {cnt1 + cnt2} audit log records."}
+
+@router.delete("/audit-logs/{log_id}", status_code=status.HTTP_200_OK)
+def delete_security_audit_log_by_id(
+    log_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Deletes a specific audit log record by ID."""
+    entry = db.query(SecurityAuditLogEntry).filter(SecurityAuditLogEntry.id == log_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Audit log entry not found.")
+    db.delete(entry)
+    db.commit()
+    return {"success": True, "message": f"Audit log entry #{log_id} deleted."}
+
+
 @router.get("/export-report")
 def export_security_report(
     format: str = Query("json", pattern="^(json|csv)$"),

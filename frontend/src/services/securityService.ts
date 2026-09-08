@@ -84,6 +84,17 @@ export const securityService = {
     return res.data;
   },
 
+  clearAuditLogs: async (): Promise<{ success: boolean; message: string }> => {
+    const res = await api.delete<{ success: boolean; message: string }>('/security/audit-logs');
+    return res.data;
+  },
+
+  deleteAuditLog: async (logId: number): Promise<{ success: boolean; message: string }> => {
+    const res = await api.delete<{ success: boolean; message: string }>(`/security/audit-logs/${logId}`);
+    return res.data;
+  },
+
+
   // Threat Deletion
   deleteThreat: async (threatId: string): Promise<any> => {
     const res = await api.delete(`/security/threats/${threatId}`);

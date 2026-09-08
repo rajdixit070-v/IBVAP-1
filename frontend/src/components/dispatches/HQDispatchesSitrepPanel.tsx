@@ -111,13 +111,15 @@ export const HQDispatchesSitrepPanel: React.FC<{ compact?: boolean }> = ({ compa
             </select>
           )}
 
-          <button
-            onClick={() => setSitrepModalOpen(true)}
-            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold font-mono tracking-wider flex items-center gap-1.5 shadow-lg shadow-cyan-600/30 transition cursor-pointer shrink-0"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>+ TRANSMIT SITREP</span>
-          </button>
+          {!isSuperAdmin && (
+            <button
+              onClick={() => setSitrepModalOpen(true)}
+              className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold font-mono tracking-wider flex items-center gap-1.5 shadow-lg shadow-cyan-600/30 transition cursor-pointer shrink-0"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>+ TRANSMIT SITREP</span>
+            </button>
+          )}
 
           <button
             onClick={loadDispatches}
@@ -133,12 +135,18 @@ export const HQDispatchesSitrepPanel: React.FC<{ compact?: boolean }> = ({ compa
         <div className="p-8 text-center border border-dashed border-slate-800 rounded-xl space-y-2">
           <FileText className="w-8 h-8 text-slate-600 mx-auto" />
           <p className="text-xs text-slate-400">No situation reports dispatched yet today.</p>
-          <button
-            onClick={() => setSitrepModalOpen(true)}
-            className="text-xs text-cyan-400 hover:underline font-mono"
-          >
-            Click here to transmit first shift SITREP to HQ
-          </button>
+          {!isSuperAdmin ? (
+            <button
+              onClick={() => setSitrepModalOpen(true)}
+              className="text-xs text-cyan-400 hover:underline font-mono"
+            >
+              Click here to transmit first shift SITREP to HQ
+            </button>
+          ) : (
+            <p className="text-xs text-slate-500 font-mono">
+              Awaiting incoming field SITREPs from border checkposts.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">

@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, Save } from 'lucide-react';
+import { X, Building2, Save, MapPin, Compass, Locate, Clock } from 'lucide-react';
 import { Site } from '../../types/federation';
+
+const TIMEZONE_OPTIONS = [
+  { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST • UTC+05:30) - Indian Standard Time' },
+  { value: 'UTC', label: 'UTC (GMT • UTC+00:00) - Coordinated Universal Time' },
+  { value: 'Asia/Karachi', label: 'Asia/Karachi (PKT • UTC+05:00) - Pakistan Standard Time' },
+  { value: 'Asia/Dhaka', label: 'Asia/Dhaka (BST • UTC+06:00) - Bangladesh Standard Time' },
+  { value: 'Asia/Kathmandu', label: 'Asia/Kathmandu (NPT • UTC+05:45) - Nepal Time' },
+  { value: 'Asia/Thimphu', label: 'Asia/Thimphu (BTT • UTC+06:00) - Bhutan Time' },
+  { value: 'Asia/Yangon', label: 'Asia/Yangon (MMT • UTC+06:30) - Myanmar Time' },
+  { value: 'Asia/Kabul', label: 'Asia/Kabul (AFT • UTC+04:30) - Afghanistan Time' },
+  { value: 'Asia/Dubai', label: 'Asia/Dubai (GST • UTC+04:00) - Gulf Standard Time' }
+];
 
 interface SiteModalProps {
   isOpen: boolean;
@@ -23,10 +35,46 @@ export const SiteModal: React.FC<SiteModalProps> = ({
   const [location, setLocation] = useState('');
   const [latitude, setLatitude] = useState<number | ''>('');
   const [longitude, setLongitude] = useState<number | ''>('');
-  const [timezone, setTimezone] = useState('UTC+05:30');
+  const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'DEGRADED'>('ACTIVE');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewTime, setPreviewTime] = useState<Date>(new Date());
+
+  const [isLocating, setIsLocating] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+
+  const handleAutoDetectGPS = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('GPS not supported on this browser/device');
+      return;
+    }
+    setIsLocating(true);
+    setGpsStatus('Acquiring live GPS signal...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setLatitude(lat);
+        setLongitude(lng);
+        setGpsStatus(`GPS Locked: ${lat}° N, ${lng}° E`);
+        setTimeout(() => setGpsStatus(null), 4000);
+      },
+      (err) => {
+        setIsLocating(false);
+        setGpsStatus(`GPS error: ${err.message || 'Permission denied'}`);
+        setTimeout(() => setGpsStatus(null), 4000);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => setPreviewTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   useEffect(() => {
     if (siteToEdit) {
@@ -38,7 +86,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
       setLocation(siteToEdit.location || '');
       setLatitude(siteToEdit.latitude || '');
       setLongitude(siteToEdit.longitude || '');
-      setTimezone(siteToEdit.timezone || 'UTC+05:30');
+      setTimezone(siteToEdit.timezone === 'UTC+05:30' ? 'Asia/Kolkata' : (siteToEdit.timezone || 'Asia/Kolkata'));
       setStatus(siteToEdit.status);
     } else {
       setSiteId(`SITE-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
@@ -47,9 +95,9 @@ export const SiteModal: React.FC<SiteModalProps> = ({
       setCode('');
       setDescription('');
       setLocation('');
-      setLatitude(32.7266);
-      setLongitude(74.8570);
-      setTimezone('UTC+05:30');
+      setLatitude('');
+      setLongitude('');
+      setTimezone('Asia/Kolkata');
       setStatus('ACTIVE');
     }
     setError(null);
@@ -87,9 +135,30 @@ export const SiteModal: React.FC<SiteModalProps> = ({
     }
   };
 
+  const getFormattedRegionalTime = (tz: string) => {
+    try {
+      const validTz = tz === 'UTC+05:30' || tz === 'IST' ? 'Asia/Kolkata' : tz;
+      return previewTime.toLocaleTimeString('en-IN', {
+        timeZone: validTz,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+    } catch {
+      return previewTime.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#0f172a] border border-slate-700 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
+      <div className="bg-[#0f172a] border border-slate-700 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#1e293b]/60">
           <div className="flex items-center gap-3">
             <Building2 className="w-5 h-5 text-indigo-400" />
@@ -124,7 +193,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                 disabled={!!siteToEdit}
                 onChange={(e) => setSiteId(e.target.value)}
                 className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-                placeholder="SITE-BORDER-NORTH"
+                placeholder="SITE-ASR-01"
               />
             </div>
             <div>
@@ -134,7 +203,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 uppercase"
-                placeholder="S-NORTH"
+                placeholder="S-ASR"
               />
             </div>
           </div>
@@ -180,29 +249,63 @@ export const SiteModal: React.FC<SiteModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-[11px] font-mono text-slate-400 uppercase mb-1">Latitude</label>
-              <input
-                type="number"
-                step="any"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                placeholder="32.7266"
-              />
+          {/* Geospatial GPS Positioning & Live Locate */}
+          <div className="p-3.5 bg-indigo-950/20 border border-indigo-500/30 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-indigo-300 text-xs font-mono font-semibold">
+                <MapPin className="w-4 h-4 text-indigo-400" />
+                <span>Geospatial GPS Coordinates & Perimeter Placement</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoDetectGPS}
+                disabled={isLocating}
+                className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+                <span>{isLocating ? 'Detecting...' : 'Live GPS Locate'}</span>
+              </button>
             </div>
-            <div>
-              <label className="block text-[11px] font-mono text-slate-400 uppercase mb-1">Longitude</label>
-              <input
-                type="number"
-                step="any"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                placeholder="74.8570"
-              />
+
+            {gpsStatus && (
+              <div className="text-[11px] font-mono text-indigo-400 bg-indigo-950/60 border border-indigo-500/40 rounded px-2.5 py-1 flex items-center gap-2">
+                <Compass className="w-3.5 h-3.5 animate-spin" />
+                <span>{gpsStatus}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Latitude (North) <span className="text-indigo-400 font-mono">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  placeholder="e.g. 31.6340"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="w-full bg-[#0d131f] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Longitude (East) <span className="text-indigo-400 font-mono">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  placeholder="e.g. 74.8723"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="w-full bg-[#0d131f] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] font-mono text-slate-400 uppercase mb-1">Status</label>
               <select
@@ -215,6 +318,31 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                 <option value="MAINTENANCE">MAINTENANCE</option>
                 <option value="INACTIVE">INACTIVE</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase mb-1">
+                Regional Timezone (IST Primary)
+              </label>
+              <select
+                value={timezone === 'UTC+05:30' ? 'Asia/Kolkata' : timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="w-full bg-[#111a2e] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+              >
+                {TIMEZONE_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-500/30 rounded px-2.5 py-1">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-cyan-400 animate-pulse" />
+                  <span>Regional Time:</span>
+                </span>
+                <span className="font-bold text-white tracking-wider">
+                  {getFormattedRegionalTime(timezone)} {timezone === 'Asia/Kolkata' || timezone === 'UTC+05:30' ? 'IST' : ''}
+                </span>
+              </div>
             </div>
           </div>
 

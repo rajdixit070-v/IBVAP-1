@@ -205,6 +205,17 @@ def list_health_events(
         for e in events
     ]
 
+@router.delete("/events/clear-all", status_code=status.HTTP_200_OK)
+def clear_all_health_events(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """Purges all infrastructure health failure/degradation log events (Admin only)."""
+    count = db.query(HealthEvent).delete()
+    db.commit()
+    return {"success": True, "message": f"Cleared {count} infrastructure health events."}
+
+
 @router.post("/maintenance", response_model=MaintenanceWindowResponse, status_code=status.HTTP_201_CREATED)
 def create_maintenance_window(
     body: MaintenanceWindowCreate,

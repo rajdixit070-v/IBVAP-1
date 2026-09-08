@@ -5,7 +5,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LiveVideoPlayer } from './LiveVideoPlayer';
 import { cameraService } from '../../services/cameraService';
 import { RTSPTestModal } from './RTSPTestModal';
-import { Activity, Play, Square, History } from 'lucide-react';
+import { Activity, Play, Square, History, Trash2 } from 'lucide-react';
 
 interface CameraDetailsModalProps {
   isOpen: boolean;
@@ -50,7 +50,20 @@ export const CameraDetailsModal: React.FC<CameraDetailsModalProps> = ({
     }
   };
 
+  const handleClearLogs = async () => {
+    if (!camera) return;
+    if (window.confirm(`Clear diagnostic logs for camera '${camera.camera_id}'?`)) {
+      try {
+        await cameraService.clearCameraLogs(camera.camera_id);
+        setLogs([]);
+      } catch (e) {
+        console.error('Failed to clear logs', e);
+      }
+    }
+  };
+
   if (!camera) return null;
+
 
   const handleStartStop = async () => {
     setActionLoading(true);
@@ -183,13 +196,27 @@ export const CameraDetailsModal: React.FC<CameraDetailsModalProps> = ({
               <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                 <History className="w-4 h-4 text-sky-400" /> RECENT CONNECTION & HEALTH EVENTS
               </h4>
-              <button
-                onClick={loadLogs}
-                className="text-[11px] text-sky-400 hover:underline font-mono"
-              >
-                REFRESH LOGS
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={loadLogs}
+                  className="text-[11px] text-sky-400 hover:underline font-mono cursor-pointer"
+                >
+                  REFRESH LOGS
+                </button>
+                {logs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearLogs}
+                    className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-mono cursor-pointer"
+                    title="Clear diagnostic logs"
+                  >
+                    <Trash2 className="w-3 h-3" /> CLEAR LOGS
+                  </button>
+                )}
+              </div>
             </div>
+
 
             <div className="bg-[#0b101c] border border-[#1e293b] rounded-lg max-h-48 overflow-y-auto">
               {loadingLogs ? (

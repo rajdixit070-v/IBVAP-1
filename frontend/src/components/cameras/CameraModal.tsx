@@ -21,6 +21,7 @@ import {
   Lock,
   MapPin,
   Compass,
+  Locate,
   Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -272,23 +273,36 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   };
 
 
+  const [isLocatingGPS, setIsLocatingGPS] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+
   const handleAutoDetectLocation = () => {
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setFormData(prev => ({
-            ...prev,
-            latitude: parseFloat(pos.coords.latitude.toFixed(6)),
-            longitude: parseFloat(pos.coords.longitude.toFixed(6))
-          }));
-        },
-        () => {
-          setFormData(prev => ({ ...prev, latitude: 31.6245, longitude: 74.8725 }));
-        }
-      );
-    } else {
-      setFormData(prev => ({ ...prev, latitude: 31.6245, longitude: 74.8725 }));
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('GPS not supported on this browser/device');
+      return;
     }
+    setIsLocatingGPS(true);
+    setGpsStatus('Acquiring real-time device GPS...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocatingGPS(false);
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setFormData(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng
+        }));
+        setGpsStatus(`GPS Locked: ${lat}° N, ${lng}° E`);
+        setTimeout(() => setGpsStatus(null), 4000);
+      },
+      (err) => {
+        setIsLocatingGPS(false);
+        setGpsStatus(`GPS error: ${err.message || 'Permission denied'}`);
+        setTimeout(() => setGpsStatus(null), 4000);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleTestConnection = async () => {
@@ -415,37 +429,85 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               <Cctv className="w-4 h-4" /> 1. CAMERA IDENTIFICATION & SITE
             </h4>
 
-            {/* Deployment Architecture Toggle */}
+            {/* Deployment Architecture & Defense Network Topology */}
             <div className="p-3.5 bg-[#090d16] border border-[#1e293b] rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-sky-400" />
-                  <span className="text-white font-bold text-xs font-mono">Deployment Architecture</span>
+                  <span className="text-white font-bold text-xs font-mono">Defense Network Architecture</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEdgeManaged(false)}
-                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition ${
-                      !isEdgeManaged
-                        ? 'bg-sky-600 text-white shadow'
-                        : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Direct HQ Stream
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEdgeManaged(true)}
-                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition ${
-                      isEdgeManaged
-                        ? 'bg-sky-600 text-white shadow'
-                        : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Remote Edge Managed
-                  </button>
-                </div>
+                <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+                  REAL-WORLD TOPOLOGY READY
+                </span>
+              </div>
+
+              {/* Topology Selection Buttons */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEdgeManaged(false);
+                    if (!formData.rtsp_url || formData.rtsp_url.startsWith('synthetic') || formData.rtsp_url.startsWith('webcam')) {
+                      setFormData(prev => ({ ...prev, rtsp_url: 'rtsp://admin:border2026@10.25.1.50:554/stream1', stream_type: 'main' }));
+                    }
+                  }}
+                  className={`p-2 rounded-lg text-left transition border ${
+                    !isEdgeManaged && formData.rtsp_url?.includes('10.')
+                      ? 'bg-purple-950/50 border-purple-500/60 text-purple-200'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <div className="text-[11px] font-bold font-mono text-purple-300">🛡️ Defence VPN</div>
+                  <div className="text-[9px] text-slate-400">10.x.x.x Tunnel</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEdgeManaged(false);
+                    if (!formData.rtsp_url || formData.rtsp_url.startsWith('synthetic') || formData.rtsp_url.startsWith('webcam')) {
+                      setFormData(prev => ({ ...prev, rtsp_url: 'rtsp://admin:border2026@192.168.1.108:554/ch1/main', stream_type: 'main' }));
+                    }
+                  }}
+                  className={`p-2 rounded-lg text-left transition border ${
+                    !isEdgeManaged && formData.rtsp_url?.includes('192.168.')
+                      ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-200'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <div className="text-[11px] font-bold font-mono text-emerald-300">🏢 Outpost LAN</div>
+                  <div className="text-[9px] text-slate-400">192.168.x.x PoE</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsEdgeManaged(true)}
+                  className={`p-2 rounded-lg text-left transition border ${
+                    isEdgeManaged
+                      ? 'bg-sky-950/50 border-sky-500/60 text-sky-200'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <div className="text-[11px] font-bold font-mono text-sky-300">⚡ Edge Managed</div>
+                  <div className="text-[9px] text-slate-400">Local AI Appliance</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEdgeManaged(false);
+                    setSourceCategory('synthetic');
+                    setFormData(prev => ({ ...prev, rtsp_url: 'synthetic://cam-north-01/main', stream_type: 'main' }));
+                  }}
+                  className={`p-2 rounded-lg text-left transition border ${
+                    !isEdgeManaged && (formData.rtsp_url?.startsWith('synthetic') || formData.rtsp_url?.startsWith('webcam'))
+                      ? 'bg-amber-950/50 border-amber-500/60 text-amber-200'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <div className="text-[11px] font-bold font-mono text-amber-300">🧪 Simulator/PC</div>
+                  <div className="text-[9px] text-slate-400">Synthetic / Webcam</div>
+                </button>
               </div>
 
               {isEdgeManaged ? (
@@ -477,8 +539,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="text-[11px] font-mono text-slate-400">
-                  Central IBVAP connects directly to this camera over the headquarters local network.
+                <div className="text-[11px] font-mono text-slate-400 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-purple-400" />
+                  <span>
+                    {formData.rtsp_url?.includes('10.')
+                      ? 'Encrypted Optical Fiber/Satellite VPN Tunnel: Central HQ connects securely to border camera subnet 10.x.x.x.'
+                      : 'Central IBVAP connects directly to this camera over local/WAN network address.'}
+                  </span>
                 </div>
               )}
             </div>
@@ -567,14 +634,22 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAutoDetectLocation}
-                  className="px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  disabled={isLocatingGPS}
+                  className="px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
                 >
-                  <Compass className="w-3.5 h-3.5" />
-                  <span>Auto-Detect GPS</span>
+                  <Locate className={`w-3.5 h-3.5 ${isLocatingGPS ? 'animate-spin' : ''}`} />
+                  <span>{isLocatingGPS ? 'Detecting...' : 'Live GPS Locate'}</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {gpsStatus && (
+                <div className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 rounded px-2.5 py-1 flex items-center gap-2">
+                  <Compass className="w-3.5 h-3.5 animate-spin" />
+                  <span>{gpsStatus}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                     Latitude (North / South) <span className="text-emerald-400 font-mono">*</span>
@@ -582,7 +657,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   <input
                     type="number"
                     step="0.000001"
-                    placeholder="e.g. 31.6245"
+                    placeholder="e.g. 31.6048"
                     value={formData.latitude ?? ''}
                     onChange={(e) => setFormData({ ...formData, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
                     className="w-full bg-[#0d131f] border border-[#1e293b] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
@@ -596,31 +671,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   <input
                     type="number"
                     step="0.000001"
-                    placeholder="e.g. 74.8725"
+                    placeholder="e.g. 74.5727"
                     value={formData.longitude ?? ''}
                     onChange={(e) => setFormData({ ...formData, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
                     className="w-full bg-[#0d131f] border border-[#1e293b] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                    Quick Border Outpost Presets
-                  </label>
-                  <select
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'bop_alpha') setFormData(prev => ({ ...prev, latitude: 31.6245, longitude: 74.8725, sector: prev.sector || 'Sector-North', bop_site: prev.bop_site || 'BOP-ALPHA' }));
-                      if (val === 'bop_bravo') setFormData(prev => ({ ...prev, latitude: 31.6310, longitude: 74.8850, sector: prev.sector || 'Sector-North', bop_site: prev.bop_site || 'BOP-BRAVO' }));
-                      if (val === 'bop_charlie') setFormData(prev => ({ ...prev, latitude: 31.6180, longitude: 74.8610, sector: prev.sector || 'Sector-South', bop_site: prev.bop_site || 'BOP-CHARLIE' }));
-                    }}
-                    className="w-full bg-[#0d131f] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono"
-                  >
-                    <option value="">Select Preset Coordinates...</option>
-                    <option value="bop_alpha">BOP Alpha (31.6245° N, 74.8725° E)</option>
-                    <option value="bop_bravo">BOP Bravo (31.6310° N, 74.8850° E)</option>
-                    <option value="bop_charlie">BOP Charlie (31.6180° N, 74.8610° E)</option>
-                  </select>
                 </div>
               </div>
               <p className="text-[10px] text-slate-400">

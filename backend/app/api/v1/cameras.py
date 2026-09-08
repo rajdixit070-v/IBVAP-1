@@ -333,3 +333,20 @@ def get_camera_diagnostic_logs(
         .all()
     )
     return logs
+
+@router.delete("/{camera_id}/logs", status_code=status.HTTP_200_OK)
+def clear_camera_diagnostic_logs(
+    camera_id: str,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_camera_admin)
+):
+    """Clears all historical diagnostic logs for a specific camera."""
+    verify_camera_access(camera_id, admin_user, db)
+    cam = camera_service.get_camera_by_id(db, camera_id)
+    if not cam:
+        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
+
+    deleted = db.query(CameraHealthLog).filter(CameraHealthLog.camera_id == cam.camera_id).delete()
+    db.commit()
+    return {"success": True, "message": f"Cleared {deleted} diagnostic log entries for camera '{camera_id}'."}
+

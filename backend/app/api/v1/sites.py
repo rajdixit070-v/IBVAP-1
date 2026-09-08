@@ -136,26 +136,31 @@ def update_site(
     return site
 
 @router.delete("/{site_id}")
-def deactivate_site(
+def delete_site(
     site_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """Deactivates a site (Admin only)."""
+    """Permanently deletes a site and cascades to its BOPs (Admin only)."""
     site = db.query(Site).filter(Site.site_id == site_id).first()
     if not site:
         raise HTTPException(status_code=404, detail=f"Site '{site_id}' not found.")
 
-    site.status = "INACTIVE"
+    # Cascade delete subordinate BOPs
+    bops = db.query(BOP).filter(BOP.site_id == site_id).all()
+    for b in bops:
+        db.delete(b)
+
+    db.delete(site)
     db.add(SecurityAuditLog(
-        action="SITE_DEACTIVATED",
+        action="SITE_DELETED",
         username=current_user.username,
         resource_type="SITE",
-        resource_id=site.site_id,
-        details=f"Deactivated site '{site.site_id}'"
+        resource_id=site_id,
+        details=f"Deleted site '{site_id}'"
     ))
     db.commit()
-    return {"message": f"Site '{site_id}' deactivated successfully."}
+    return {"message": f"Site '{site_id}' deleted successfully.", "status": "DELETED"}
 
 @router.get("/{site_id}/overview", response_model=SiteOverviewResponse)
 def get_site_overview(
@@ -277,3 +282,43 @@ def get_site_incidents(
         query = query.filter(Incident.status == status)
     query = ScopeService.filter_query_by_scope(query, Incident, current_user, db)
     return query.order_by(Incident.created_at.desc()).all()
+
+@router.delete("/{site_id}", status_code=status.HTTP_200_OK)
+def delete_site(
+    site_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """Deletes a Tactical Site and cleans up associated scopes/hierarchy (Admin only)."""
+    site = db.query(Site).filter((Site.site_id == site_id) | (Site.name == site_id)).first()
+    if not site:
+        raise HTTPException(status_code=404, detail=f"Site '{site_id}' not found.")
+
+    sid = site.site_id
+    site_name = site.name
+
+    # Cascade unassign or delete subordinate BOPs
+    bops = db.query(BOP).filter(BOP.site_id == sid).all()
+    for b in bops:
+        db.delete(b)
+
+    # Clean user scopes
+    from app.models.federation_models import SiteUserScope
+    db.query(SiteUserScope).filter(
+        (SiteUserScope.scope_type == "SITE") & (SiteUserScope.scope_id == sid)
+    ).delete(synchronize_session=False)
+
+    db.delete(site)
+
+    audit = SecurityAuditLog(
+        username=current_user.username,
+        action="SITE_DELETED",
+        resource_type="SITE",
+        resource_id=sid,
+        details=f'{{"site_id": "{sid}", "name": "{site_name}"}}'
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"success": True, "message": f"Site '{site_name}' ({sid}) successfully deleted."}
+

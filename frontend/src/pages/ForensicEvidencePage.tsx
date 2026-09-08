@@ -21,6 +21,7 @@ import {
 import { Evidence } from '../types/incident';
 import { evidenceService } from '../services/evidenceService';
 import { useCameras } from '../context/CameraContext';
+import { useAuth } from '../context/AuthContext';
 import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
 import { QuickSendEvidenceModal } from '../components/dispatches/QuickSendEvidenceModal';
 
@@ -29,6 +30,8 @@ interface ForensicEvidencePageProps {
 }
 
 export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = ({ onBackToDashboard }) => {
+  const { user } = useAuth();
+  const isHQCommand = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
   const { cameras } = useCameras();
   const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,13 +172,24 @@ export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = ({ onBa
               TAMPER-EVIDENT FORENSIC REPOSITORY
             </span>
             <span className="text-slate-400 font-mono text-xs">• SHA-256 CHAIN OF CUSTODY</span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+              isHQCommand
+                ? 'bg-purple-950/70 text-purple-300 border-purple-600/50'
+                : 'bg-emerald-950/70 text-emerald-300 border-emerald-600/50'
+            }`}>
+              {isHQCommand ? '🏢 DELHI HQ CENTRAL CUSTODY' : '🪖 BOP ALPHA FIELD POST'}
+            </span>
           </div>
           <h1 className="text-2xl font-black text-white tracking-wide flex items-center gap-2.5">
             <FolderLock className="w-6 h-6 text-cyan-400" />
-            Tactical AI Evidence Vault
+            {isHQCommand
+              ? 'National AI Evidence Vault (Central Repository)'
+              : 'BOP Alpha Forensic Evidence Terminal'}
           </h1>
           <p className="text-xs text-slate-400 max-w-2xl leading-relaxed font-mono">
-            Cryptographically sealed visual proof of all intercepted persons, intruders, suspect vehicles, and perimeter targets for military and court-admissible prosecution.
+            {isHQCommand
+              ? 'Centralized repository of cryptographically verified SHA-256 evidence packets synchronized from border outposts for high-command triage and legal prosecution.'
+              : 'Local field evidence capture terminal. Record perimeter snapshots with instant cryptographic checksums and dispatch high-priority SITREPs to Delhi HQ.'}
           </p>
         </div>
 
@@ -212,13 +226,15 @@ export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = ({ onBa
             <span>UPLOAD FILE</span>
           </button>
 
-          <button
-            onClick={() => setSitrepModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-mono font-bold border border-cyan-400/40 shadow-lg shadow-cyan-600/30 transition cursor-pointer"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>TRANSMIT EVIDENCE SITREP TO HQ</span>
-          </button>
+          {!isHQCommand && (
+            <button
+              onClick={() => setSitrepModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-white rounded-xl text-xs font-mono font-bold border transition cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border-emerald-400 shadow-lg shadow-emerald-900/50 animate-pulse"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>DISPATCH EVIDENCE TO DELHI HQ</span>
+            </button>
+          )}
 
           {evidenceList.length > 0 && (
             <button
@@ -368,16 +384,18 @@ export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = ({ onBa
                     >
                       <Eye className="w-3 h-3" /> INSPECT
                     </button>
-                    <button
-                      onClick={() => {
-                        setQuickSendTarget(ev);
-                        setQuickSendModalOpen(true);
-                      }}
-                      className="p-1.5 bg-amber-950/40 hover:bg-amber-900/70 text-amber-300 hover:text-white rounded-lg border border-amber-500/30 transition cursor-pointer"
-                      title="Transmit Evidence to HQ Admin"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                    </button>
+                    {!isHQCommand && (
+                      <button
+                        onClick={() => {
+                          setQuickSendTarget(ev);
+                          setQuickSendModalOpen(true);
+                        }}
+                        className="p-1.5 bg-amber-950/40 hover:bg-amber-900/70 text-amber-300 hover:text-white rounded-lg border border-amber-500/30 transition cursor-pointer"
+                        title="Transmit Evidence to HQ Admin"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <a
                       href={fileUrl}
                       download={`${ev.evidence_id}.jpg`}
@@ -477,15 +495,17 @@ export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = ({ onBa
                   <Trash2 className="w-4 h-4" /> DELETE EVIDENCE
                 </button>
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      setQuickSendTarget(selectedEvidence);
-                      setQuickSendModalOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 transition shadow-lg shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" /> TRANSMIT TO HQ ADMIN
-                  </button>
+                  {!isHQCommand && (
+                    <button
+                      onClick={() => {
+                        setQuickSendTarget(selectedEvidence);
+                        setQuickSendModalOpen(true);
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 transition shadow-lg shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" /> TRANSMIT TO HQ ADMIN
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedEvidence(null)}
                     className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800 transition cursor-pointer"

@@ -14,6 +14,7 @@ import { RiskBadge } from '../components/events/RiskBadge';
 import { EventDetailModal } from '../components/events/EventDetailModal';
 import { HQDispatchesSitrepPanel } from '../components/dispatches/HQDispatchesSitrepPanel';
 
+import { useAuth } from '../context/AuthContext';
 import {
   Cctv,
   CheckCircle2,
@@ -35,7 +36,10 @@ import {
   Flame,
   HeartPulse,
   Plane,
-  Compass
+  Compass,
+  Video,
+  Crosshair,
+  Activity
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -55,16 +59,21 @@ interface DashboardPageProps {
   onNavigateToPredictive?: () => void;
   onNavigateToDrones?: () => void;
   onNavigateToGIS?: () => void;
+  onNavigateToPTZ?: () => void;
+  onNavigateToThermal?: () => void;
+  onNavigateToBehaviour?: () => void;
   onInspectCamera: (camera: Camera) => void;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
+  onNavigateToCameras,
   onNavigateToLive,
   onNavigateToSOC,
   onNavigateToFederation,
   onNavigateToEvidence,
   onNavigateToIncidents,
   onNavigateToSecurity,
+  onNavigateToIntelligence,
   onNavigateToEvents,
   onNavigateToANPR,
   onNavigateToFace,
@@ -73,9 +82,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigateToPredictive,
   onNavigateToDrones,
   onNavigateToGIS,
+  onNavigateToPTZ,
+  onNavigateToThermal,
+  onNavigateToBehaviour,
   onInspectCamera
 }) => {
-
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
   const { cameras, summary } = useCameras();
   const [eventsSummary, setEventsSummary] = useState<SecurityEventsSummary | null>(null);
   const [anprSummary, setAnprSummary] = useState<ANPRSummary | null>(null);
@@ -126,202 +139,369 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[11px] font-bold border border-sky-500/30">
-              TACTICAL BORDER SURVEILLANCE
+              {isSuperAdmin ? 'DELHI HQ CENTRAL COMMAND' : 'TACTICAL GROUND SURVEILLANCE'}
             </span>
-            <span className="text-slate-400 font-mono text-xs">• SECTOR HQ DISPATCH</span>
+            <span className="text-slate-400 font-mono text-xs">
+              {isSuperAdmin ? '• NATIONAL DEFENCE OVERSIGHT' : `• ${user?.scope_id || 'BOP ALPHA CHECKPOST'}`}
+            </span>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wide">
-            IBVAP Central Surveillance Matrix
+            {isSuperAdmin
+              ? 'IBVAP Central Command & Surveillance Matrix'
+              : `Checkpost Surveillance Matrix • ${user?.scope_id || 'BOP ALPHA'}`}
           </h1>
           <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-            Real-time IP CCTV ingestion, Edge AI inference, offline store-and-forward sync, ANPR consensus, facial analytics, and explainable threat scoring.
+            {isSuperAdmin
+              ? 'National federated border oversight, multi-site checkpost triage, zero-trust officer governance, and encrypted forensic evidence custody.'
+              : 'Ground-level tactical surveillance, ONVIF optical/thermal PTZ targeting, local AI intrusion tripwires, and direct high-priority dispatch to Delhi HQ.'}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          {onNavigateToFederation && (
-            <button
-              onClick={onNavigateToFederation}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg shadow-emerald-600/20"
-            >
-              <Globe className="w-4 h-4" />
-              NATIONAL BORDER MAP
-            </button>
-          )}
-          {onNavigateToSOC && (
-            <button
-              onClick={onNavigateToSOC}
-              className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg shadow-rose-600/20"
-            >
-              <Flame className="w-4 h-4" />
-              SOC THREAT MATRIX
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* HQ Central Command Governance Hub (Admin Exclusive Modules) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
-            <Shield className="w-4 h-4 text-sky-400" />
-            HQ Central Governance & Command Modules
-          </h3>
-          <span className="text-xs font-mono text-slate-400">Level-5 Central Supreme Authority</span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {onNavigateToSOC && (
-            <button
-              onClick={onNavigateToSOC}
-              className="group p-4 bg-[#111a2e] hover:bg-rose-950/40 border border-[#1e293b] hover:border-rose-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30 group-hover:scale-110 transition">
-                <Flame className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-rose-400 transition">SOC Command</div>
-                <div className="text-[10px] text-slate-400">Threat triage</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToFederation && (
-            <button
-              onClick={onNavigateToFederation}
-              className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
-                <Globe className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Federated Map</div>
-                <div className="text-[10px] text-slate-400">National border</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToSecurity && (
-            <button
-              onClick={onNavigateToSecurity}
-              className="group p-4 bg-[#111a2e] hover:bg-purple-950/40 border border-[#1e293b] hover:border-purple-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/30 group-hover:scale-110 transition">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-purple-400 transition">Officer Mgmt</div>
-                <div className="text-[10px] text-slate-400">Assign BOPs & Pass</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToEvidence && (
-            <button
-              onClick={onNavigateToEvidence}
-              className="group p-4 bg-[#111a2e] hover:bg-cyan-950/40 border border-[#1e293b] hover:border-cyan-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 group-hover:scale-110 transition">
-                <FolderLock className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition">Forensic Vault</div>
-                <div className="text-[10px] text-slate-400">SHA-256 custody</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToIncidents && (
-            <button
-              onClick={onNavigateToIncidents}
-              className="group p-4 bg-[#111a2e] hover:bg-amber-950/40 border border-[#1e293b] hover:border-amber-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 group-hover:scale-110 transition">
-                <FileCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-amber-400 transition">SOP Orders</div>
-                <div className="text-[10px] text-slate-400">QRT playbooks</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToEdge && (
-            <button
-              onClick={onNavigateToEdge}
-              className="group p-4 bg-[#111a2e] hover:bg-sky-950/40 border border-[#1e293b] hover:border-sky-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/30 group-hover:scale-110 transition">
-                <Server className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-sky-400 transition">Edge Fleet</div>
-                <div className="text-[10px] text-slate-400">Outpost sync</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToHealth && (
-            <button
-              onClick={onNavigateToHealth}
-              className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
-                <HeartPulse className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Health Matrix</div>
-                <div className="text-[10px] text-slate-400">9 Subsystems & SLAs</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToPredictive && (
-            <button
-              onClick={onNavigateToPredictive}
-              className="group p-4 bg-[#111a2e] hover:bg-teal-950/40 border border-[#1e293b] hover:border-teal-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/30 group-hover:scale-110 transition">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-teal-400 transition">Predictive AI</div>
-                <div className="text-[10px] text-slate-400">24H Threat Forecast</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToDrones && (
-            <button
-              onClick={onNavigateToDrones}
-              className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
-                <Plane className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Drone Fleet</div>
-                <div className="text-[10px] text-slate-400">Patrol & Handoffs</div>
-              </div>
-            </button>
-          )}
-
-          {onNavigateToGIS && (
-            <button
-              onClick={onNavigateToGIS}
-              className="group p-4 bg-[#111a2e] hover:bg-indigo-950/40 border border-[#1e293b] hover:border-indigo-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
-            >
-              <div className="p-2 w-fit rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 group-hover:scale-110 transition">
-                <Compass className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white group-hover:text-indigo-400 transition">GIS Terrain</div>
-                <div className="text-[10px] text-slate-400">Perimeter & FOV</div>
-              </div>
-            </button>
+          {isSuperAdmin ? (
+            <>
+              {onNavigateToFederation && (
+                <button
+                  onClick={onNavigateToFederation}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg shadow-emerald-600/20"
+                >
+                  <Globe className="w-4 h-4" />
+                  NATIONAL BORDER MAP
+                </button>
+              )}
+              {onNavigateToSOC && (
+                <button
+                  onClick={onNavigateToSOC}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg shadow-rose-600/20"
+                >
+                  <Flame className="w-4 h-4" />
+                  SOC THREAT MATRIX
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {onNavigateToLive && (
+                <button
+                  onClick={onNavigateToLive}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg shadow-cyan-600/20"
+                >
+                  <Video className="w-4 h-4" />
+                  LIVE VIDEO WALL
+                </button>
+              )}
+              {onNavigateToCameras && (
+                <button
+                  onClick={onNavigateToCameras}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-mono font-bold tracking-wider transition shadow-lg shadow-sky-600/20"
+                >
+                  <Cctv className="w-4 h-4" />
+                  + ONBOARD CAMERA
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
+
+      {/* Role-Specific Command & Operations Hub */}
+      {isSuperAdmin ? (
+        /* HQ Central Command Governance Hub (Admin Exclusive Modules) */
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+              <Shield className="w-4 h-4 text-sky-400" />
+              HQ Central Governance & Command Modules
+            </h3>
+            <span className="text-xs font-mono text-slate-400">Level-5 Central Supreme Authority</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3">
+            {onNavigateToSOC && (
+              <button
+                onClick={onNavigateToSOC}
+                className="group p-4 bg-[#111a2e] hover:bg-rose-950/40 border border-[#1e293b] hover:border-rose-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30 group-hover:scale-110 transition">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-rose-400 transition">SOC Threat Matrix</div>
+                  <div className="text-[10px] text-slate-400">National threat triage</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToFederation && (
+              <button
+                onClick={onNavigateToFederation}
+                className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Federated Map</div>
+                  <div className="text-[10px] text-slate-400">Multi-site border command</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToSecurity && (
+              <button
+                onClick={onNavigateToSecurity}
+                className="group p-4 bg-[#111a2e] hover:bg-purple-950/40 border border-[#1e293b] hover:border-purple-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/30 group-hover:scale-110 transition">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-purple-400 transition">Officer Management</div>
+                  <div className="text-[10px] text-slate-400">Assign BOPs & credentials</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToEvidence && (
+              <button
+                onClick={onNavigateToEvidence}
+                className="group p-4 bg-[#111a2e] hover:bg-cyan-950/40 border border-[#1e293b] hover:border-cyan-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 group-hover:scale-110 transition">
+                  <FolderLock className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition">Forensic Vault</div>
+                  <div className="text-[10px] text-slate-400">SHA-256 chain of custody</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToIncidents && (
+              <button
+                onClick={onNavigateToIncidents}
+                className="group p-4 bg-[#111a2e] hover:bg-amber-950/40 border border-[#1e293b] hover:border-amber-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 group-hover:scale-110 transition">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-amber-400 transition">SOP Command Orders</div>
+                  <div className="text-[10px] text-slate-400">QRT playbooks & SITREPs</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToEdge && (
+              <button
+                onClick={onNavigateToEdge}
+                className="group p-4 bg-[#111a2e] hover:bg-sky-950/40 border border-[#1e293b] hover:border-sky-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/30 group-hover:scale-110 transition">
+                  <Server className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-sky-400 transition">Edge Infrastructure</div>
+                  <div className="text-[10px] text-slate-400">Outpost fleet telemetry</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToHealth && (
+              <button
+                onClick={onNavigateToHealth}
+                className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
+                  <HeartPulse className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">System Health Center</div>
+                  <div className="text-[10px] text-slate-400">9 Subsystems & SLAs</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToPredictive && (
+              <button
+                onClick={onNavigateToPredictive}
+                className="group p-4 bg-[#111a2e] hover:bg-teal-950/40 border border-[#1e293b] hover:border-teal-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/30 group-hover:scale-110 transition">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-teal-400 transition">Predictive AI Trends</div>
+                  <div className="text-[10px] text-slate-400">24H Threat Forecast</div>
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* BOP Ground Tactical Operations Hub (Officer Checkpost Modules) */
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+              <Crosshair className="w-4 h-4 text-emerald-400" />
+              Checkpost Ground Tactical Operations Hub
+            </h3>
+            <span className="text-xs font-mono text-slate-400">Local PoE LAN & Ground Sensors</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3">
+            {onNavigateToCameras && (
+              <button
+                onClick={onNavigateToCameras}
+                className="group p-4 bg-[#111a2e] hover:bg-sky-950/40 border border-[#1e293b] hover:border-sky-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/30 group-hover:scale-110 transition">
+                  <Cctv className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-sky-400 transition">Onboard Cameras</div>
+                  <div className="text-[10px] text-slate-400">Local RTSP & PoE switch</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToLive && (
+              <button
+                onClick={onNavigateToLive}
+                className="group p-4 bg-[#111a2e] hover:bg-cyan-950/40 border border-[#1e293b] hover:border-cyan-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 group-hover:scale-110 transition">
+                  <Video className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition">Live Video Wall</div>
+                  <div className="text-[10px] text-slate-400">Zero-latency RTSP grid</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToPTZ && (
+              <button
+                onClick={onNavigateToPTZ}
+                className="group p-4 bg-[#111a2e] hover:bg-amber-950/40 border border-[#1e293b] hover:border-amber-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 group-hover:scale-110 transition">
+                  <Crosshair className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-amber-400 transition">PTZ Joystick</div>
+                  <div className="text-[10px] text-slate-400">30x Optical Zoom & Pan</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToThermal && (
+              <button
+                onClick={onNavigateToThermal}
+                className="group p-4 bg-[#111a2e] hover:bg-rose-950/40 border border-[#1e293b] hover:border-rose-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30 group-hover:scale-110 transition">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-rose-400 transition">Thermal + Night IR</div>
+                  <div className="text-[10px] text-slate-400">Dual-spectrum heat scan</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToDrones && (
+              <button
+                onClick={onNavigateToDrones}
+                className="group p-4 bg-[#111a2e] hover:bg-emerald-950/40 border border-[#1e293b] hover:border-emerald-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition">
+                  <Plane className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Drone Patrol</div>
+                  <div className="text-[10px] text-slate-400">UAV waypoint sorties</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToIntelligence && (
+              <button
+                onClick={onNavigateToIntelligence}
+                className="group p-4 bg-[#111a2e] hover:bg-purple-950/40 border border-[#1e293b] hover:border-purple-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/30 group-hover:scale-110 transition">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-purple-400 transition">Virtual Tripwires</div>
+                  <div className="text-[10px] text-slate-400">Perimeter intrusion line</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToANPR && (
+              <button
+                onClick={onNavigateToANPR}
+                className="group p-4 bg-[#111a2e] hover:bg-teal-950/40 border border-[#1e293b] hover:border-teal-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/30 group-hover:scale-110 transition">
+                  <Car className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-teal-400 transition">Vehicle ANPR</div>
+                  <div className="text-[10px] text-slate-400">Barrier gate OCR</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToEvidence && (
+              <button
+                onClick={onNavigateToEvidence}
+                className="group p-4 bg-[#111a2e] hover:bg-cyan-950/40 border border-[#1e293b] hover:border-cyan-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 group-hover:scale-110 transition">
+                  <FolderLock className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition">Dispatch to Delhi HQ</div>
+                  <div className="text-[10px] text-slate-400">Transmit sealed evidence</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToGIS && (
+              <button
+                onClick={onNavigateToGIS}
+                className="group p-4 bg-[#111a2e] hover:bg-indigo-950/40 border border-[#1e293b] hover:border-indigo-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 group-hover:scale-110 transition">
+                  <Compass className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-indigo-400 transition">GIS Terrain & FOV</div>
+                  <div className="text-[10px] text-slate-400">Tactical GPS coordinates</div>
+                </div>
+              </button>
+            )}
+
+            {onNavigateToBehaviour && (
+              <button
+                onClick={onNavigateToBehaviour}
+                className="group p-4 bg-[#111a2e] hover:bg-violet-950/40 border border-[#1e293b] hover:border-violet-500/50 rounded-xl transition text-left space-y-2 cursor-pointer shadow-lg"
+              >
+                <div className="p-2 w-fit rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/30 group-hover:scale-110 transition">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-violet-400 transition">Behaviour Rules</div>
+                  <div className="text-[10px] text-slate-400">Loitering & perimeter run</div>
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
 
       {/* Threat Intelligence Metrics Section */}

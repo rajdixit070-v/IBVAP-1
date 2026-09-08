@@ -542,3 +542,41 @@ def get_sync_stats(
         nodes_offline=nodes_offline,
         nodes_degraded=nodes_degraded
     )
+
+@router.delete("/nodes/{node_id}", status_code=status.HTTP_200_OK)
+def delete_edge_node(
+    node_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_edge_admin)
+):
+    """
+    Deactivates and removes an Edge Node appliance and revokes credentials.
+    """
+    nid = node_id.strip()
+    node = db.query(EdgeNode).filter(EdgeNode.node_id == nid).first()
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Edge Node '{nid}' not found.")
+
+    node_name = node.name
+
+    # Revoke credentials
+    try:
+        from app.models.enterprise_security_models import EdgeNodeCredential
+        db.query(EdgeNodeCredential).filter(EdgeNodeCredential.node_id == nid).delete()
+    except Exception:
+        pass
+
+    db.delete(node)
+
+    audit = SecurityAuditLog(
+        username=current_user.username,
+        action="EDGE_NODE_DELETED",
+        resource_type="EDGE_NODE",
+        resource_id=nid,
+        details=f'{{"node_id": "{nid}", "name": "{node_name}"}}'
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"status": "DELETED", "node_id": nid, "message": f"Edge Node '{node_name}' successfully removed."}
+
