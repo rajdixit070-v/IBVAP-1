@@ -7,6 +7,8 @@ interface UserState {
   scope_type?: string;
   scope_id?: string;
   scope_role?: string;
+  post_name?: string;
+  sector?: string;
 }
 
 interface AuthContextType {
@@ -34,7 +36,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: currentUser.role,
             scope_type: currentUser.scope_type,
             scope_id: currentUser.scope_id,
-            scope_role: currentUser.scope_role
+            scope_role: currentUser.scope_role,
+            post_name: currentUser.post_name,
+            sector: currentUser.sector
           });
         } catch {
           // If token is invalid or expired, clear session
@@ -57,7 +61,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: data.role,
       scope_type: data.scope_type,
       scope_id: data.scope_id,
-      scope_role: data.scope_role
+      scope_role: data.scope_role,
+      post_name: data.post_name,
+      sector: data.sector
     });
   };
 

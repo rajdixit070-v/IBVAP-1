@@ -210,3 +210,27 @@ export interface HealthConfig {
   notes?: string;
   changed_by?: string;
 }
+
+export interface ServerHardwareTelemetry {
+  cpu_percent: number;
+  cpu_count: number;
+  memory_used_gb: number;
+  memory_total_gb: number;
+  memory_percent: number;
+  disk_used_gb: number;
+  disk_total_gb: number;
+  disk_percent: number;
+  db_size_mb: number;
+  db_latency_ms: number;
+  evidence_storage_mb: number;
+  uptime_seconds: number;
+  active_cameras_count: number;
+  total_cameras_count: number;
+  total_bops_count: number;
+  ai_workers_count: number;
+  yolo_status: string;
+  torch_device: string;
+  os_platform: string;
+  python_version: string;
+}
+

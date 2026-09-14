@@ -33,9 +33,18 @@ class CameraAIWorker:
         self.input_size = input_size
         self.broadcast_callback = broadcast_callback
 
+        self.thresholds: Dict[str, float] = {
+            "person": 0.40,
+            "vehicle": 0.45,
+            "animal": 0.35,
+            "drone": 0.30,
+            "other": 0.40
+        }
+
         self.tracker = ByteTracker(camera_id=camera_id)
         self.is_running = False
         self.thread: Optional[threading.Thread] = None
+        self._last_frame_count = -1
         
         # Health and performance metrics
         self.status = "STARTING" # ACTIVE, STARTING, PAUSED, ERROR, NO_STREAM
@@ -51,6 +60,50 @@ class CameraAIWorker:
         # FPS calculation window
         self._fps_counter = 0
         self._fps_window_start = time.time()
+
+    def update_config(self, config_obj_or_dict: Any):
+        """Dynamically applies tuned AI thresholds and pipeline settings."""
+        if config_obj_or_dict is None:
+            return
+
+        if hasattr(config_obj_or_dict, "__dict__"):
+            data = {k: v for k, v in config_obj_or_dict.__dict__.items() if not k.startswith("_")}
+        elif isinstance(config_obj_or_dict, dict):
+            data = config_obj_or_dict
+        else:
+            return
+
+        if "target_fps" in data and data["target_fps"] is not None:
+            self.target_fps = max(1.0, min(30.0, float(data["target_fps"])))
+
+        if "input_size" in data and data["input_size"] is not None:
+            self.input_size = int(data["input_size"])
+
+        # Update per-camera class confidence thresholds
+        for k in ("person", "vehicle", "animal", "drone", "other"):
+            conf_key = f"conf_{k}"
+            if conf_key in data and data[conf_key] is not None:
+                self.thresholds[k] = float(data[conf_key])
+
+        # Update ByteTrack tracker parameters
+        track_thresh = data.get("track_thresh")
+        match_thresh = data.get("match_thresh")
+        max_lost_frames = data.get("max_lost_frames")
+        max_trajectory_length = data.get("max_trajectory_length")
+        self.tracker.update_params(
+            track_thresh=track_thresh,
+            match_thresh=match_thresh,
+            max_lost_frames=max_lost_frames,
+            max_history=max_trajectory_length
+        )
+
+        # Handle enabled state toggle
+        if "enabled" in data and data["enabled"] is not None:
+            should_run = bool(data["enabled"])
+            if should_run and not self.is_running:
+                self.start()
+            elif not should_run and self.is_running:
+                self.stop()
 
     def start(self):
         """Starts the asynchronous AI inference worker thread."""
@@ -76,15 +129,20 @@ class CameraAIWorker:
 
     def _worker_loop(self):
         """Continuous frame ingestion, detection, and tracking loop."""
-        min_frame_interval = 1.0 / max(1.0, self.target_fps)
-
         while self.is_running:
             loop_start = time.time()
+            min_frame_interval = 1.0 / max(1.0, self.target_fps)
             
             streamer = stream_manager.get_streamer(self.camera_id)
             if not streamer or not getattr(streamer, "_running", False):
                 self.status = "NO_STREAM"
                 time.sleep(0.5)
+                continue
+
+            # Optimize CPU: skip redundant inference if camera streamer hasn't produced a new frame
+            curr_count = getattr(streamer, "_frame_count", -1)
+            if curr_count != -1 and curr_count == self._last_frame_count:
+                time.sleep(0.01)
                 continue
 
             frame = streamer.get_latest_frame()
@@ -93,10 +151,17 @@ class CameraAIWorker:
                 time.sleep(0.2)
                 continue
 
+            self._last_frame_count = curr_count
+
             try:
-                # 1. Execute YOLO Object Detection
+                # 1. Execute YOLO Object Detection with camera-specific tuned thresholds
                 det_start = time.time()
-                detections = self.detector.detect(frame, camera_id=self.camera_id, input_size=self.input_size)
+                detections = self.detector.detect(
+                    frame,
+                    camera_id=self.camera_id,
+                    input_size=self.input_size,
+                    thresholds=self.thresholds
+                )
 
                 # 1b. Modulate detection confidence based on observable camera quality (Phase 11)
                 try:
@@ -234,10 +299,30 @@ class AIPipelineManager:
                 target_fps=target_fps,
                 broadcast_callback=self._broadcast_telemetry
             )
+            # Try to populate worker with saved database thresholds
+            try:
+                from app.database import SessionLocal
+                from app.models.ai_config import CameraAIConfig
+                with SessionLocal() as db:
+                    cfg = db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == camera_id).first()
+                    if cfg:
+                        worker.update_config(cfg)
+            except Exception:
+                pass
+
             self.workers[camera_id] = worker
-            if auto_start:
+            if auto_start and worker.status != "PAUSED":
                 worker.start()
             return worker
+
+    def update_camera_config(self, camera_id: str, config: Any):
+        """Updates AI configuration for an active camera worker."""
+        with self._lock:
+            worker = self.workers.get(camera_id)
+        if not worker:
+            worker = self.register_camera(camera_id, auto_start=getattr(config, "enabled", True))
+        if worker:
+            worker.update_config(config)
 
     def unregister_camera(self, camera_id: str):
         """Unregisters and stops an AI camera worker."""
@@ -286,14 +371,16 @@ class AIPipelineManager:
             worker.start()
             return True
 
-    def disable_camera(self, camera_id: str) -> bool:
-        """Disables AI processing for a camera."""
+    def shutdown_all(self):
+        """Stops all camera AI processing workers immediately."""
         with self._lock:
-            worker = self.workers.get(camera_id)
-            if worker:
-                worker.stop()
-                return True
-            return False
+            workers = list(self.workers.values())
+            self.workers.clear()
+        for worker in workers:
+            try:
+                worker._running = False
+            except Exception:
+                pass
 
     def get_camera_status(self, camera_id: str) -> CameraAIStatus:
         """Returns the real-time AI status for a specific camera."""

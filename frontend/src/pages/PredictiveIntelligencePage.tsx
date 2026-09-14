@@ -10,7 +10,6 @@ import {
 import { predictiveService } from '../services/predictiveService';
 import { EarlyWarningDetailModal } from '../components/predictive/EarlyWarningDetailModal';
 import { HotspotsMapModal } from '../components/predictive/HotspotsMapModal';
-import { BaselineShiftModal } from '../components/predictive/BaselineShiftModal';
 import {
   TrendingUp,
   AlertTriangle,
@@ -19,17 +18,13 @@ import {
   Activity,
   ShieldCheck,
   Sparkles,
-  Sliders,
-  RefreshCw,
-  ArrowLeft
+  RefreshCw
 } from 'lucide-react';
 import { useCameras } from '../context/CameraContext';
 
-interface PredictiveIntelligencePageProps {
-  onBackToDashboard?: () => void;
-}
+interface PredictiveIntelligencePageProps {}
 
-export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProps> = ({ onBackToDashboard }) => {
+export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProps> = () => {
   const { cameras } = useCameras();
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [timeSeries, setTimeSeries] = useState<ActivityTimeSeriesResponse | null>(null);
@@ -47,7 +42,6 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
   const [selectedWarning, setSelectedWarning] = useState<EarlyWarning | null>(null);
   const [warningModalOpen, setWarningModalOpen] = useState(false);
   const [hotspotsModalOpen, setHotspotsModalOpen] = useState(false);
-  const [shiftsModalOpen, setShiftsModalOpen] = useState(false);
   useEffect(() => {
     if (cameras.length > 0 && !selectedCamera) {
       setSelectedCamera(cameras[0].camera_id);
@@ -98,17 +92,7 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-[#172138] via-[#10192b] to-[#0a101d] border border-cyan-500/30 rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-2">
-          <div className="flex items-center gap-2.5">
-            {onBackToDashboard && (
-              <button
-                onClick={onBackToDashboard}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-xl text-xs font-mono font-bold border border-slate-700 transition cursor-pointer shadow-sm group"
-                title="Return to Central Dashboard"
-              >
-                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform text-cyan-400" />
-                <span>Back to Dashboard</span>
-              </button>
-            )}
+          <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[11px] font-bold border border-cyan-500/30 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
               PREDICTIVE FORECASTING MATRIX
@@ -119,7 +103,7 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
             Predictive Intelligence & Early Warning Decision Console
           </h1>
           <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-            Short-term activity anomaly forecasting, trend slope estimation, statistical baseline comparisons, spatial activity hotspots, and AI-assisted monitoring camera recommendations.
+            Short-term activity anomaly forecasting, trend slope estimation, spatial threat hotspots, and AI-assisted monitoring camera recommendations.
           </p>
         </div>
 
@@ -130,13 +114,6 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
           >
             <MapPin className="w-4 h-4 text-cyan-400" />
             HOTSPOTS MAP ({hotspots.length})
-          </button>
-          <button
-            onClick={() => setShiftsModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-mono font-bold transition border border-slate-700"
-          >
-            <Sliders className="w-4 h-4 text-amber-400" />
-            BASELINE SHIFTS
           </button>
           <button
             onClick={loadData}
@@ -154,10 +131,10 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
           <div className="space-y-1 font-mono">
             <span className="text-[11px] text-cyan-400 font-bold">FORECAST RISK</span>
             <div className="text-2xl font-black text-cyan-400">
-              {forecast?.forecast_risk_score ?? 40} <span className="text-xs text-slate-500">/ 100</span>
+              {forecast ? forecast.forecast_risk_score : 0} <span className="text-xs text-slate-500">/ 100</span>
             </div>
             <span className="text-[10px] text-slate-400 block">
-              Current Risk: {forecast?.current_risk_score ?? 35}
+              Current Risk: {forecast ? forecast.current_risk_score : 0}
             </span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
@@ -169,7 +146,7 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
           <div className="space-y-1 font-mono">
             <span className="text-[11px] text-amber-400 font-bold">ACTIVITY TREND</span>
             <div className="text-2xl font-black text-amber-400">
-              {timeSeries?.trend ?? 'STABLE'}
+              {timeSeries?.trend ?? (cameras.length > 0 ? 'INACTIVE' : 'NO DATA')}
             </div>
             <span className="text-[10px] text-slate-400 block">
               Slope: {timeSeries?.trend_slope ?? 0.0} events/h
@@ -184,10 +161,10 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
           <div className="space-y-1 font-mono">
             <span className="text-[11px] text-emerald-400 font-bold">DATA QUALITY</span>
             <div className="text-2xl font-black text-emerald-400">
-              {Math.round((forecast?.data_quality_score ?? 0.94) * 100)}%
+              {forecast ? `${Math.round(forecast.data_quality_score * 100)}%` : (cameras.length > 0 ? '100%' : '0%')}
             </div>
             <span className="text-[10px] text-slate-400 block">
-              Confidence: {Math.round((forecast?.confidence ?? 0.78) * 100)}%
+              Confidence: {forecast ? `${Math.round(forecast.confidence * 100)}%` : '0%'}
             </span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -247,9 +224,23 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
       </div>
 
       {/* Main Grid: Forecast Breakdown + Timeline Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Short-Term Anomaly Forecast Card */}
-        {forecast && (
+      {cameras.length === 0 ? (
+        <div className="bg-[#111a2e] border border-cyan-500/20 rounded-2xl p-12 text-center space-y-4 shadow-xl">
+          <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
+            <Cctv className="w-8 h-8" />
+          </div>
+          <h2 className="text-base font-bold font-mono text-white tracking-wider">
+            NO ACTIVE STREAMS DETECTED FOR PREDICTIVE MODELING
+          </h2>
+          <p className="text-xs font-mono text-slate-400 max-w-lg mx-auto leading-relaxed">
+            Predictive threat forecasting models require real-time telemetry from active checkpost cameras. Once Checkpost Heads onboard cameras and video analytics detect perimeter events, AI anomaly trends, early warnings, and hotspot clusters will compute automatically.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Short-Term Anomaly Forecast Card */}
+            {forecast && (
           <div className="bg-[#111a2e] border border-cyan-500/30 rounded-xl p-5 space-y-4 font-mono text-xs">
             <div className="flex items-center justify-between">
               <span className="font-bold text-white uppercase text-xs flex items-center gap-2">
@@ -339,8 +330,15 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                {timeSeries?.points.map((p, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/40 transition">
+                {!timeSeries || timeSeries.points.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-500 font-mono">
+                      No time-series activity points recorded for this surveillance target.
+                    </td>
+                  </tr>
+                ) : (
+                  timeSeries.points.map((p, idx) => (
+                    <tr key={idx} className="hover:bg-slate-800/40 transition">
                     <td className="px-3 py-2 font-bold text-white">
                       {new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
@@ -369,7 +367,8 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
                       )}
                     </td>
                   </tr>
-                ))}
+                ))
+              )}
               </tbody>
             </table>
           </div>
@@ -458,33 +457,39 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
           </span>
 
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-            {recommendations.map((r, idx) => (
-              <div
-                key={idx}
-                onClick={() => setSelectedCamera(r.camera_id)}
-                className={`p-3 rounded-xl border cursor-pointer transition ${
-                  selectedCamera === r.camera_id
-                    ? 'bg-[#15233c] border-cyan-500 text-white'
-                    : 'bg-[#090d16] border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs">{r.camera_id}</span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                      r.priority === 'CRITICAL'
-                        ? 'bg-rose-950 text-rose-300 border-rose-500/40'
-                        : r.priority === 'HIGH'
-                        ? 'bg-orange-950 text-orange-300 border-orange-500/40'
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}
-                  >
-                    {r.priority} PRIORITY
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-400 mt-1">{r.reason}</div>
+            {recommendations.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 font-mono text-xs">
+                All perimeter sectors nominal. No cameras require elevated attention.
               </div>
-            ))}
+            ) : (
+              recommendations.map((r, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => setSelectedCamera(r.camera_id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition ${
+                    selectedCamera === r.camera_id
+                      ? 'bg-[#15233c] border-cyan-500 text-white'
+                      : 'bg-[#090d16] border-slate-800 text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs">{r.camera_id}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                        r.priority === 'CRITICAL'
+                          ? 'bg-rose-950 text-rose-300 border-rose-500/40'
+                          : r.priority === 'HIGH'
+                          ? 'bg-orange-950 text-orange-300 border-orange-500/40'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      {r.priority} PRIORITY
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">{r.reason}</div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Model Telemetry */}
@@ -502,6 +507,8 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* Modals */}
       <EarlyWarningDetailModal
@@ -515,12 +522,6 @@ export const PredictiveIntelligencePage: React.FC<PredictiveIntelligencePageProp
         isOpen={hotspotsModalOpen}
         onClose={() => setHotspotsModalOpen(false)}
         hotspots={hotspots}
-      />
-
-      <BaselineShiftModal
-        isOpen={shiftsModalOpen}
-        onClose={() => setShiftsModalOpen(false)}
-        onUpdated={loadData}
       />
     </div>
   );

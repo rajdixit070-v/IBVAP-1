@@ -5,7 +5,7 @@ import math
 import logging
 import threading
 from datetime import datetime
-from typing import Optional, Tuple, Callable
+from typing import Optional, Tuple, Callable, List, Dict
 import cv2
 import numpy as np
 
@@ -40,7 +40,13 @@ class RTSPStreamer:
         self.on_status_change = on_status_change
 
         self.auth_url = build_authenticated_rtsp_url(rtsp_url, username, password)
-        self.is_synthetic = rtsp_url.startswith("synthetic://") or rtsp_url.startswith("test://")
+        u_low = (rtsp_url or "").lower()
+        is_known_protocol = any(u_low.startswith(p) for p in ("rtsp://", "http://", "https://", "udp://", "webcam://", "device://", "rtmp://"))
+        self.is_synthetic = (
+            u_low.startswith("synthetic://") or 
+            u_low.startswith("test://") or 
+            not is_known_protocol
+        )
 
         # Worker control
         self._running = False
@@ -52,6 +58,7 @@ class RTSPStreamer:
         self._latest_jpeg: Optional[bytes] = None
         self._latest_frame_time: Optional[float] = None
         self._frame_count = 0
+        self._synthetic_targets: List[dict] = []
 
         # Health & Stream Metrics
         self.status = "CONNECTING"  # HEALTHY, DEGRADED, OFFLINE, ERROR, CONNECTING
@@ -101,6 +108,11 @@ class RTSPStreamer:
         """Returns the latest pre-encoded JPEG bytes from buffer."""
         with self._lock:
             return self._latest_jpeg
+
+    def get_synthetic_targets(self) -> List[dict]:
+        """Returns current simulated target bounding boxes for AI detection pipeline."""
+        with self._lock:
+            return [dict(t) for t in self._synthetic_targets]
 
 
     def get_status_info(self) -> dict:
@@ -481,15 +493,42 @@ class RTSPStreamer:
             cv2.line(frame, (0, 750), (width, 750), (0, 140, 255), 2)
             cv2.putText(frame, "VIRTUAL PERIMETER BOUNDARY [ZONE A]", (40, 740), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 140, 255), 2)
 
-            # Simulated moving object (patrol vehicle / target)
+            # Simulated moving vehicle target (patrol vehicle / technical)
             x_pos += speed
-            if x_pos > width - 300 or x_pos < 100:
+            if x_pos > width - 320 or x_pos < 80:
                 speed = -speed
             
             box_x = int(x_pos)
             box_y = 650
-            cv2.rectangle(frame, (box_x, box_y), (box_x + 140, box_y + 80), (0, 255, 120), 2)
-            cv2.putText(frame, "TARGET-SIM-01", (box_x, box_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 120), 2)
+            cv2.rectangle(frame, (box_x, box_y), (box_x + 160, box_y + 90), (0, 255, 120), 2)
+            cv2.putText(frame, "PATROL-VEHICLE-01", (box_x, box_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 120), 2)
+
+            # Simulated walking personnel target (border perimeter patrol)
+            person_x = int(600 + ((width - 800) - (x_pos * 0.7)))
+            person_y = 630
+            cv2.rectangle(frame, (person_x, person_y), (person_x + 60, person_y + 120), (50, 200, 255), 2)
+            cv2.putText(frame, "PATROL-PERSON-02", (person_x, person_y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (50, 200, 255), 2)
+
+            # Update structured synthetic target metadata for AI worker
+            with self._lock:
+                self._synthetic_targets = [
+                    {
+                        "class_name": "truck",
+                        "category": "vehicle",
+                        "confidence": 0.88,
+                        "bbox": {"x": float(box_x), "y": float(box_y), "width": 160.0, "height": 90.0},
+                        "timestamp": datetime.utcnow(),
+                        "camera_id": self.camera_id
+                    },
+                    {
+                        "class_name": "person",
+                        "category": "person",
+                        "confidence": 0.74,
+                        "bbox": {"x": float(person_x), "y": float(person_y), "width": 60.0, "height": 120.0},
+                        "timestamp": datetime.utcnow(),
+                        "camera_id": self.camera_id
+                    }
+                ]
 
             # Top HUD: Camera ID, BOP Name, Time
             cv2.rectangle(frame, (0, 0), (width, 60), (10, 12, 16), -1)

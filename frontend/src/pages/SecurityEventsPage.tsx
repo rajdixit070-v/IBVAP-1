@@ -35,10 +35,18 @@ export const SecurityEventsPage: React.FC = () => {
       }
     });
 
+    const handleRefresh = () => {
+      loadData();
+    };
+    window.addEventListener('ibvap:refresh-all', handleRefresh);
+    window.addEventListener('ibvap:alert-received', handleRefresh);
+
     const interval = setInterval(loadData, 5000);
 
     return () => {
       ws.close();
+      window.removeEventListener('ibvap:refresh-all', handleRefresh);
+      window.removeEventListener('ibvap:alert-received', handleRefresh);
       clearInterval(interval);
     };
   }, [selectedCamera, selectedRiskLevel, selectedEventType, selectedStatus]);

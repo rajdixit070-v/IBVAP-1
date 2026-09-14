@@ -9,22 +9,29 @@ const api = axios.create({
 
 // Attach JWT Bearer token if present
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('ibvap_token');
+  const token = (typeof window !== 'undefined')
+    ? (sessionStorage.getItem('ibvap_token') || localStorage.getItem('ibvap_token'))
+    : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Handle unauthorized responses: clear expired session and redirect to login
+// Handle unauthorized responses: clear expired session only on auth failures
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('ibvap_token');
-      localStorage.removeItem('ibvap_user');
-      if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+      const url = error.config?.url || '';
+      // Only wipe session if the current user profile endpoint rejected credentials
+      if (url.includes('/auth/me') || url.includes('/auth/login')) {
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('ibvap_token');
+          sessionStorage.removeItem('ibvap_user');
+          localStorage.removeItem('ibvap_token');
+          localStorage.removeItem('ibvap_user');
+        }
       }
     }
     return Promise.reject(error);

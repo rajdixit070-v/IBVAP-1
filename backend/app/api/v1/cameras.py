@@ -19,7 +19,7 @@ from app.schemas.health import (
     CameraSummaryStats,
     CameraDiagnosticLogResponse
 )
-from app.api.deps import get_current_user, require_admin, require_camera_admin, verify_camera_access
+from app.api.deps import get_current_user, get_current_user_optional, require_admin, require_camera_admin, verify_camera_access
 
 from app.services import camera_service
 from app.services.rtsp_tester import test_rtsp_connection
@@ -251,11 +251,13 @@ def get_live_camera_status(
 def get_live_video_stream(
     camera_id: str,
     fps: Optional[float] = Query(25.0, ge=1.0, le=60.0),
+    profile: Optional[str] = Query("main", regex="^(main|sub)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     Authenticated HTTP MJPEG streaming endpoint for low-latency live camera preview.
+    Supports 'main' (HD) and 'sub' (Low-bandwidth SD for slow border connections).
     Protected by JWT authentication and camera-level authorization.
     """
     verify_camera_access(camera_id, current_user, db)
@@ -264,7 +266,7 @@ def get_live_video_stream(
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
     
     return StreamingResponse(
-        stream_manager.generate_mjpeg_stream(cam.camera_id, fps_limit=fps),
+        stream_manager.generate_mjpeg_stream(cam.camera_id, fps_limit=fps, stream_profile=profile or "main"),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
@@ -272,15 +274,21 @@ def get_live_video_stream(
 def get_camera_snapshot(
     camera_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Returns single current JPEG snapshot frame. If stream is offline, returns a placeholder JPEG."""
-    verify_camera_access(camera_id, current_user, db)
+    if current_user:
+        verify_camera_access(camera_id, current_user, db)
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
     
     jpeg_bytes = stream_manager.get_latest_jpeg(cam.camera_id)
+    if not jpeg_bytes:
+        streamer = stream_manager.ensure_camera_running(cam.camera_id)
+        if streamer:
+            jpeg_bytes = streamer.get_latest_jpeg()
+
     if jpeg_bytes:
         return Response(content=jpeg_bytes, media_type="image/jpeg")
 

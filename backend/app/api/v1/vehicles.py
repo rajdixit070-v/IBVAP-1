@@ -13,6 +13,7 @@ from app.services.anpr.ocr_engine import normalize_plate_number
 
 router = APIRouter()
 
+@router.get("", response_model=List[VehicleWatchlistResponse])
 @router.get("/", response_model=List[VehicleWatchlistResponse])
 def list_vehicles(
     status: Optional[str] = Query(None),
@@ -39,6 +40,7 @@ def list_vehicles(
 
     return query.order_by(VehicleWatchlist.updated_at.desc()).all()
 
+@router.post("", response_model=VehicleWatchlistResponse, status_code=201)
 @router.post("/", response_model=VehicleWatchlistResponse, status_code=201)
 def create_vehicle_entry(
     data: VehicleWatchlistCreate,

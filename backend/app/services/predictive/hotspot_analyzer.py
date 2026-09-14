@@ -36,8 +36,8 @@ class HotspotAnalyzer:
                 bhv_events_count = db.query(BehaviourEvent).filter(BehaviourEvent.zone_id == z.zone_id).count()
                 
                 total_events = sec_events_count + bhv_events_count
-                baseline = 5.0
-                dev_pct = round(((total_events - baseline) / baseline) * 100.0, 1)
+                baseline = float(total_events) if total_events > 0 else 0.0
+                dev_pct = round(((total_events - baseline) / max(1.0, baseline)) * 100.0, 1) if baseline > 0 else 0.0
 
                 if total_events >= 15:
                     level = "HIGH"
@@ -51,10 +51,14 @@ class HotspotAnalyzer:
                     level = "WATCH"
                     density = 3.2
                     risk_score = 42
-                else:
+                elif total_events > 0:
                     level = "NORMAL"
                     density = 1.0
-                    risk_score = 18
+                    risk_score = 15
+                else:
+                    level = "NORMAL"
+                    density = 0.0
+                    risk_score = 0
 
                 factors = []
                 if sec_events_count > 0:

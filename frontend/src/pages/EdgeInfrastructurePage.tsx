@@ -17,15 +17,12 @@ import {
   Trash2,
   Camera,
   Zap,
-  FlaskConical,
-  ArrowLeft
+  FlaskConical
 } from 'lucide-react';
 
-interface EdgeInfrastructurePageProps {
-  onBackToDashboard?: () => void;
-}
+interface EdgeInfrastructurePageProps {}
 
-export const EdgeInfrastructurePage: React.FC<EdgeInfrastructurePageProps> = ({ onBackToDashboard }) => {
+export const EdgeInfrastructurePage: React.FC<EdgeInfrastructurePageProps> = () => {
   const [nodes, setNodes] = useState<EdgeNode[]>([]);
   const [stats, setStats] = useState<EdgeSyncStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,17 +125,7 @@ export const EdgeInfrastructurePage: React.FC<EdgeInfrastructurePageProps> = ({ 
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-[#112338] via-[#0f172a] to-[#0d131f] border border-[#1e3a5f] rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-2">
-          <div className="flex items-center gap-2.5">
-            {onBackToDashboard && (
-              <button
-                onClick={onBackToDashboard}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-xl text-xs font-mono font-bold border border-slate-700 transition cursor-pointer shadow-sm group"
-                title="Return to Central Dashboard"
-              >
-                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform text-cyan-400" />
-                <span>Back to Dashboard</span>
-              </button>
-            )}
+          <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[11px] font-bold border border-sky-500/30">
               EDGE AI & STORE-AND-FORWARD MATRIX
             </span>

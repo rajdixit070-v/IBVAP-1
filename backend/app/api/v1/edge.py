@@ -515,6 +515,48 @@ async def sync_edge_evidence(
 
     return {"status": "SUCCESS", "evidence_id": evd_record.evidence_id, "file_path": file_path}
 
+@router.post("/nodes/{node_id}/push-frame/{camera_id}")
+async def push_edge_live_frame(
+    node_id: str,
+    camera_id: str,
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    resolution: Optional[str] = Query(None),
+    fps: Optional[float] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Outbound Reverse Push Relay Endpoint.
+    Enables remote border edge appliances to push live video frames into Central HQ (Delhi).
+    Requires ZERO open inbound ports and ZERO public IPs on the border network.
+    """
+    node = db.query(EdgeNode).filter(EdgeNode.node_id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Edge Node not found.")
+
+    if file:
+        frame_bytes = await file.read()
+    else:
+        frame_bytes = await request.body()
+
+    if not frame_bytes:
+        raise HTTPException(status_code=400, detail="Empty frame payload.")
+
+    from app.services.stream_manager import stream_manager
+    stream_manager.ingest_edge_frame(
+        camera_id=camera_id,
+        frame_bytes=frame_bytes,
+        resolution=resolution,
+        fps=fps
+    )
+
+    return {
+        "status": "FRAME_INGESTED",
+        "camera_id": camera_id,
+        "node_id": node_id,
+        "size_bytes": len(frame_bytes)
+    }
+
 @router.get("/sync/stats", response_model=EdgeSyncStatsResponse)
 def get_sync_stats(
     db: Session = Depends(get_db),

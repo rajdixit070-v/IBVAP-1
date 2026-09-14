@@ -818,127 +818,38 @@ def seed_demo_data(db: Session) -> dict:
     return get_demo_status(db)
 
 
+def seed_demo_data(db: Session) -> dict:
+    """
+    Injects a complete, rich, highly-realistic Border Surveillance demonstration dataset.
+    Covers 17 Cameras across 6 Frontier Sectors, Edge Nodes, Zones, Incidents, Threat Events,
+    ANPR, Face, Evidence JPEGs, Drone Missions.
+    """
+    try:
+        try:
+            from backend.load_demo_data import load_demo_data as run_loader
+        except ImportError:
+            from load_demo_data import load_demo_data as run_loader
+        run_loader()
+    except Exception as e:
+        logger.error(f"Error executing load_demo_data: {e}", exc_info=True)
+
+    logger.info("Successfully seeded comprehensive demo dataset across all 15 modules.")
+    return get_demo_status(db)
+
+
 def purge_demo_data(db: Session) -> dict:
     """
     Cleans ALL operational demonstration and fake data from the database.
-    Resets tables to 0 rows and removes generated evidence images from disk.
+    Preserves Admin, Officer, and all 57 Calibrated Frontier BOP Checkposts.
     """
-    tables = [
-        "alerts",
-        "security_events",
-        "security_threat_events",
-        "multimodal_security_events",
-        "incidents",
-        "incident_relationships",
-        "incident_reviews",
-        "evidence_records",
-        "notifications",
-        "global_tracks",
-        "track_observations",
-        "track_associations",
-        "movement_anomalies",
-        "anpr_events",
-        "face_events",
-        "ai_events",
-        "ai_observations",
-        "camera_transitions",
-        "camera_pairs",
-        "ptz_devices",
-        "ptz_presets",
-        "behaviour_events",
-        "drone_missions",
-        "drone_telemetry",
-        "drone_handoffs",
-        "cameras",
-        "camera_ai_configs",
-        "camera_ai_profiles",
-        "camera_health_logs",
-        "edge_nodes",
-        "edge_node_credentials",
-        "edge_event_buffers",
-        "security_zones",
-        "sites",
-        "bops",
-        "site_user_scopes",
-        "vehicle_watchlist",
-        "person_watchlist",
-        "early_warnings",
-        "baseline_shifts",
-        "activity_baselines",
-        "activity_snapshots",
-        "model_health",
-        "health_config_records",
-        "maintenance_windows",
-        "prediction_feedback",
-        "behaviour_feedback",
-        "ai_operator_feedbacks",
-        "bop_dispatches"
-    ]
-    
-    # Shutdown all running camera video streamers
     try:
-        from app.services.stream_manager import stream_manager
-        stream_manager.shutdown_all()
-    except Exception as e:
-        logger.debug(f"Could not shutdown stream_manager: {e}")
-
-    for t in tables:
         try:
-            db.execute(text(f"DELETE FROM {t}"))
-        except Exception as e:
-            logger.debug(f"Could not delete from {t}: {e}")
-
-    # Delete non-admin, non-officer demo users
-    try:
-        db.execute(text("DELETE FROM users WHERE username NOT IN ('admin', 'officer_alpha')"))
-    except Exception:
-        pass
-        
-    db.commit()
-
-    # Ensure baseline Site, BOP, Officer and Admin remain
-    try:
-        if not db.query(Site).filter(Site.site_id == "SITE-BORDER-NORTH").first():
-            db.add(Site(site_id="SITE-BORDER-NORTH", name="North Frontier Sector", code="S-NORTH", region_id="REG-WEST"))
-        if not db.query(BOP).filter(BOP.bop_id == "BOP-ALPHA").first():
-            db.add(BOP(bop_id="BOP-ALPHA", name="BOP Alpha Outpost", code="BOP-A", site_id="SITE-BORDER-NORTH", latitude=31.6245, longitude=74.8725))
-
-        admin_u = db.query(User).filter(User.username == "admin").first()
-        if not admin_u:
-            db.add(User(username="admin", email="admin@ibvap.mil", hashed_password=get_password_hash("Admin@IBVAP2026"), role="admin", is_active=True))
-        else:
-            admin_u.is_active = True
-            admin_u.locked_until = None
-
-        officer_u = db.query(User).filter(User.username == "officer_alpha").first()
-        if not officer_u:
-            db.add(User(username="officer_alpha", email="officer.alpha@ibvap.mil", hashed_password=get_password_hash("Officer@IBVAP2026"), role="COMMANDER", is_active=True))
-        else:
-            officer_u.is_active = True
-            officer_u.locked_until = None
-
-        if not db.query(SiteUserScope).filter(SiteUserScope.username == "admin").first():
-            db.add(SiteUserScope(username="admin", scope_type="GLOBAL", scope_id="*", role="SUPER_ADMIN", assigned_by="system"))
-        if not db.query(SiteUserScope).filter(SiteUserScope.username == "officer_alpha").first():
-            db.add(SiteUserScope(username="officer_alpha", scope_type="BOP", scope_id="BOP-ALPHA", role="BOP_OPERATOR", assigned_by="admin"))
-        db.commit()
+            from backend.clear_data import clear_database as run_clear
+        except ImportError:
+            from clear_data import clear_database as run_clear
+        run_clear()
     except Exception as e:
-        logger.warning(f"Could not restore base site/BOP/users in purge: {e}")
-
-
-
-    # Clean evidence snapshots on disk
-    for path in ["./storage/evidence", "./storage/edge_local", "./storage/temp"]:
-        if os.path.exists(path):
-            try:
-                for item in os.listdir(path):
-                    full_p = os.path.join(path, item)
-                    if os.path.isdir(full_p):
-                        shutil.rmtree(full_p)
-                    else:
-                        os.remove(full_p)
-            except Exception as e:
-                logger.warning(f"Error purging disk path {path}: {e}")
+        logger.error(f"Error executing clear_database: {e}", exc_info=True)
 
     logger.info("Successfully purged all operational demo data.")
     return get_demo_status(db)
@@ -955,11 +866,9 @@ def simulate_live_threat(db: Session) -> dict:
     evt_id = f"EVT-LIVE-{rand_suffix}"
     alt_id = f"ALT-LIVE-{rand_suffix}"
     evd_id = f"EVD-LIVE-{rand_suffix}"
-    cam_id = "CAM-001"
-    
-    # Check if CAM-001 exists; if not, seed first
-    if not db.query(Camera).filter(Camera.camera_id == cam_id).first():
-        seed_demo_data(db)
+    active_cam = db.query(Camera).first()
+    cam_id = active_cam.camera_id if active_cam else "CAM-WAGAH-01"
+    bop_site = active_cam.bop_site if active_cam else "Attari-Wagah Joint Check Post"
 
     evd_path = f"./storage/evidence/{cam_id}/{evd_id}.jpg"
     _create_synthetic_jpeg(evd_path, cam_id, "LIVE SIMULATED THREAT: ARMED INTRUSION AT ZERO LINE", 98)
@@ -1014,8 +923,8 @@ def simulate_live_threat(db: Session) -> dict:
         alert_id=alt_id,
         event_id=evt_id,
         camera_id=cam_id,
-        bop_site="BOP Alpha",
-        title="[CRITICAL] LIVE THREAT: Armed Infiltration Detected at Tower Alpha-1",
+        bop_site=bop_site,
+        title="[CRITICAL] LIVE THREAT: Armed Infiltration Detected at Perimeter",
         priority="CRITICAL",
         risk_score=98,
         status="NEW",

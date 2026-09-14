@@ -1,15 +1,16 @@
 import React from 'react';
 import { Camera } from '../../types/camera';
 import { StatusBadge } from '../common/StatusBadge';
-import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin } from 'lucide-react';
+import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin, Sliders, Flame, Server } from 'lucide-react';
 
 interface CameraCardProps {
   camera: Camera;
   onView: (camera: Camera) => void;
-  onEdit: (camera: Camera) => void;
-  onDelete: (camera: Camera) => void;
+  onEdit?: (camera: Camera) => void;
+  onDelete?: (camera: Camera) => void;
   onTest: (camera: Camera) => void;
   onLocate?: (camera: Camera) => void;
+  onConfigureAI?: (camera: Camera) => void;
 }
 
 export const CameraCard: React.FC<CameraCardProps> = ({
@@ -18,7 +19,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   onEdit,
   onDelete,
   onTest,
-  onLocate
+  onLocate,
+  onConfigureAI
 }) => {
   const url = camera.rtsp_url || '';
   const st = camera.stream_type || '';
@@ -27,7 +29,12 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   let sourceClass = 'bg-sky-950/60 border-sky-500/30 text-sky-300';
   let iconColor = 'text-sky-400';
 
-  if (st === 'webcam' || url.startsWith('webcam://')) {
+  if (st === 'nvr' || st === 'dvr' || url.includes('/Streaming/Channels/') || url.includes('channel=') || url.includes('/cam/realmonitor')) {
+    SourceIcon = Server;
+    sourceBadge = st === 'dvr' ? 'DVR' : 'NVR';
+    sourceClass = 'bg-indigo-950/60 border-indigo-500/30 text-indigo-300';
+    iconColor = 'text-indigo-400';
+  } else if (st === 'webcam' || url.startsWith('webcam://')) {
     SourceIcon = Laptop;
     sourceBadge = 'WEBCAM';
     sourceClass = 'bg-cyan-950/60 border-cyan-500/30 text-cyan-300';
@@ -37,6 +44,16 @@ export const CameraCard: React.FC<CameraCardProps> = ({
     sourceBadge = 'DRONE';
     sourceClass = 'bg-purple-950/60 border-purple-500/30 text-purple-300';
     iconColor = 'text-purple-400';
+  } else if (st === 'thermal' || url.includes('thermal') || url.includes('/201')) {
+    SourceIcon = Flame;
+    sourceBadge = 'THERMAL';
+    sourceClass = 'bg-amber-950/60 border-amber-500/30 text-amber-300';
+    iconColor = 'text-amber-400';
+  } else if (st === 'ptz') {
+    SourceIcon = Sliders;
+    sourceBadge = 'PTZ';
+    sourceClass = 'bg-blue-950/60 border-blue-500/30 text-blue-300';
+    iconColor = 'text-blue-400';
   } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
     SourceIcon = Smartphone;
     sourceBadge = 'ANDROID';
@@ -111,14 +128,26 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           <button
             onClick={() => onTest(camera)}
             className="flex items-center gap-1 text-xs font-mono text-sky-400 hover:text-sky-300 transition cursor-pointer"
+            title="Diagnose RTSP Stream & Network Latency"
           >
             <Activity className="w-3.5 h-3.5" />
             <span>TEST</span>
           </button>
+          {onConfigureAI && (
+            <button
+              onClick={() => onConfigureAI(camera)}
+              className="flex items-center gap-1 text-xs font-mono text-purple-400 hover:text-purple-300 transition cursor-pointer"
+              title="Tune AI Object Detection Thresholds & FPS"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>AI</span>
+            </button>
+          )}
           {onLocate && (
             <button
               onClick={() => onLocate(camera)}
               className="flex items-center gap-1 text-xs font-mono text-amber-400 hover:text-amber-300 transition cursor-pointer"
+              title="Locate Camera on Tactical Map"
             >
               <MapPin className="w-3.5 h-3.5" />
               <span>MAP</span>
@@ -126,22 +155,28 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onEdit(camera)}
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
-            title="Edit Camera"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onDelete(camera)}
-            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition cursor-pointer"
-            title="Delete Camera"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {(onEdit || onDelete) && (
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(camera)}
+                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
+                title="Edit Camera"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(camera)}
+                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition cursor-pointer"
+                title="Delete Camera"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,7 +13,8 @@ import {
   Cpu,
   Eye,
   EyeOff,
-  Sliders
+  Sliders,
+  ShieldCheck
 } from 'lucide-react';
 import { cameraService } from '../../services/cameraService';
 import { zoneService } from '../../services/zoneService';
@@ -26,18 +27,27 @@ interface LiveVideoPlayerProps {
   className?: string;
   showControls?: boolean;
   onOpenDetails?: () => void;
+  globalProfile?: 'main' | 'sub';
 }
 
 export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   camera,
   autoPlay = true,
   className = '',
-  showControls = true
+  showControls = true,
+  globalProfile = 'main'
 }) => {
+  const [streamProfile, setStreamProfile] = useState<'main' | 'sub'>(globalProfile);
   const [frameSrc, setFrameSrc] = useState<string | null>(null);
   const [fps, setFps] = useState<number>(camera.fps || 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [useFallbackMjpeg, setUseFallbackMjpeg] = useState(false);
+
+  useEffect(() => {
+    if (globalProfile) {
+      setStreamProfile(globalProfile);
+    }
+  }, [globalProfile]);
   
   // AI Telemetry State
   const [showAiOverlay, setShowAiOverlay] = useState(true);
@@ -178,6 +188,30 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 pointer-events-auto">
+            {/* Tactical Tunnel / Edge Relay Status */}
+            {camera.edge_node_id && camera.edge_node_id !== 'CENTRAL' && camera.edge_node_id !== 'NONE' && (
+              <span
+                className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-950/80 border border-cyan-500/40 text-cyan-300"
+                title={`Connected via Border Edge Appliance ${camera.edge_node_id} (Outbound Reverse Push / Encrypted Tunnel)`}
+              >
+                <ShieldCheck className="w-3 h-3 text-cyan-400" />
+                TUNNEL RELAY
+              </span>
+            )}
+
+            {/* Stream Profile Switcher (HD vs SD Sub-Stream) */}
+            <button
+              onClick={() => setStreamProfile(p => p === 'main' ? 'sub' : 'main')}
+              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition ${
+                streamProfile === 'sub'
+                  ? 'bg-amber-950/90 border-amber-500/60 text-amber-300 shadow-sm'
+                  : 'bg-slate-900/80 border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title={streamProfile === 'sub' ? 'SD Sub-Stream Active: Consumes ~75% less bandwidth for slow border connections' : 'HD Main Stream Active: Click to switch to low-bandwidth SD'}
+            >
+              {streamProfile === 'sub' ? 'SD (SUB -75%)' : 'HD (MAIN)'}
+            </button>
+
             {/* AI Engine Status Pill */}
             <div
               className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
@@ -229,7 +263,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
         <div className="relative flex-1 flex items-center justify-center min-h-[220px] bg-slate-950 overflow-hidden">
           {camera.enabled ? (
             <>
-              {frameSrc ? (
+              {frameSrc && streamProfile === 'main' ? (
                 <img
                   src={frameSrc}
                   alt={camera.camera_name}
@@ -237,7 +271,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                 />
               ) : (
                 <img
-                  src={cameraService.getLiveStreamUrl(camera.camera_id)}
+                  src={cameraService.getLiveStreamUrl(camera.camera_id, streamProfile === 'sub' ? 15 : 25, streamProfile)}
                   alt={camera.camera_name}
                   className="w-full h-full object-contain"
                   onError={() => {

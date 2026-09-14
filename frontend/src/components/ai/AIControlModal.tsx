@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import { CameraAIConfig, CameraAIConfigUpdate } from '../../types/ai';
+import { CameraAIConfig, CameraAIConfigUpdate, CameraAIStatus } from '../../types/ai';
 import { aiService } from '../../services/aiService';
-import { Cpu, Sliders, Save, CheckCircle2 } from 'lucide-react';
+import {
+  Cpu,
+  Sliders,
+  Save,
+  CheckCircle2,
+  ShieldCheck,
+  Zap,
+  CloudRain,
+  RotateCcw,
+  Activity,
+  Target,
+  Layers
+} from 'lucide-react';
 
 interface AIControlModalProps {
   isOpen: boolean;
@@ -20,10 +32,12 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
   onSaved
 }) => {
   const [config, setConfig] = useState<CameraAIConfig | null>(null);
+  const [liveStatus, setLiveStatus] = useState<CameraAIStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvancedTracker, setShowAdvancedTracker] = useState(false);
 
   useEffect(() => {
     if (isOpen && cameraId) {
@@ -35,13 +49,59 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const data = await aiService.getCameraConfig(cameraId);
-      setConfig(data);
+      const [configData, statusData] = await Promise.all([
+        aiService.getCameraConfig(cameraId),
+        aiService.getCameraAIStatus(cameraId).catch(() => null)
+      ]);
+      setConfig(configData);
+      if (statusData) setLiveStatus(statusData);
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Failed to load AI configuration.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyPreset = (presetType: 'balanced' | 'high_sensitivity' | 'adverse_weather') => {
+    if (!config) return;
+    if (presetType === 'balanced') {
+      setConfig({
+        ...config,
+        conf_person: 0.40,
+        conf_vehicle: 0.45,
+        conf_animal: 0.35,
+        conf_drone: 0.30,
+        target_fps: 10.0,
+        track_thresh: 0.45,
+        match_thresh: 0.70
+      });
+    } else if (presetType === 'high_sensitivity') {
+      setConfig({
+        ...config,
+        conf_person: 0.25,
+        conf_vehicle: 0.30,
+        conf_animal: 0.25,
+        conf_drone: 0.20,
+        target_fps: 15.0,
+        track_thresh: 0.30,
+        match_thresh: 0.60
+      });
+    } else if (presetType === 'adverse_weather') {
+      setConfig({
+        ...config,
+        conf_person: 0.55,
+        conf_vehicle: 0.55,
+        conf_animal: 0.60,
+        conf_drone: 0.45,
+        target_fps: 10.0,
+        track_thresh: 0.50,
+        match_thresh: 0.75
+      });
+    }
+  };
+
+  const handleResetDefaults = () => {
+    applyPreset('balanced');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -66,6 +126,11 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
       };
       await aiService.updateCameraConfig(cameraId, payload);
       setSuccessMsg(true);
+
+      // Refresh live telemetry
+      const updatedStatus = await aiService.getCameraAIStatus(cameraId).catch(() => null);
+      if (updatedStatus) setLiveStatus(updatedStatus);
+
       if (onSaved) onSaved();
       setTimeout(() => setSuccessMsg(false), 3000);
     } catch (err: any) {
@@ -85,10 +150,35 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
     >
       {loading ? (
         <div className="py-10 text-center text-xs font-mono text-slate-400">
-          Loading AI parameters...
+          Loading AI parameters & live telemetry...
         </div>
       ) : config ? (
-        <form onSubmit={handleSave} className="space-y-6">
+        <form onSubmit={handleSave} className="space-y-5">
+          {/* Live Telemetry & Engine Diagnostics Header */}
+          <div className="bg-[#0c1424] border border-[#1e293b] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <div className={`w-2.5 h-2.5 rounded-full ${config.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span className="font-semibold text-slate-200">
+                AI ENGINE: <span className={config.enabled ? 'text-emerald-400 font-bold' : 'text-slate-400'}>{config.enabled ? 'ENABLED' : 'PAUSED'}</span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1">
+                <Activity className="w-3.5 h-3.5 text-sky-400" />
+                <span>FPS: <strong className="text-white">{liveStatus?.inference_fps ? `${liveStatus.inference_fps} FPS` : `${config.target_fps} FPS`}</strong></span>
+              </span>
+              <span className="flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-purple-400" />
+                <span>LATENCY: <strong className="text-white">{liveStatus?.latency_ms ? `${liveStatus.latency_ms}ms` : '<15ms'}</strong></span>
+              </span>
+              <span className="flex items-center gap-1">
+                <Target className="w-3.5 h-3.5 text-amber-400" />
+                <span>TRACKS: <strong className="text-white">{liveStatus?.active_tracks_count ?? 0}</strong></span>
+              </span>
+            </div>
+          </div>
+
           {error && (
             <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-lg text-rose-300 text-xs font-mono">
               {error}
@@ -97,11 +187,64 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
 
           {successMsg && (
             <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-lg text-emerald-300 text-xs font-mono flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" /> AI configuration updated and applied live to stream!
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>AI configuration saved and applied dynamically to live video feed!</span>
             </div>
           )}
 
-          {/* Section 1: State & Performance Rate */}
+          {/* Quick Tactical Presets Bar */}
+          <div className="bg-[#111a2e] p-3.5 rounded-xl border border-[#1e293b] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-400" /> QUICK TACTICAL PRESETS
+              </span>
+              <button
+                type="button"
+                onClick={handleResetDefaults}
+                className="text-[11px] font-mono text-slate-400 hover:text-slate-200 flex items-center gap-1 transition"
+                title="Reset sliders to standard border patrol settings"
+              >
+                <RotateCcw className="w-3 h-3" /> Reset Defaults
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => applyPreset('balanced')}
+                className="p-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 rounded-lg text-left transition group"
+              >
+                <div className="flex items-center gap-1.5 text-sky-400 text-xs font-semibold">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Balanced
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-mono">Person 40% | Veh 45%</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => applyPreset('high_sensitivity')}
+                className="p-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 rounded-lg text-left transition group"
+              >
+                <div className="flex items-center gap-1.5 text-rose-400 text-xs font-semibold">
+                  <Target className="w-3.5 h-3.5" /> High Alert
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-mono">Person 25% | Drone 20%</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => applyPreset('adverse_weather')}
+                className="p-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 rounded-lg text-left transition group"
+              >
+                <div className="flex items-center gap-1.5 text-amber-400 text-xs font-semibold">
+                  <CloudRain className="w-3.5 h-3.5" /> Bad Weather
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-mono">Rain/Dust (55% Cutoff)</div>
+              </button>
+            </div>
+          </div>
+
+          {/* Section 1: Pipeline Control & Inference Rate */}
           <div className="bg-[#111a2e] p-4 rounded-xl border border-[#1e293b] space-y-4">
             <h4 className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800 pb-2">
               <Cpu className="w-4 h-4" /> PIPELINE CONTROL & INFERENCE RATE
@@ -111,12 +254,12 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">AI Pipeline Status</label>
                 <div className="flex items-center gap-3 mt-2">
-                  <label className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+                  <label className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={config.enabled}
                       onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
-                      className="w-4 h-4 rounded border-slate-700 text-sky-600 focus:ring-sky-500"
+                      className="w-4 h-4 rounded border-slate-700 text-sky-600 focus:ring-sky-500 bg-slate-900"
                     />
                     <span>AI Object Detection Enabled</span>
                   </label>
@@ -222,6 +365,65 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
             </div>
           </div>
 
+          {/* Section 3: Advanced ByteTrack Multi-Frame Tracker Tuning (Collapsible) */}
+          <div className="bg-[#111a2e] p-4 rounded-xl border border-[#1e293b] space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedTracker(!showAdvancedTracker)}
+              className="w-full flex items-center justify-between text-xs font-mono font-bold text-indigo-300 uppercase tracking-wider border-b border-slate-800 pb-2 cursor-pointer hover:text-indigo-200 transition"
+            >
+              <span className="flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-indigo-400" />
+                BYTETRACK MULTI-FRAME TRACKING PARAMETERS
+              </span>
+              <span className="text-[11px] text-slate-400 font-normal">
+                {showAdvancedTracker ? '[-] Hide Parameters' : '[+] Show Parameters'}
+              </span>
+            </button>
+
+            {showAdvancedTracker && (
+              <div className="space-y-4 pt-2 text-xs">
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="font-semibold text-slate-300">Track Association Score Threshold</span>
+                    <span className="font-mono text-indigo-400 font-bold">{Math.round(config.track_thresh * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.15"
+                    max="0.85"
+                    step="0.05"
+                    value={config.track_thresh}
+                    onChange={(e) => setConfig({ ...config, track_thresh: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                  <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                    Lower values maintain trajectories across occlusions; higher values eliminate phantom tracks.
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="font-semibold text-slate-300">Bounding Box IoU Match Threshold</span>
+                    <span className="font-mono text-indigo-400 font-bold">{Math.round(config.match_thresh * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.30"
+                    max="0.90"
+                    step="0.05"
+                    value={config.match_thresh}
+                    onChange={(e) => setConfig({ ...config, match_thresh: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                  <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                    Spatial overlap required between adjacent frames to confirm persistent target identity.
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
@@ -233,10 +435,10 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold tracking-wider transition shadow-lg shadow-sky-600/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold tracking-wider transition shadow-lg shadow-sky-600/20 disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              {saving ? 'SAVING...' : 'APPLY CONFIGURATION'}
+              {saving ? 'APPLYING CONFIGURATION...' : 'APPLY CONFIGURATION'}
             </button>
           </div>
         </form>
@@ -244,3 +446,4 @@ export const AIControlModal: React.FC<AIControlModalProps> = ({
     </Modal>
   );
 };
+

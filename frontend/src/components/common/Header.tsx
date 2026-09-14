@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Clock, Home, ArrowLeft } from 'lucide-react';
+import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
@@ -17,7 +17,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  activeTab,
+  activeTab: _activeTab,
   onNavigateToDashboard,
   onOpenMap,
   onOpenAssistant,
@@ -108,18 +108,6 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Universal Return to Dashboard Quick Action */}
-          {activeTab && activeTab !== 'dashboard' && onNavigateToDashboard && (
-            <button
-              onClick={onNavigateToDashboard}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-cyan-950/70 hover:bg-cyan-900/90 text-cyan-300 hover:text-white rounded-lg border border-cyan-500/50 transition text-xs font-mono font-bold cursor-pointer shadow-md shadow-cyan-950/40 group animate-in fade-in duration-150"
-              title="Return to Central Dashboard / Home"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400 group-hover:-translate-x-0.5 transition-transform" />
-              <Home className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">HOME DASHBOARD</span>
-            </button>
-          )}
 
           {/* Live System Indicator */}
           <div className="hidden lg:flex items-center gap-1.5 pl-3 ml-1 border-l border-slate-800 text-[11px] font-mono">
@@ -158,6 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-rose-400 font-semibold">OFFLINE: {summary.offline}</span>
             </div>
           )}
+
 
           {/* AI Copilot Trigger Button */}
           {onOpenAssistant && (
@@ -248,7 +237,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={logout}
               className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg border border-transparent hover:border-rose-800/40 transition cursor-pointer"
-              title="Sign Out Session"
+              title="Sign Out & Return to Defense Gateway"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>

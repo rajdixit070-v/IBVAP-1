@@ -60,25 +60,56 @@ export const CameraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [selectedBop, selectedStatus, searchQuery, refreshSummary]);
 
+  // Initial fetch on mount & filter change
   useEffect(() => {
     refreshCameras();
   }, [refreshCameras]);
 
-  // Connect to Health telemetry WebSocket
+  // Periodic background sync (every 6s) so any camera registered at remote border posts
+  // immediately populates on Delhi HQ Admin screens without manual page reload
+  useEffect(() => {
+    const onRefresh = () => refreshCameras();
+    window.addEventListener('ibvap:refresh-all', onRefresh);
+    window.addEventListener('ibvap:refresh-cameras', onRefresh);
+
+    const intervalId = setInterval(() => {
+      refreshCameras();
+    }, 6000);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('ibvap:refresh-all', onRefresh);
+      window.removeEventListener('ibvap:refresh-cameras', onRefresh);
+    };
+  }, [refreshCameras]);
+
+  // Connect to Health telemetry WebSocket for real-time camera updates
   useEffect(() => {
     const healthWs = new HealthWebSocket((msg) => {
-      if (msg.event === 'HEALTH_AUDIT' && Array.isArray(msg.cameras)) {
+      const incomingCameras = msg.cameras;
+      if (Array.isArray(incomingCameras)) {
         setCameras((prev) => {
-          const map = new Map(msg.cameras.map((c: any) => [c.camera_id, c]));
+          // Check if a new camera was registered remotely or one was deleted
+          const currentIds = new Set(prev.map((c) => c.camera_id));
+          const hasNewCamera = incomingCameras.some((c: any) => c?.camera_id && !currentIds.has(c.camera_id));
+          const hasRemovedCamera = prev.length > 0 && incomingCameras.length < prev.length;
+
+          if (hasNewCamera || hasRemovedCamera) {
+            // Trigger refresh to fetch complete camera specifications and activate live streaming
+            refreshCameras();
+            return prev;
+          }
+
+          // In-place real-time status & FPS updates for active cameras
+          const map = new Map(incomingCameras.map((c: any) => [c.camera_id, c]));
           return prev.map((cam) => {
             const update: any = map.get(cam.camera_id);
             if (update) {
               return {
                 ...cam,
                 status: update.status,
-                fps: update.fps,
+                fps: update.fps ?? cam.fps,
                 resolution: update.resolution || cam.resolution,
-                last_seen_at: update.last_seen_at || cam.last_seen_at
+                last_seen_at: update.last_seen_at || update.last_seen || cam.last_seen_at
               };
             }
             return cam;
@@ -90,7 +121,7 @@ export const CameraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       healthWs.close();
     };
-  }, []);
+  }, [refreshCameras]);
 
   const testConnection = async (cameraId: string): Promise<CameraTestResponse> => {
     return await cameraService.testSavedCamera(cameraId);

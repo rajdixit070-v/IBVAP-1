@@ -36,23 +36,25 @@ class AlertEngine:
             if callback in self._ws_subscribers:
                 self._ws_subscribers.remove(callback)
 
-    def _broadcast_alert(self, event_name: str, alert: Alert):
-        """Pushes structured alert payloads to all registered WebSocket clients."""
+    def _broadcast_alert(self, event_name: str, alert: Alert, message: Optional[str] = None):
+        """
+        Dispatches alert status changes to registered WebSocket client handlers.
+        """
         with self._lock:
             subscribers = list(self._ws_subscribers)
 
-        evd_url = None
         evd_id = None
+        evd_url = None
         if alert.event_id:
             try:
-                db_sub = SessionLocal()
+                db_local = SessionLocal()
                 try:
-                    se = db_sub.query(SecurityEvent).filter(SecurityEvent.event_id == alert.event_id).first()
-                    if se and se.evidence_id:
-                        evd_id = se.evidence_id
-                        evd_url = f"/api/v1/evidence/{se.evidence_id}/file"
+                    ev = db_local.query(SecurityEvent).filter(SecurityEvent.event_id == alert.event_id).first()
+                    if ev and ev.evidence_id:
+                        evd_id = ev.evidence_id
+                        evd_url = f"/api/v1/evidence/{ev.evidence_id}/file"
                 finally:
-                    db_sub.close()
+                    db_local.close()
             except Exception:
                 pass
 
@@ -66,6 +68,7 @@ class AlertEngine:
                 "camera_id": alert.camera_id,
                 "bop_site": alert.bop_site,
                 "title": alert.title,
+                "message": message or alert.title,
                 "priority": alert.priority,
                 "risk_score": alert.risk_score,
                 "status": alert.status,
@@ -97,6 +100,10 @@ class AlertEngine:
         """
         db: Session = SessionLocal()
         try:
+            # Drop only zero or negative risk trivialities
+            if event.risk_score < 10:
+                return None
+
             # Map severity to priority
             priority = event.risk_level.upper()
             if priority not in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
@@ -116,7 +123,7 @@ class AlertEngine:
                         alert.updated_at = now
                         db.commit()
                         db.refresh(alert)
-                        self._broadcast_alert("ALERT_UPDATED", alert)
+                        self._broadcast_alert("ALERT_UPDATED", alert, message=f"Active threat updated: {alert.title} (Risk: {alert.risk_score}/100)")
                         return alert
 
                 # SLA Deadline configuration
@@ -127,6 +134,11 @@ class AlertEngine:
                 else:
                     deadline = now + timedelta(seconds=600)
 
+                # Query camera for precise outpost / GPS location & BOP site
+                from app.models.camera import Camera
+                cam = db.query(Camera).filter(Camera.camera_id == event.camera_id).first()
+                cam_bop = cam.bop_site if cam and cam.bop_site else "HQ Central"
+
                 # Generate new Alert
                 new_alert_id = f"ALT-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
                 title = f"{priority} Threat: {event.event_type.replace('_', ' ').title()} on {event.camera_id}"
@@ -135,7 +147,7 @@ class AlertEngine:
                     alert_id=new_alert_id,
                     event_id=event.event_id,
                     camera_id=event.camera_id,
-                    bop_site="BOP Alpha",
+                    bop_site=cam_bop,
                     title=title,
                     priority=priority,
                     risk_score=event.risk_score,
@@ -150,9 +162,6 @@ class AlertEngine:
                 evd_id = getattr(event, 'evidence_id', None)
                 evd_url = f"/api/v1/evidence/{evd_id}/file" if evd_id else None
 
-                # Query camera for precise outpost / GPS location
-                from app.models.camera import Camera
-                cam = db.query(Camera).filter(Camera.camera_id == event.camera_id).first()
                 loc_desc = getattr(event, 'location_description', None)
                 if not loc_desc and cam:
                     coords = f"(GPS: {cam.latitude:.4f}, {cam.longitude:.4f})" if cam.latitude and cam.longitude else ""
@@ -179,10 +188,10 @@ class AlertEngine:
 
                 self._active_alert_map[dedup_key] = new_alert_id
                 logger.info(f"Generated Alert {new_alert_id} ({priority}) for Event {event.event_id}")
-                self._broadcast_alert("ALERT_CREATED", alert)
+                self._broadcast_alert("ALERT_CREATED", alert, message=notification.message)
 
-                # Connect to Incident pipeline for CRITICAL and HIGH priority alerts
-                if priority in ["CRITICAL", "HIGH"] or event.risk_score >= 60:
+                # Connect to Incident pipeline for genuine threats
+                if priority == "CRITICAL" or event.risk_score >= 70:
                     try:
                         from app.services.incident.incident_service import incident_service
                         incident_service.create_incident_from_event(event)

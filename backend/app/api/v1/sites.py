@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_admin, require_border_provisioner
 from app.models.user import User
 from app.models.federation_models import Site, BOP
 from app.models.camera import Camera
@@ -44,27 +44,28 @@ def list_sites(
 def create_site(
     payload: SiteCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_border_provisioner)
 ):
-    """Creates a new operational border Site (Admin only)."""
-    existing = db.query(Site).filter(Site.site_id == payload.site_id).first()
+    """Creates a new operational border Site (Border Officers & Commanders)."""
+    site_id = (payload.site_id.strip() if payload.site_id else f"SITE-{payload.code.strip().upper()}").replace(" ", "-")
+    existing = db.query(Site).filter(Site.site_id == site_id).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Site with ID '{payload.site_id}' already exists."
+            detail=f"Site with ID '{site_id}' already exists."
         )
 
     site = Site(
-        site_id=payload.site_id.strip(),
-        region_id=payload.region_id.strip(),
+        site_id=site_id,
+        region_id=(payload.region_id or "REG-INDIA-BORDER").strip(),
         name=payload.name.strip(),
         code=payload.code.strip().upper(),
-        description=payload.description,
-        location=payload.location,
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        timezone=payload.timezone,
-        status=payload.status
+        description=payload.description or f"Operational Frontier Sector: {payload.name.strip()}",
+        location=payload.location or payload.name.strip(),
+        latitude=payload.latitude if payload.latitude is not None else 28.6139,
+        longitude=payload.longitude if payload.longitude is not None else 77.2090,
+        timezone=payload.timezone or "Asia/Kolkata",
+        status=payload.status or "ACTIVE"
     )
     db.add(site)
     db.commit()
@@ -98,9 +99,9 @@ def update_site(
     site_id: str,
     payload: SiteUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_border_provisioner)
 ):
-    """Updates site metadata (Admin only)."""
+    """Updates site metadata (Border Officers & Commanders)."""
     site = db.query(Site).filter(Site.site_id == site_id).first()
     if not site:
         raise HTTPException(status_code=404, detail=f"Site '{site_id}' not found.")
@@ -139,7 +140,7 @@ def update_site(
 def delete_site(
     site_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_border_provisioner)
 ):
     """Permanently deletes a site and cascades to its BOPs (Admin only)."""
     site = db.query(Site).filter(Site.site_id == site_id).first()

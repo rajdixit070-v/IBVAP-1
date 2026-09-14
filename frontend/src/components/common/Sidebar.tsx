@@ -7,7 +7,6 @@ import {
   Bell,
   Car,
   Fingerprint,
-  Server,
   Flame,
   FileCheck,
   TrendingUp,
@@ -57,10 +56,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
           badge: 'SITREPS'
         },
         {
+          id: 'live',
+          label: 'Live Border Video Wall',
+          icon: Video,
+          badge: 'WATCH'
+        },
+        {
           id: 'federation',
           label: 'Multi-Site & Checkposts Map',
           icon: Globe,
-          badge: 'FEDERATED'
+          badge: 'MONITOR'
         },
         {
           id: 'soc',
@@ -75,9 +80,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
       items: [
         {
           id: 'security',
-          label: 'Officer & User Management',
+          label: 'Checkpost Heads (Commanders)',
           icon: ShieldCheck,
-          badge: 'ASSIGN BOP'
+          badge: 'APPOINT'
         },
         {
           id: 'evidence',
@@ -96,12 +101,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
     {
       title: 'NATIONAL INFRASTRUCTURE & HEALTH',
       items: [
-        {
-          id: 'edge',
-          label: 'Border Outposts & Edge Sync',
-          icon: Server,
-          badge: 'SYNC'
-        },
         {
           id: 'health',
           label: 'System Health Center',
@@ -128,6 +127,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
           label: 'Checkpost Overview',
           icon: LayoutDashboard,
           badge: 'LOCAL'
+        },
+        {
+          id: 'federation',
+          label: 'Checkposts & Border Map',
+          icon: Globe,
+          badge: 'MAP'
         },
         {
           id: 'cameras',

@@ -56,7 +56,7 @@ class PredictiveIntelligenceService:
             elif probing_events:
                 current_risk = max(ev.risk_score for ev in probing_events)
             else:
-                current_risk = 15
+                current_risk = 0
 
             hr = datetime.utcnow().hour
             is_night = hr >= 22 or hr <= 5
@@ -68,10 +68,10 @@ class PredictiveIntelligenceService:
             ).first()
             if db_baseline and db_baseline.baseline_count is not None:
                 baseline_expected = float(db_baseline.baseline_count)
-            elif history_values and len(history_values) > 0:
+            elif history_values and len(history_values) > 0 and sum(history_values) > 0:
                 baseline_expected = float(sum(history_values) / len(history_values))
             else:
-                baseline_expected = 10.0 if not is_night else 2.0
+                baseline_expected = 0.0
         finally:
             db.close()
 

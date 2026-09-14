@@ -49,12 +49,12 @@ class SiteBase(BaseModel):
     location: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    timezone: str = "UTC"
-    status: str = "ACTIVE" # ACTIVE, INACTIVE, MAINTENANCE, DEGRADED
+    timezone: Optional[str] = "Asia/Kolkata"
+    status: Optional[str] = "ACTIVE" # ACTIVE, INACTIVE, MAINTENANCE, DEGRADED
 
 class SiteCreate(SiteBase):
-    site_id: str = Field(..., min_length=2, max_length=50)
-    region_id: str = Field(default="REG-NORTH")
+    site_id: Optional[str] = None
+    region_id: Optional[str] = "REG-INDIA-BORDER"
 
 class SiteUpdate(BaseModel):
     name: Optional[str] = None
@@ -104,11 +104,11 @@ class BOPBase(BaseModel):
     location: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    status: str = "ACTIVE" # ACTIVE, INACTIVE, MAINTENANCE, DEGRADED
-    operational_priority: str = "NORMAL" # CRITICAL, HIGH, NORMAL, LOW
+    status: Optional[str] = "ACTIVE" # ACTIVE, INACTIVE, MAINTENANCE, DEGRADED
+    operational_priority: Optional[str] = "NORMAL" # CRITICAL, HIGH, NORMAL, LOW
 
 class BOPCreate(BOPBase):
-    bop_id: str = Field(..., min_length=2, max_length=50)
+    bop_id: Optional[str] = None
     site_id: str = Field(..., min_length=2, max_length=50)
 
 class BOPUpdate(BaseModel):

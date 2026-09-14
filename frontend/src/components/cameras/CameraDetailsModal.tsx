@@ -5,14 +5,15 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LiveVideoPlayer } from './LiveVideoPlayer';
 import { cameraService } from '../../services/cameraService';
 import { RTSPTestModal } from './RTSPTestModal';
-import { Activity, Play, Square, History, Trash2 } from 'lucide-react';
+import { Activity, Play, Square, History, Trash2, Sliders } from 'lucide-react';
 
 interface CameraDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   camera: Camera | null;
   onRefresh: () => void;
-  onEdit: (camera: Camera) => void;
+  onEdit?: (camera: Camera) => void;
+  onConfigureAI?: (camera: Camera) => void;
 }
 
 export const CameraDetailsModal: React.FC<CameraDetailsModalProps> = ({
@@ -20,7 +21,8 @@ export const CameraDetailsModal: React.FC<CameraDetailsModalProps> = ({
   onClose,
   camera,
   onRefresh,
-  onEdit
+  onEdit,
+  onConfigureAI
 }) => {
   const [logs, setLogs] = useState<CameraDiagnosticLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -126,6 +128,17 @@ export const CameraDetailsModal: React.FC<CameraDetailsModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {onConfigureAI && (
+                <button
+                  onClick={() => onConfigureAI(camera)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 rounded-lg text-xs font-mono font-semibold border border-purple-500/30 transition cursor-pointer"
+                  title="Tune AI Object Detection Thresholds & FPS"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  AI DETECTION TUNING
+                </button>
+              )}
+
               <button
                 onClick={handleTestConnection}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 rounded-lg text-xs font-mono font-semibold border border-sky-500/30 transition"
@@ -154,15 +167,17 @@ export const CameraDetailsModal: React.FC<CameraDetailsModalProps> = ({
                 )}
               </button>
 
-              <button
-                onClick={() => {
-                  onClose();
-                  onEdit(camera);
-                }}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold transition"
-              >
-                EDIT CONFIG
-              </button>
+              {onEdit && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onEdit(camera);
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold transition"
+                >
+                  EDIT CONFIG
+                </button>
+              )}
             </div>
           </div>
 

@@ -31,7 +31,14 @@ export const HQDispatchesSitrepPanel: React.FC<{ compact?: boolean }> = ({ compa
   useEffect(() => {
     loadDispatches();
     const interval = setInterval(loadDispatches, 8000);
-    return () => clearInterval(interval);
+    const onRefresh = () => loadDispatches();
+    window.addEventListener('ibvap:refresh-all', onRefresh);
+    window.addEventListener('ibvap:alert-received', onRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ibvap:refresh-all', onRefresh);
+      window.removeEventListener('ibvap:alert-received', onRefresh);
+    };
   }, [selectedBopFilter]);
 
   const loadDispatches = async () => {

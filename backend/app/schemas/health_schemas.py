@@ -203,3 +203,26 @@ class CameraPriorityUpdate(BaseModel):
     priority: str = Field(..., description="CRITICAL, HIGH, NORMAL, LOW")
     reason: Optional[str] = None
     authorized_by: Optional[str] = "admin"
+
+class ServerHardwareTelemetry(BaseModel):
+    cpu_percent: float
+    cpu_count: int
+    memory_used_gb: float
+    memory_total_gb: float
+    memory_percent: float
+    disk_used_gb: float
+    disk_total_gb: float
+    disk_percent: float
+    db_size_mb: float
+    db_latency_ms: float
+    evidence_storage_mb: float
+    uptime_seconds: float
+    active_cameras_count: int
+    total_cameras_count: int
+    total_bops_count: int
+    ai_workers_count: int
+    yolo_status: str
+    torch_device: str
+    os_platform: str
+    python_version: str
+

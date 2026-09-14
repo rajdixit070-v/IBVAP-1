@@ -1,4 +1,5 @@
 import api from './api';
+import { authService } from './authService';
 import {
   Camera,
   CameraCreateInput,
@@ -83,14 +84,14 @@ export const cameraService = {
   },
 
 
-  getLiveStreamUrl(cameraId: string, fps = 25): string {
-    const token = localStorage.getItem('ibvap_token');
+  getLiveStreamUrl(cameraId: string, fps = 25, profile: 'main' | 'sub' = 'main'): string {
+    const token = authService.getToken();
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `/api/v1/cameras/${cameraId}/live?fps=${fps}${tokenParam}`;
+    return `/api/v1/cameras/${cameraId}/live?fps=${fps}&profile=${profile}${tokenParam}`;
   },
 
   getSnapshotUrl(cameraId: string): string {
-    const token = localStorage.getItem('ibvap_token');
+    const token = authService.getToken();
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
     return `/api/v1/cameras/${cameraId}/snapshot?t=${Date.now()}${tokenParam}`;
   },

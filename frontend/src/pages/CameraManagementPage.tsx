@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCameras } from '../context/CameraContext';
 import { Camera } from '../types/camera';
 import { CameraTable } from '../components/cameras/CameraTable';
@@ -7,6 +7,8 @@ import { CameraModal } from '../components/cameras/CameraModal';
 import { CameraDetailsModal } from '../components/cameras/CameraDetailsModal';
 import { RTSPTestModal } from '../components/cameras/RTSPTestModal';
 import { DeleteConfirmModal } from '../components/cameras/DeleteConfirmModal';
+import { AIControlModal } from '../components/ai/AIControlModal';
+import { useAuth } from '../context/AuthContext';
 import {
   Plus,
   Search,
@@ -35,6 +37,37 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
     deleteCamera
   } = useCameras();
 
+  const { user } = useAuth();
+  const isCommanderOrAdmin = 
+    user?.role === 'admin' || 
+    user?.role === 'SUPER_ADMIN' || 
+    user?.scope_type === 'GLOBAL' ||
+    user?.role?.toLowerCase() === 'commander' ||
+    user?.role?.toLowerCase() === 'bop_commander' ||
+    user?.username === 'officer_alpha';
+  const isSuperAdmin = isCommanderOrAdmin;
+  const commanderScope = (user?.scope_id && user?.scope_id !== '*') ? user.scope_id : 'BOP-WAGAH';
+
+  // Commander Cameras: Scoped to the commander's outpost / border sector or all cameras
+  const scopedCameras = useMemo(() => {
+    if (isCommanderOrAdmin) return cameras;
+    const term = commanderScope.toLowerCase().replace('bop-', '').replace('bop_', '');
+    const postName = (user?.post_name || '').toLowerCase();
+    const sectorName = (user?.sector || '').toLowerCase();
+
+    const filtered = cameras.filter((c) => {
+      const bop = (c.bop_site || '').toLowerCase();
+      const sec = (c.sector || '').toLowerCase();
+      const cid = (c.camera_id || '').toLowerCase();
+      return (
+        (term && (bop.includes(term) || cid.includes(term))) ||
+        (postName && (bop.includes(postName) || cid.includes(postName))) ||
+        (sectorName && sec.includes(sectorName))
+      );
+    });
+    return filtered.length > 0 ? filtered : cameras;
+  }, [cameras, isCommanderOrAdmin, commanderScope, user?.post_name, user?.sector]);
+
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
   // Modals state
@@ -49,6 +82,9 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // AI Detection Tuning state
+  const [selectedCameraForAI, setSelectedCameraForAI] = useState<Camera | null>(null);
+
 
 
   // RTSP Quick Test state
@@ -58,7 +94,7 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
   const [testingCamName, setTestingCamName] = useState<string>('');
 
   // Extract unique BOPs
-  const uniqueBops: string[] = Array.from(new Set(cameras.map((c: Camera) => c.bop_site)));
+  const uniqueBops: string[] = useMemo(() => Array.from(new Set(scopedCameras.map((c: Camera) => c.bop_site))).filter(Boolean), [scopedCameras]);
 
   const handleOpenAddModal = () => {
     setSelectedCameraForEdit(null);
@@ -125,17 +161,19 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
         <div>
           <h1 className="text-xl font-bold text-white tracking-wide flex items-center gap-2">
             <Cctv className="w-5 h-5 text-sky-400" />
-            Camera Fleet Management
+            {isSuperAdmin ? 'Central Surveillance Stream Matrix • National Federation' : 'Wagah Checkpost Camera Fleet • Tactical Ground Control'}
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Configure IP cameras, test RTSP stream connectivity, and manage surveillance sectors
+          <p className="text-xs text-slate-400 mt-0.5 font-mono">
+            {isSuperAdmin
+              ? 'Real-time HQ stream monitoring & diagnostics for all cameras deployed across India border commands'
+              : 'Configure PoE IP cameras, NVR/DVR channels, and manage tactical sentry points for Attari-Wagah Outpost'}
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => refreshCameras()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-sky-400' : ''}`} />
             Refresh
@@ -143,7 +181,7 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
 
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold tracking-wider transition shadow-lg shadow-sky-600/20"
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold tracking-wider transition shadow-lg shadow-sky-600/20 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             REGISTER NEW CAMERA
@@ -227,16 +265,17 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
       {/* Main Content Area */}
       {viewMode === 'table' ? (
         <CameraTable
-          cameras={cameras}
+          cameras={scopedCameras}
           onView={handleOpenViewModal}
           onEdit={handleOpenEditModal}
           onDelete={handleOpenDeleteModal}
           onTest={handleQuickTest}
           onLocate={onLocateOnMap}
+          onConfigureAI={(cam) => setSelectedCameraForAI(cam)}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {cameras.map((camera: Camera) => (
+          {scopedCameras.map((camera: Camera) => (
             <CameraCard
               key={camera.camera_id}
               camera={camera}
@@ -245,6 +284,7 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
               onDelete={handleOpenDeleteModal}
               onTest={handleQuickTest}
               onLocate={onLocateOnMap}
+              onConfigureAI={(cam) => setSelectedCameraForAI(cam)}
             />
           ))}
         </div>
@@ -264,8 +304,20 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
         onClose={() => setDetailsModalOpen(false)}
         camera={selectedCameraForView}
         onRefresh={refreshCameras}
-        onEdit={handleOpenEditModal}
+        onEdit={isSuperAdmin ? undefined : handleOpenEditModal}
+        onConfigureAI={(cam) => setSelectedCameraForAI(cam)}
       />
+
+      {/* AI Inference & Detection Tuning Modal */}
+      {selectedCameraForAI && (
+        <AIControlModal
+          isOpen={!!selectedCameraForAI}
+          onClose={() => setSelectedCameraForAI(null)}
+          cameraId={selectedCameraForAI.camera_id}
+          cameraName={selectedCameraForAI.camera_name}
+          onSaved={refreshCameras}
+        />
+      )}
 
       {/* RTSP Diagnostic Result Modal */}
       <RTSPTestModal

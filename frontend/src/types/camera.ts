@@ -1,5 +1,5 @@
 export type CameraStatus = 'HEALTHY' | 'ONLINE' | 'DEGRADED' | 'OFFLINE' | 'ERROR' | 'CONNECTING' | 'MAINTENANCE';
-export type CameraSourceType = 'rtsp' | 'webcam' | 'drone' | 'android' | 'thermal' | 'ptz';
+export type CameraSourceType = 'rtsp' | 'nvr' | 'dvr' | 'webcam' | 'drone' | 'android' | 'thermal' | 'ptz';
 
 export interface Camera {
   id: number;
@@ -7,11 +7,15 @@ export interface Camera {
   camera_name: string;
   description?: string;
   bop_site: string;
+  bop_id?: string;
+  site_id?: string;
   sector: string;
   location?: string;
   latitude?: number;
   longitude?: number;
   rtsp_url: string;
+  sub_stream_url?: string;
+  edge_node_id?: string;
   username?: string;
   has_password?: boolean;
   stream_type: string;
@@ -42,6 +46,8 @@ export interface CameraCreateInput {
   latitude?: number;
   longitude?: number;
   rtsp_url: string;
+  sub_stream_url?: string;
+  edge_node_id?: string;
   username?: string;
   password?: string;
   stream_type?: string;
@@ -57,6 +63,8 @@ export interface CameraUpdateInput {
   latitude?: number;
   longitude?: number;
   rtsp_url?: string;
+  sub_stream_url?: string;
+  edge_node_id?: string;
   username?: string;
   password?: string;
   stream_type?: string;

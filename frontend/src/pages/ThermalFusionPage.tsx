@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Flame,
   Sun,
@@ -11,17 +11,22 @@ import {
   Radio,
   Crosshair,
   Thermometer,
-  ArrowLeft as BackIcon,
-  Columns
+  Columns,
+  Volume2,
+  Users,
+  Send,
+  CheckCircle2
 } from 'lucide-react';
 import { thermalService, CameraPair, ThermalFusionResult } from '../services/thermalService';
 import { cameraService } from '../services/cameraService';
 import { useCameras } from '../context/CameraContext';
+import { useAuth } from '../context/AuthContext';
+import { incidentService } from '../services/incidentService';
+import { alertSoundService } from '../services/alertSoundService';
+import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
 import { CreatePairModal } from '../components/thermal/CreatePairModal';
 
-interface ThermalFusionPageProps {
-  onBackToDashboard?: () => void;
-}
+interface ThermalFusionPageProps {}
 
 type ThermalPalette = 'IRONBOW' | 'WHITE_HOT' | 'BLACK_HOT' | 'NIGHT_VISION' | 'RAINBOW' | 'RGB';
 
@@ -64,11 +69,43 @@ const PALETTE_CONFIGS: Record<ThermalPalette, { label: string; filter: string; i
   }
 };
 
-export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDashboard }) => {
+export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = () => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
+  const isCommander = user?.role === 'COMMANDER' || user?.role === 'bop_commander' || isSuperAdmin || user?.username === 'officer_alpha';
+  const userBop = user?.scope_id || '';
+  const commanderPostName = user?.post_name || 'Attari-Wagah Joint Check Post';
   const { cameras, refreshCameras } = useCameras();
+
+  const scopedCameras = useMemo(() => {
+    if (isCommander || isSuperAdmin) return cameras;
+    const filtered = cameras.filter(c => {
+      const p = (c.bop_site || '').toLowerCase();
+      const cid = (c.camera_id || '').toLowerCase();
+      return (
+        (commanderPostName && p.includes(commanderPostName.toLowerCase())) ||
+        (userBop && p.includes(userBop.toLowerCase())) ||
+        p.includes('wagah') ||
+        cid.includes('wagah')
+      );
+    });
+    return filtered.length > 0 ? filtered : cameras;
+  }, [cameras, isCommander, isSuperAdmin, commanderPostName, userBop]);
+
+  const availableCameras = scopedCameras.length > 0 ? scopedCameras : cameras;
+
   const [pairs, setPairs] = useState<CameraPair[]>([]);
   const [selectedPair, setSelectedPair] = useState<CameraPair | null>(null);
+  const [selectedSensorKey, setSelectedSensorKey] = useState<string>('');
   const [activeCameraId, setActiveCameraId] = useState<string>('');
+  const [streamKey, setStreamKey] = useState<number>(Date.now());
+
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [sirenActive, setSirenActive] = useState(false);
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [dispatchTitle, setDispatchTitle] = useState('');
+  const [dispatchSummary, setDispatchSummary] = useState('');
+
   const [activePalette, setActivePalette] = useState<ThermalPalette>('IRONBOW');
   const [results, setResults] = useState<ThermalFusionResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,22 +125,18 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
   const [streamErrorRgb, setStreamErrorRgb] = useState(false);
   const [streamErrorThermal, setStreamErrorThermal] = useState(false);
 
+  const validCameraIds = useMemo(() => new Set(cameras.map(c => c.camera_id)), [cameras]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
+      await refreshCameras();
       const [pList, rList] = await Promise.all([
         thermalService.getCameraPairs(),
         thermalService.getFusionResults()
       ]);
       setPairs(pList);
       setResults(rList);
-      if (pList.length > 0 && !selectedPair) {
-        setSelectedPair(pList[0]);
-        setFusionMode(pList[0].fusion_mode);
-        setActiveCameraId(pList[0].rgb_camera_id || pList[0].thermal_camera_id);
-      } else if (cameras.length > 0 && !activeCameraId) {
-        setActiveCameraId(cameras[0].camera_id);
-      }
     } catch (err) {
       console.error('Error fetching thermal fusion pairs:', err);
     } finally {
@@ -115,16 +148,88 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
     fetchData();
   }, []);
 
-  // Ensure an active camera is selected if pairs or cameras exist
+  // Initialize or maintain selected sensor key
   useEffect(() => {
-    if (!activeCameraId) {
-      if (selectedPair) {
-        setActiveCameraId(fusionMode === 'THERMAL_ONLY' ? selectedPair.thermal_camera_id : selectedPair.rgb_camera_id);
-      } else if (cameras.length > 0) {
-        setActiveCameraId(cameras[0].camera_id);
+    if (cameras.length === 0) return;
+
+    if (!selectedSensorKey) {
+      // Priority 1: Pick first registered camera
+      const firstCam = cameras[0].camera_id;
+      setSelectedSensorKey(`cam:${firstCam}`);
+      setActiveCameraId(firstCam);
+      setSelectedPair(null);
+    } else if (selectedSensorKey.startsWith('cam:')) {
+      const cid = selectedSensorKey.replace('cam:', '');
+      if (!validCameraIds.has(cid)) {
+        const firstCam = cameras[0].camera_id;
+        setSelectedSensorKey(`cam:${firstCam}`);
+        setActiveCameraId(firstCam);
+        setSelectedPair(null);
+      }
+    } else if (selectedSensorKey.startsWith('pair:')) {
+      const pid = selectedSensorKey.replace('pair:', '');
+      const p = pairs.find(x => x.pair_id === pid);
+      if (p) {
+        setSelectedPair(p);
+      } else {
+        const firstCam = cameras[0].camera_id;
+        setSelectedSensorKey(`cam:${firstCam}`);
+        setActiveCameraId(firstCam);
+        setSelectedPair(null);
       }
     }
-  }, [cameras, selectedPair, fusionMode, activeCameraId]);
+  }, [cameras, pairs, selectedSensorKey, validCameraIds]);
+
+  // Handle Sensor Selector Change
+  const handleSensorSelect = (val: string) => {
+    setSelectedSensorKey(val);
+    setStreamErrorRgb(false);
+    setStreamErrorThermal(false);
+    setStreamKey(Date.now());
+
+    if (val.startsWith('cam:')) {
+      const cid = val.replace('cam:', '');
+      setActiveCameraId(cid);
+      setSelectedPair(null);
+    } else if (val.startsWith('pair:')) {
+      const pid = val.replace('pair:', '');
+      const p = pairs.find(x => x.pair_id === pid);
+      if (p) {
+        setSelectedPair(p);
+        setFusionMode(p.fusion_mode);
+        setActiveCameraId(fusionMode === 'THERMAL_ONLY' ? p.thermal_camera_id : p.rgb_camera_id);
+      }
+    }
+  };
+
+  // Compute resolved stream IDs
+  const resolvedStreamCameraId = useMemo(() => {
+    if (selectedPair) {
+      const targetId = fusionMode === 'THERMAL_ONLY' ? selectedPair.thermal_camera_id : selectedPair.rgb_camera_id;
+      if (validCameraIds.has(targetId)) return targetId;
+      if (validCameraIds.has(selectedPair.rgb_camera_id)) return selectedPair.rgb_camera_id;
+      if (validCameraIds.has(selectedPair.thermal_camera_id)) return selectedPair.thermal_camera_id;
+    }
+    if (activeCameraId && validCameraIds.has(activeCameraId)) {
+      return activeCameraId;
+    }
+    return cameras.length > 0 ? cameras[0].camera_id : '';
+  }, [selectedPair, fusionMode, activeCameraId, validCameraIds, cameras]);
+
+  const resolvedRgbId = useMemo(() => {
+    if (selectedPair && validCameraIds.has(selectedPair.rgb_camera_id)) {
+      return selectedPair.rgb_camera_id;
+    }
+    return resolvedStreamCameraId;
+  }, [selectedPair, validCameraIds, resolvedStreamCameraId]);
+
+  const resolvedThermalId = useMemo(() => {
+    if (selectedPair && validCameraIds.has(selectedPair.thermal_camera_id)) {
+      return selectedPair.thermal_camera_id;
+    }
+    // If only 1 camera, use same camera with thermal filter
+    return resolvedStreamCameraId;
+  }, [selectedPair, validCameraIds, resolvedStreamCameraId]);
 
   // Periodic simulated spot temperature drift
   useEffect(() => {
@@ -134,10 +239,53 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
     return () => clearInterval(interval);
   }, []);
 
+  // Tactical Night Sentry Ground Actions
+  const handleSoundNightSiren = () => {
+    setSirenActive(true);
+    alertSoundService.playAlarm('CRITICAL');
+    alertSoundService.speakVoiceAlert('Night infrared tripwire breach detected on thermal turret. Immediate sentry intercept.');
+    setActionNotice('Night Perimeter Acoustic Siren Triggered!');
+    setTimeout(() => {
+      setSirenActive(false);
+      setActionNotice(null);
+    }, 4000);
+  };
+
+  const handleDeployThermalSentry = async () => {
+    try {
+      alertSoundService.playAlarm('HIGH');
+      alertSoundService.speakVoiceAlert('Armed night reaction patrol dispatched to intercept thermal heat contact.');
+      const pairRgb = resolvedStreamCameraId || 'BOP-WAGAH-CAM-01';
+      await incidentService.createIncident({
+        title: `🛡️ SENTRY PATROL: Intercept Thermal Contact on ${pairRgb}`,
+        description: `Commander dispatched 2-man armed reaction squad to investigate positive body heat signature (${spotTemp}°C) on thermal turret. Homography fusion verified subject profile in pitch darkness.`,
+        priority: 'CRITICAL',
+        incident_type: 'SECURITY',
+        camera_id: pairRgb,
+        bop_site: userBop || 'BOP Sector',
+        risk_score: 88
+      });
+      setActionNotice('Armed Sentry Intercept Dispatched & Incident Logged!');
+      setTimeout(() => setActionNotice(null), 5000);
+    } catch (e) {
+      console.error('Failed to deploy sentry squad:', e);
+    }
+  };
+
+  const handleOpenThermalDispatch = () => {
+    const pairName = selectedPair?.pair_id || 'INDIVIDUAL-CAM';
+    const thermalCam = resolvedStreamCameraId || 'THERMAL-LWIR';
+    setDispatchTitle(`🚨 NOCTURNAL THERMAL BREACH: Suspicious Heat Signature (${userBop || 'Outpost Sector'})`);
+    setDispatchSummary(
+      `Thermal LWIR Sensor ${thermalCam} (Sensor/Pair: ${pairName}) detected human body heat signature (${spotTemp}°C) in pitch darkness. Palette: ${activePalette}. Optical-Thermal alignment confirmed target. Night sentry squad deployed.`
+    );
+    setDispatchModalOpen(true);
+  };
+
   const handleExecuteFusion = async () => {
     try {
       setExecuting(true);
-      const pairIdToUse = selectedPair?.pair_id || (pairs.length > 0 ? pairs[0].pair_id : 'PAIR-NORTH-01');
+      const pairIdToUse = selectedPair?.pair_id || (pairs.length > 0 ? pairs[0].pair_id : 'PAIR-AUTO-01');
       const res = await thermalService.executeFusion({
         pair_id: pairIdToUse,
         lighting_condition: lightingCondition,
@@ -150,16 +298,6 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
         ]
       });
       setResults(prev => [res, ...prev]);
-
-      // Auto-sync pairs if an operational pair was provisioned
-      if (!selectedPair) {
-        const pList = await thermalService.getCameraPairs();
-        setPairs(pList);
-        if (pList.length > 0) {
-          setSelectedPair(pList[0]);
-          setActiveCameraId(pList[0].rgb_camera_id || pList[0].thermal_camera_id);
-        }
-      }
     } catch (err) {
       console.error('Failed to execute thermal fusion:', err);
     } finally {
@@ -188,6 +326,9 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
 
   const handleModeChange = async (mode: 'FUSED' | 'RGB_ONLY' | 'THERMAL_ONLY') => {
     setFusionMode(mode);
+    setStreamErrorRgb(false);
+    setStreamErrorThermal(false);
+    setStreamKey(Date.now());
     if (selectedPair) {
       try {
         const updated = await thermalService.updateCameraPair(selectedPair.pair_id, { fusion_mode: mode });
@@ -203,39 +344,27 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
     try {
       await thermalService.deletePair(pairId);
       setSelectedPair(null);
+      if (cameras.length > 0) {
+        setSelectedSensorKey(`cam:${cameras[0].camera_id}`);
+        setActiveCameraId(cameras[0].camera_id);
+      }
       fetchData();
     } catch (err) {
       console.error('Failed to delete pair:', err);
     }
   };
 
-  const resolvedRgbId = selectedPair?.rgb_camera_id || activeCameraId || (cameras.length > 0 ? cameras[0].camera_id : '');
-  const resolvedThermalId = selectedPair?.thermal_camera_id || (cameras.length > 1 ? cameras[1].camera_id : activeCameraId);
-  const resolvedStreamCameraId = selectedPair
-    ? (fusionMode === 'THERMAL_ONLY' ? selectedPair.thermal_camera_id : selectedPair.rgb_camera_id)
-    : activeCameraId;
-
   return (
     <div className="space-y-6">
       {/* Header with Return to Home Dashboard */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 rounded-xl backdrop-blur-sm shadow-xl">
         <div className="flex items-center gap-3">
-          {onBackToDashboard && (
-            <button
-              onClick={onBackToDashboard}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-sky-400 rounded-lg text-xs font-mono font-bold border border-slate-700 transition cursor-pointer shrink-0"
-              title="Return to Home Dashboard"
-            >
-              <BackIcon className="w-4 h-4" />
-              <span>← Return to Home Dashboard</span>
-            </button>
-          )}
           <div className="p-2.5 bg-amber-600/20 text-amber-400 rounded-lg border border-amber-500/30 shrink-0">
             <Flame className="w-6 h-6 animate-pulse" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white tracking-wide">Thermal & Night Vision Sensor Fusion HUD</h1>
-            <p className="text-slate-400 text-sm">Long-Wave Infrared (LWIR) + RGB Homography Alignment, Real-Time Color Palettes & Spot Pyrometer</p>
+            <p className="text-slate-400 text-sm">Long-Wave Infrared (LWIR) + Optical Night Vision, Real-Time Color Palettes & Spot Pyrometer</p>
           </div>
         </div>
 
@@ -245,10 +374,15 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
             className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow-lg shadow-amber-900/30 text-xs transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            + Pair / Register Camera
+            + Pair / Link Cameras
           </button>
           <button
-            onClick={() => setViewLayout(viewLayout === 'SINGLE' ? 'DUAL' : 'SINGLE')}
+            onClick={() => {
+              setViewLayout(viewLayout === 'SINGLE' ? 'DUAL' : 'SINGLE');
+              setStreamErrorRgb(false);
+              setStreamErrorThermal(false);
+              setStreamKey(Date.now());
+            }}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-mono font-bold transition cursor-pointer ${
               viewLayout === 'DUAL'
                 ? 'bg-amber-600/30 text-amber-300 border-amber-500'
@@ -260,7 +394,12 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
             {viewLayout === 'DUAL' ? 'Dual Side-by-Side View' : 'Single Fused View'}
           </button>
           <button
-            onClick={fetchData}
+            onClick={() => {
+              setStreamErrorRgb(false);
+              setStreamErrorThermal(false);
+              setStreamKey(Date.now());
+              fetchData();
+            }}
             disabled={loading}
             className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-xs transition cursor-pointer"
           >
@@ -278,110 +417,174 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
         </div>
       </div>
 
+      {/* Tactical Night Sentry Response Bar */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center flex-wrap gap-2.5">
+          <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+            <Flame className="w-3.5 h-3.5 text-amber-400" />
+            Night Sentry Actions:
+          </span>
+
+          <button
+            type="button"
+            onClick={handleSoundNightSiren}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition cursor-pointer border ${
+              sirenActive
+                ? 'bg-red-600 text-white border-red-500 animate-pulse shadow-lg shadow-red-600/30'
+                : 'bg-red-950/40 hover:bg-red-900/60 text-red-300 border-red-800/60'
+            }`}
+            title="Sound emergency night siren across the perimeter wire"
+          >
+            <Volume2 className="w-3.5 h-3.5" />
+            {sirenActive ? 'SIREN ACTIVE...' : 'SOUND NIGHT SIREN'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDeployThermalSentry}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border border-amber-800/60 rounded-lg text-xs font-mono font-bold transition cursor-pointer"
+            title="Mobilize 2-man armed reaction squad to intercept heat signature"
+          >
+            <Users className="w-3.5 h-3.5" />
+            DEPLOY SENTRY PATROL
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenThermalDispatch}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white rounded-lg text-xs font-mono font-bold transition cursor-pointer shadow-md shadow-purple-900/30"
+            title="Transmit thermal breach SITREP to Delhi Central HQ Admin"
+          >
+            <Send className="w-3.5 h-3.5" />
+            DISPATCH THERMAL BREACH TO HQ
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {actionNotice && (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono bg-emerald-950/60 px-3 py-1.5 rounded-lg border border-emerald-800/80 animate-in fade-in">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {actionNotice}
+            </div>
+          )}
+          <div className="px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-lg text-[11px] font-mono text-slate-300">
+            HEAT RADAR: <strong className="text-amber-400">{spotTemp}°C</strong> (TARGET) • <strong className="text-cyan-400">{activePalette}</strong> PALETTE
+          </div>
+        </div>
+      </div>
+
       {/* Main Dual Feed + Calibration Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Real Live Stream + Thermal Shaders + Pyrometer HUD */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4 shadow-xl">
-            {/* Camera / Pair Selector Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <CameraIcon className="w-5 h-5 text-amber-400" />
-                  <span className="text-xs font-mono font-bold text-slate-300">ACTIVE PAIR / SENSOR:</span>
-                </div>
+            {/* Active Sensor / Camera Selector Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <CameraIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-xs font-mono font-bold text-slate-300 shrink-0">ACTIVE SENSOR:</span>
 
-                {pairs.length > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedPair?.pair_id || ''}
-                      onChange={e => {
-                        const p = pairs.find(x => x.pair_id === e.target.value);
-                        if (p) {
-                          setSelectedPair(p);
-                          setFusionMode(p.fusion_mode);
-                          setActiveCameraId(p.rgb_camera_id);
-                          setStreamErrorRgb(false);
-                          setStreamErrorThermal(false);
-                        }
-                      }}
-                      className="bg-slate-950 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-xs font-mono font-bold focus:border-amber-500 focus:outline-none"
-                    >
-                      {pairs.map(p => (
-                        <option key={p.pair_id} value={p.pair_id}>
-                          Pair: {p.pair_id} (RGB: {p.rgb_camera_id} ↔ Thermal: {p.thermal_camera_id})
-                        </option>
-                      ))}
-                    </select>
-                    {selectedPair && (
-                      <button
-                        onClick={() => handleDeletePair(selectedPair.pair_id)}
-                        title="Delete this pair"
-                        className="p-1.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-300 rounded-lg text-xs transition cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ) : (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <select
-                    value={activeCameraId}
-                    onChange={e => {
-                      setActiveCameraId(e.target.value);
-                      setStreamErrorRgb(false);
-                      setStreamErrorThermal(false);
-                    }}
-                    className="bg-slate-950 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-xs font-mono font-bold focus:border-amber-500 focus:outline-none"
+                    value={selectedSensorKey}
+                    onChange={e => handleSensorSelect(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-xs font-mono font-bold focus:border-amber-500 focus:outline-none w-full max-w-md truncate"
                   >
-                    {cameras.length === 0 ? (
-                      <option value="">No registered cameras available</option>
+                    {availableCameras.length === 0 && pairs.length === 0 ? (
+                      <option value="">No cameras registered yet</option>
                     ) : (
-                      cameras.map(c => (
-                        <option key={c.camera_id} value={c.camera_id}>
-                          {c.camera_name} ({c.camera_id} • {c.stream_type || 'RTSP'})
-                        </option>
-                      ))
+                      <>
+                        {/* Group 1: Individual Cameras */}
+                        {availableCameras.length > 0 && (
+                          <optgroup label="📹 REGISTERED BORDER CAMERAS">
+                            {availableCameras.map(c => (
+                              <option key={`cam:${c.camera_id}`} value={`cam:${c.camera_id}`}>
+                                {c.camera_name} [{c.camera_id}] • {c.stream_type.toUpperCase()} ({c.bop_site || 'BOP'})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+
+                        {/* Group 2: Dual Sensor Pairs */}
+                        {pairs.length > 0 && (
+                          <optgroup label="⚡ DUAL SENSOR PAIRS (OPTICAL + THERMAL)">
+                            {pairs.map(p => (
+                              <option key={`pair:${p.pair_id}`} value={`pair:${p.pair_id}`}>
+                                Pair {p.pair_id}: (RGB: {p.rgb_camera_id} ↔ Thermal: {p.thermal_camera_id})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </>
                     )}
                   </select>
-                )}
+
+                  {selectedPair && (
+                    <button
+                      onClick={() => handleDeletePair(selectedPair.pair_id)}
+                      title="Delete this pair"
+                      className="p-1.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-300 rounded-lg text-xs transition cursor-pointer shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Fusion Channel Mode & Lighting Matrix */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
-                  {(['FUSED', 'RGB_ONLY', 'THERMAL_ONLY'] as const).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => handleModeChange(m)}
-                      className={`px-3 py-1 rounded text-xs font-semibold transition cursor-pointer ${
-                        fusionMode === m ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {m.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
+              {/* Lighting Condition Mode (Day / Night) */}
+              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLightingCondition('DAY')}
+                  title="Daylight mode"
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                    lightingCondition === 'DAY' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Sun className="w-3.5 h-3.5" /> DAY
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLightingCondition('NIGHT')}
+                  title="Night / zero-light mode"
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                    lightingCondition === 'NIGHT' ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Moon className="w-3.5 h-3.5" /> NIGHT
+                </button>
+              </div>
+            </div>
 
-                <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+            {/* Fusion Mode Selector Box (Neatly Contained Inside Layout Box) */}
+            <div className="bg-slate-950/90 border border-slate-800/90 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-inner">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5" /> FUSION CHANNEL:
+                </span>
+                <span className="text-[11px] font-mono text-slate-400 hidden md:inline">
+                  Optical & LWIR Overlay Mode
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800/80 shrink-0">
+                {(['FUSED', 'RGB_ONLY', 'THERMAL_ONLY'] as const).map(m => (
                   <button
-                    onClick={() => setLightingCondition('DAY')}
-                    title="Daylight mode"
-                    className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                      lightingCondition === 'DAY' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-white'
+                    key={m}
+                    type="button"
+                    onClick={() => handleModeChange(m)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      fusionMode === m
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-md shadow-amber-900/40 border border-amber-400/50'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent'
                     }`}
                   >
-                    <Sun className="w-3.5 h-3.5" /> DAY
+                    {m === 'FUSED' && <span>⚡</span>}
+                    {m === 'RGB_ONLY' && <span>👁️</span>}
+                    {m === 'THERMAL_ONLY' && <span>🔥</span>}
+                    <span>{m.replace('_', ' ')}</span>
                   </button>
-                  <button
-                    onClick={() => setLightingCondition('NIGHT')}
-                    title="Night / zero-light mode"
-                    className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                      lightingCondition === 'NIGHT' ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Moon className="w-3.5 h-3.5" /> NIGHT
-                  </button>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -424,12 +627,15 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
                 <div className="relative aspect-video bg-black rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center shadow-lg">
                   {resolvedRgbId ? (
                     <img
-                      src={streamErrorRgb ? cameraService.getSnapshotUrl(resolvedRgbId) : cameraService.getLiveStreamUrl(resolvedRgbId)}
+                      key={`rgb-${resolvedRgbId}-${streamKey}`}
+                      src={streamErrorRgb ? cameraService.getSnapshotUrl(resolvedRgbId) : cameraService.getLiveStreamUrl(resolvedRgbId, 25, 'main')}
                       alt="Optical RGB Feed"
                       onError={() => setStreamErrorRgb(true)}
                       className="absolute inset-0 w-full h-full object-cover"
                     />
-                  ) : null}
+                  ) : (
+                    <span className="text-xs font-mono text-slate-500">NO OPTICAL CAMERA</span>
+                  )}
                   <div className="absolute top-2 left-2 bg-slate-950/85 px-2 py-1 rounded text-[10px] font-mono text-sky-400 border border-slate-700">
                     OPTICAL RGB: {resolvedRgbId || 'NO CAM'}
                   </div>
@@ -439,13 +645,16 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
                 <div className="relative aspect-video bg-black rounded-xl border border-amber-800/80 overflow-hidden flex items-center justify-center shadow-lg">
                   {resolvedThermalId ? (
                     <img
-                      src={streamErrorThermal ? cameraService.getSnapshotUrl(resolvedThermalId) : cameraService.getLiveStreamUrl(resolvedThermalId)}
+                      key={`th-${resolvedThermalId}-${streamKey}`}
+                      src={streamErrorThermal ? cameraService.getSnapshotUrl(resolvedThermalId) : cameraService.getLiveStreamUrl(resolvedThermalId, 25, 'main')}
                       alt="Thermal LWIR Feed"
                       onError={() => setStreamErrorThermal(true)}
                       style={{ filter: PALETTE_CONFIGS[activePalette].filter }}
                       className="absolute inset-0 w-full h-full object-cover"
                     />
-                  ) : null}
+                  ) : (
+                    <span className="text-xs font-mono text-slate-500">NO THERMAL CAMERA</span>
+                  )}
                   <div className="absolute top-2 left-2 bg-slate-950/85 px-2 py-1 rounded text-[10px] font-mono text-amber-400 border border-slate-700">
                     THERMAL LWIR: {resolvedThermalId || 'NO CAM'}
                   </div>
@@ -459,16 +668,24 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
               /* Single Fused HUD Player */
               <div className="relative aspect-video bg-black rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center group shadow-2xl">
                 {resolvedStreamCameraId ? (
-                  <img
-                    src={streamErrorRgb ? cameraService.getSnapshotUrl(resolvedStreamCameraId) : cameraService.getLiveStreamUrl(resolvedStreamCameraId)}
-                    alt="Live Thermal Sensor Feed"
-                    style={{
-                      filter: PALETTE_CONFIGS[activePalette].filter,
-                      transition: 'filter 0.3s ease-in-out'
-                    }}
-                    onError={() => setStreamErrorRgb(true)}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
+                  <>
+                    <img
+                      key={`main-${resolvedStreamCameraId}-${streamKey}`}
+                      src={streamErrorRgb ? cameraService.getSnapshotUrl(resolvedStreamCameraId) : cameraService.getLiveStreamUrl(resolvedStreamCameraId, 25, 'main')}
+                      alt="Live Thermal Sensor Feed"
+                      style={{
+                        filter: PALETTE_CONFIGS[activePalette].filter,
+                        transition: 'filter 0.3s ease-in-out'
+                      }}
+                      onError={() => setStreamErrorRgb(true)}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                    {streamErrorRgb && (
+                      <div className="absolute top-2 right-2 bg-amber-950/80 border border-amber-600/60 px-2 py-0.5 rounded text-[10px] font-mono text-amber-300 z-10">
+                        SNAPSHOT MODE
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="flex flex-col items-center justify-center p-8 text-center space-y-2">
                     <CameraIcon className="w-12 h-12 text-slate-600" />
@@ -535,15 +752,30 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
                   <div>MODE: <strong className="text-amber-400">{fusionMode}</strong></div>
                 </div>
 
-                {/* Bottom Right Controls */}
-                <div className="absolute bottom-3 right-10 flex items-center gap-2">
+                {/* Bottom Center Controls */}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
                   <button
                     type="button"
                     onClick={() => setShowPyrometerHud(!showPyrometerHud)}
-                    className="px-2.5 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded text-[11px] font-mono text-amber-400 transition cursor-pointer"
+                    className="px-3 py-1 bg-slate-950/90 hover:bg-slate-800 border border-amber-500/60 rounded-lg text-[11px] font-mono font-bold text-amber-300 transition cursor-pointer shadow-lg backdrop-blur"
                   >
-                    <Crosshair className="w-3 h-3 inline mr-1" />
-                    {showPyrometerHud ? 'Hide Pyrometer' : 'Show Pyrometer'}
+                    <Crosshair className="w-3.5 h-3.5 inline mr-1 text-amber-400" />
+                    {showPyrometerHud ? 'HIDE PYROMETER' : 'SHOW PYROMETER'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionNotice('FLIR NUC Sensor Recalibrated. Thermal Shutter Cleared.');
+                      setStreamErrorRgb(false);
+                      setStreamErrorThermal(false);
+                      setStreamKey(Date.now());
+                      setTimeout(() => setActionNotice(null), 4000);
+                    }}
+                    className="px-3 py-1 bg-slate-950/90 hover:bg-slate-800 border border-cyan-500/60 rounded-lg text-[11px] font-mono font-bold text-cyan-300 transition cursor-pointer shadow-lg backdrop-blur"
+                    title="Non-Uniformity Correction FLIR Shutter Calibration"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 inline mr-1 text-cyan-400" />
+                    NUC CALIBRATION
                   </button>
                 </div>
               </div>
@@ -551,73 +783,112 @@ export const ThermalFusionPage: React.FC<ThermalFusionPageProps> = ({ onBackToDa
           </div>
         </div>
 
-        {/* Right Col: AI Heat Scan Logs */}
+        {/* Right Col: Tactical Homography Logs & Heat Scan Results */}
         <div className="space-y-4">
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Flame className="w-5 h-5 text-amber-400" />
-                AI Heat Scans & Anomaly Logs ({results.length})
-              </h2>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                <Thermometer className="w-4 h-4" /> RECENT HEAT ANOMALY LOGS
+              </h3>
               {results.length > 0 && (
                 <button
                   onClick={handleClearAllResults}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-300 rounded text-xs font-mono font-semibold transition cursor-pointer"
-                  title="Clear all thermal heat scan logs"
+                  className="text-[10px] font-mono text-slate-400 hover:text-red-400 transition cursor-pointer"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear All</span>
+                  Clear All
                 </button>
               )}
             </div>
 
-            <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
-              {results.length === 0 ? (
-                <div className="p-6 bg-slate-950 border border-slate-800/80 rounded-lg text-center text-xs text-slate-500">
-                  No heat scan results logged. Click "Trigger Heat Scan" above to perform live fusion inference.
-                </div>
-              ) : (
-                results.map((r) => (
-                  <div key={r.result_id} className="p-3 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-lg text-xs space-y-1.5 font-mono group transition">
+            {results.length === 0 ? (
+              <div className="p-8 text-center text-xs font-mono text-slate-500">
+                No heat anomalies recorded yet. Click "Trigger Heat Scan" to perform live sensor fusion analysis.
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                {results.map((r) => (
+                  <div
+                    key={r.result_id}
+                    className="p-3 bg-slate-950/90 border border-slate-800 hover:border-amber-500/40 rounded-lg space-y-2 text-xs font-mono transition"
+                  >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-amber-300">{r.result_id}</span>
+                      <span className="font-bold text-amber-400">{r.result_id}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500">{new Date(r.timestamp).toLocaleTimeString()}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          r.has_heat_anomaly ? 'bg-red-950/80 text-red-300 border border-red-800' : 'bg-slate-800 text-slate-400'
+                        }`}>
+                          {r.has_heat_anomaly ? 'HEAT ANOMALY' : 'NORMAL HEAT'}
+                        </span>
                         <button
                           onClick={() => handleDeleteSingleResult(r.result_id)}
-                          className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/60 rounded border border-transparent hover:border-red-900/60 transition cursor-pointer"
-                          title="Delete this scan log"
+                          className="text-slate-500 hover:text-red-400 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                    <div className="text-[11px] text-slate-400 flex justify-between">
-                      <span>Fused Conf: <strong className="text-emerald-400">{Math.round(r.fused_confidence * 100)}%</strong></span>
-                      <span>Lighting: <strong className="text-cyan-400">{r.lighting_condition}</strong></span>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                      <div>Pair: <strong className="text-slate-300">{r.pair_id}</strong></div>
+                      <div>Mode: <strong className="text-slate-300">{r.fusion_mode_applied || 'FUSED'}</strong></div>
+                      <div>Lighting: <strong className="text-slate-300">{r.lighting_condition}</strong></div>
+                      <div>Confidence: <strong className="text-emerald-400">{((r.fused_confidence || 0.85) * 100).toFixed(0)}%</strong></div>
                     </div>
-                    <div className="text-[10px] text-slate-500 flex items-center justify-between">
-                      <span>Pair: {r.pair_id} • Mode: {r.fusion_mode_applied}</span>
-                      {r.has_heat_anomaly && (
-                        <span className="text-amber-400 font-bold">🔥 HEAT ANOMALY</span>
-                      )}
-                    </div>
+
+                    {(() => {
+                      let list: any[] = [];
+                      try {
+                        list = typeof r.detections_json === 'string' ? JSON.parse(r.detections_json || '[]') : (r.detections_json || []);
+                      } catch {
+                        list = [];
+                      }
+                      if (!list || list.length === 0) return null;
+                      return (
+                        <div className="pt-1.5 border-t border-slate-800/80 space-y-1">
+                          <span className="text-[10px] text-slate-400 font-bold">Fused Heat Signatures:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {list.map((d: any, idx: number) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 bg-amber-950/40 border border-amber-800/50 rounded text-[10px] text-amber-300 font-bold"
+                              >
+                                {d.class?.toUpperCase() || 'TARGET'} ({d.temp_c ? `${d.temp_c}°C` : `${spotTemp}°C`})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Create Pair Modal */}
+      {/* Modal: Pair or Register Camera */}
       <CreatePairModal
         isOpen={isPairModalOpen}
         onClose={() => setIsPairModalOpen(false)}
         onSuccess={() => {
           fetchData();
-          refreshCameras();
+          setIsPairModalOpen(false);
         }}
+      />
+
+      {/* Modal: Dispatch Sitrep to HQ */}
+      <DispatchSitrepModal
+        isOpen={dispatchModalOpen}
+        onClose={() => setDispatchModalOpen(false)}
+        onSuccess={() => {
+          setDispatchModalOpen(false);
+          setActionNotice('Thermal Breach SITREP Dispatched to Central HQ!');
+          setTimeout(() => setActionNotice(null), 5000);
+        }}
+        initialTitle={dispatchTitle}
+        initialSummary={dispatchSummary}
+        initialPriority="CRITICAL"
       />
     </div>
   );

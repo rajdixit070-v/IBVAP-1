@@ -107,5 +107,11 @@ export const behaviourService = {
   async getAnalyticsSummary(): Promise<BehaviourAnalyticsSummary> {
     const response = await api.get<BehaviourAnalyticsSummary>('/behaviour/analytics/summary');
     return response.data;
+  },
+
+  // Tactical Simulation
+  async simulateBehaviourEvent(data: { category?: string; camera_id?: string; zone_name?: string }): Promise<BehaviourEvent> {
+    const response = await api.post<BehaviourEvent>('/behaviour/events/simulate', data);
+    return response.data;
   }
 };

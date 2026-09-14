@@ -21,7 +21,11 @@ import {
   BellRing,
   Lock,
   Car,
-  Rocket
+  Rocket,
+  Maximize2,
+  Minimize2,
+  HeartPulse,
+  Compass
 } from 'lucide-react';
 import { multimodalService } from '../../services/multimodalService';
 import { alertSoundService } from '../../services/alertSoundService';
@@ -61,12 +65,40 @@ const QUERY_CATEGORIES: QueryCategory[] = [
     icon: Sparkles,
     color: 'text-amber-400 border-amber-500/30 bg-amber-950/20',
     queries: [
-      'System status aur live fleet health report dikhao',
-      'Project ka overview aur operational architecture kya hai?',
-      'Sabhi 17 operational modules ka kya use hai?',
-      'Admin ka kya kaam hai aur kaise use kare?',
-      'Officer ka kya kaam hai aur kaise use kare?',
-      'Kaise run krege starting se?'
+      'Commander kaise appoint karein aur checkpost kaise banayein?',
+      'Checkpost ke Latitude & Longitude coordinates kaise dalein?',
+      'System Health Center me kya kya features hain?',
+      'HQ monitoring aur real-time incident sync kaise hota hai?',
+      'Live fleet status aur database telemetry report dikhao',
+      'Default admin aur officer login password kya hai?',
+      'Camera kaise add karege RTSP stream se?',
+      'Project ka overview aur architecture kya hai?'
+    ]
+  },
+  {
+    id: 'checkpost',
+    label: '🏛️ Commander & Checkpost',
+    icon: Compass,
+    color: 'text-emerald-400 border-emerald-500/30 bg-emerald-950/20',
+    queries: [
+      'Commander kaise appoint karein aur checkpost kaise banayein?',
+      'Checkpost ke Latitude & Longitude coordinates kaise dalein?',
+      'Checkpost Defense Priority SLA (Critical/High/Normal) kya hai?',
+      'Frontier sectors (Punjab, Rajasthan, Sikkim) kaise assign karein?',
+      'Checkpost Tactical GIS Border Map par kaise pin hoti hai?'
+    ]
+  },
+  {
+    id: 'health',
+    label: '🩺 System Health Center',
+    icon: HeartPulse,
+    color: 'text-cyan-400 border-cyan-500/30 bg-cyan-950/20',
+    queries: [
+      'System Health Center me kya kya features hain?',
+      'Operational Alert Banner me offline camera ya checkpost warning kaise aati hai?',
+      'Evidence Video Storage aur recording buffer days kitne bache hain?',
+      'HQ Stream link latency aur packet loss report dikhao',
+      'System Health score (/100) kaise calculate hota hai?'
     ]
   },
   {
@@ -173,8 +205,8 @@ const QUERY_CATEGORIES: QueryCategory[] = [
     color: 'text-pink-400 border-pink-500/30 bg-pink-950/20',
     queries: [
       'Starting se project run aur access kaise karein?',
-      'System CPU, RAM, GPU aur AI Model Engines status kaise check karein?',
-      'Database dummy data purge / clean kaise karein?'
+      'Default admin aur officer credentials kya hain?',
+      'System Health Center me real-time monitoring kaise dekhein?'
     ]
   }
 ];
@@ -184,11 +216,11 @@ const INITIAL_WELCOME: ChatMessage = {
   role: 'assistant',
   text: `👋 **Jai Hind, Commander!** I am your Tactical AI Copilot.
 
-Aap **HQ Admin** ya **Field Officer** kisi bhi role ke anusaar platform ke kisi bhi module, live telemetry, cameras, drone fleet, thermal vision, GIS layers, voice alerts ya forensic evidence ke bare me kuch bhi puch sakte hain.
+Aap **Checkpost Commander Appointment**, **GPS Latitude/Longitude Coordinates**, **System Health Center**, **HQ Monitoring**, **Cameras**, **Drone Patrols**, **Thermal Palettes**, **GIS Layers**, **Audio Siren Alerts**, ya **Forensic Evidence** ke baare me platform se related koi bhi sawal puch sakte hain.
 
 💡 *Neeche di gayi categories me se direct question select karein ya apna custom question niche type karein:*`,
   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  safety_notice: 'Zero-trust verified intelligence copilot. Read-only database citations & tactical workflows.'
+  safety_notice: 'Zero-trust verified intelligence copilot. Real-time production database citations & mission guidance.'
 };
 
 export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
@@ -202,6 +234,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const [activeCategory, setActiveCategory] = useState<string>('top');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -294,7 +327,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
 
     setSpeakingId(msgId);
     alertSoundService.speakVoiceAlert(text);
-    // Reset speaking indicator after rough duration
     const words = text.split(' ').length;
     const durationMs = Math.min(30000, Math.max(3000, words * 320));
     setTimeout(() => {
@@ -307,34 +339,46 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const currentCategoryData = QUERY_CATEGORIES.find((c) => c.id === activeCategory) || QUERY_CATEGORIES[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 md:p-6 animate-in fade-in duration-150">
-      <div className="bg-[#0b101c] border border-cyan-500/30 rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl shadow-cyan-950/60 overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400 shadow-sm">
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in">
+      {/* Right-Side Slide-Over Drawer Container */}
+      <div
+        className={`h-full flex flex-col bg-[#0b101c] border-l border-cyan-500/40 shadow-2xl shadow-cyan-950/80 transition-all duration-300 ${
+          isExpanded ? 'w-full max-w-4xl' : 'w-full sm:w-[500px] md:w-[560px]'
+        }`}
+      >
+        {/* Header Bar */}
+        <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400 shadow-sm">
               <Bot className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white tracking-wide">
+                <h3 className="text-sm font-black text-white tracking-wide">
                   IBVAP Tactical AI Copilot
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-bold">
-                  ADMIN & OFFICER COPILOT
+                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-bold">
+                  RIGHT-SIDE COPILOT
                 </span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Multi-Domain Tactical Intelligence, Operational Guidance & Instant Telemetry
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Instant Mission Guidance, Telemetry & Operational Workflow Intelligence
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              title={isExpanded ? "Dock to Right Side" : "Expand View"}
+              className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded-lg transition cursor-pointer"
+            >
+              {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
             <button
               onClick={handleResetChat}
               title="Reset conversation"
-              className="p-2 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded-lg transition cursor-pointer"
+              className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded-lg transition cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -345,7 +389,8 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 }
                 onClose();
               }}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+              title="Close Copilot"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -361,18 +406,18 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             >
               {msg.role === 'assistant' && (
                 <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow ${
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow ${
                     msg.isError
                       ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                       : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                   }`}
                 >
-                  {msg.isError ? <AlertTriangle className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                  {msg.isError ? <AlertTriangle className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
                 </div>
               )}
 
               <div
-                className={`max-w-[88%] rounded-2xl p-4 space-y-3 leading-relaxed shadow-lg ${
+                className={`max-w-[88%] rounded-2xl p-3.5 space-y-2.5 leading-relaxed shadow-lg ${
                   msg.role === 'user'
                     ? 'bg-gradient-to-br from-cyan-600 to-sky-700 text-white rounded-tr-none'
                     : msg.isError
@@ -444,7 +489,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 {msg.results && msg.results.length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-slate-800">
                     <div className="text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-wider">
-                      Verified Matching Threat Events ({msg.results.length})
+                      Verified Threat Events ({msg.results.length})
                     </div>
                     <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                       {msg.results.map((ev) => (
@@ -497,8 +542,8 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
               </div>
 
               {msg.role === 'user' && (
-                <div className="w-8 h-8 rounded-xl bg-sky-600/30 text-sky-200 border border-sky-500/40 flex items-center justify-center shrink-0 mt-0.5 shadow">
-                  <User className="w-4 h-4" />
+                <div className="w-7 h-7 rounded-xl bg-sky-600/30 text-sky-200 border border-sky-500/40 flex items-center justify-center shrink-0 mt-0.5 shadow">
+                  <User className="w-3.5 h-3.5" />
                 </div>
               )}
             </div>
@@ -507,12 +552,12 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           {/* Loading Indicator */}
           {loading && (
             <div className="flex gap-3 items-start">
-              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center justify-center shrink-0 animate-pulse">
-                <Bot className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center justify-center shrink-0 animate-pulse">
+                <Bot className="w-3.5 h-3.5" />
               </div>
-              <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl rounded-tl-none p-3.5 shadow-lg flex items-center gap-3 text-cyan-400 font-mono text-xs">
-                <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
-                <span>Analyzing tactical telemetry, cameras & synthesizing verified operational guidance...</span>
+              <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl rounded-tl-none p-3 shadow-lg flex items-center gap-2.5 text-cyan-400 font-mono text-xs">
+                <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                <span>Analyzing mission query & synthesizing verified operational guidance...</span>
               </div>
             </div>
           )}
@@ -521,7 +566,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         </div>
 
         {/* Categorized Suggested Questions Section */}
-        <div className="bg-slate-900/95 border-t border-slate-800 p-2.5 space-y-2 shrink-0">
+        <div className="bg-slate-900/95 border-t border-slate-800 p-2 space-y-2 shrink-0">
           {/* Category Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
             {QUERY_CATEGORIES.map((cat) => {
@@ -531,13 +576,13 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer border ${
+                  className={`px-2 py-1 rounded-lg text-[10px] font-mono font-medium flex items-center gap-1 whitespace-nowrap transition cursor-pointer border ${
                     isActive
                       ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
                       : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:text-slate-200 hover:bg-slate-700/80'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-3 h-3" />
                   <span>{cat.label}</span>
                 </button>
               );
@@ -551,10 +596,10 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 key={idx}
                 onClick={() => handleSearch(qText)}
                 disabled={loading}
-                className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-950/80 hover:bg-cyan-950/40 active:bg-cyan-900/60 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-200 whitespace-nowrap transition-all cursor-pointer shrink-0 disabled:opacity-50 flex items-center gap-1.5 group shadow-sm"
+                className="text-[10px] px-2.5 py-1.5 rounded-lg bg-slate-950/80 hover:bg-cyan-950/40 active:bg-cyan-900/60 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-200 whitespace-nowrap transition-all cursor-pointer shrink-0 disabled:opacity-50 flex items-center gap-1.5 group shadow-sm font-sans"
               >
-                <span className="text-cyan-400 font-mono text-[10px] group-hover:translate-x-0.5 transition">›</span>
-                <span>{qText}</span>
+                <span className="text-cyan-400 font-mono text-[9px] group-hover:translate-x-0.5 transition">›</span>
+                <span className="truncate max-w-[280px]">{qText}</span>
               </button>
             ))}
           </div>
@@ -570,24 +615,24 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             className="flex gap-2"
           >
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
               <input
                 ref={inputRef}
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ask any question (Admin or Officer) e.g. 'How to add camera?', 'Thermal palettes', 'System health'..."
+                placeholder="Ask any question (e.g. 'Commander appoint', 'GPS coordinates', 'System health')..."
                 disabled={loading}
-                className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-sans"
+                className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-sans"
               />
             </div>
             <button
               type="submit"
               disabled={loading || !query.trim()}
-              className="px-5 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 shadow-lg shadow-cyan-900/30 transition-all cursor-pointer shrink-0"
+              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 shadow-lg shadow-cyan-900/30 transition-all cursor-pointer shrink-0"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Ask Copilot</span>
+              <span className="hidden sm:inline">Ask</span>
             </button>
           </form>
         </div>

@@ -8,6 +8,8 @@ export interface User {
   scope_type?: string;
   scope_id?: string;
   scope_role?: string;
+  post_name?: string;
+  sector?: string;
 }
 
 export interface AuthResponse {
@@ -18,5 +20,7 @@ export interface AuthResponse {
   scope_type?: string;
   scope_id?: string;
   scope_role?: string;
+  post_name?: string;
+  sector?: string;
 }
 

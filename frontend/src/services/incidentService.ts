@@ -24,6 +24,20 @@ export const incidentService = {
     return response.data;
   },
 
+  async escalateAlert(alertId: string, reason?: string): Promise<Alert> {
+    const response = await api.post<Alert>(`/alerts/${alertId}/escalate`, {
+      reason: reason || 'Escalated by Central HQ SOC'
+    });
+    return response.data;
+  },
+
+  async resolveAlert(alertId: string, notes?: string): Promise<Alert> {
+    const response = await api.post<Alert>(`/alerts/${alertId}/resolve`, {
+      notes: notes || 'Threat contained and resolved'
+    });
+    return response.data;
+  },
+
   async deleteAlert(alertId: string): Promise<any> {
     const response = await api.delete(`/alerts/${alertId}`);
     return response.data;

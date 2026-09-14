@@ -196,6 +196,23 @@ class ByteTracker:
         self.lost_stracks: List[STrack] = []
         self.frame_id = 0
 
+    def update_params(
+        self,
+        track_thresh: Optional[float] = None,
+        match_thresh: Optional[float] = None,
+        max_lost_frames: Optional[int] = None,
+        max_history: Optional[int] = None
+    ):
+        """Dynamically tunes ByteTrack tracking parameters on the fly."""
+        if track_thresh is not None:
+            self.track_thresh = float(track_thresh)
+        if match_thresh is not None:
+            self.match_thresh = float(match_thresh)
+        if max_lost_frames is not None:
+            self.max_lost_frames = int(max_lost_frames)
+        if max_history is not None:
+            self.max_history = int(max_history)
+
     def update(self, detections: List[Dict[str, Any]]) -> List[STrack]:
         """
         Updates the tracker with detections for the current frame.

@@ -13,8 +13,10 @@ export interface Officer {
   scope_type: string;
   scope_id: string;
   post_name: string;
+  sector?: string;
   scope_role: string;
   assigned_by?: string;
+  full_name?: string;
 }
 
 export interface OfficerCreate {
@@ -24,7 +26,12 @@ export interface OfficerCreate {
   role: string;
   post_scope_id: string;
   post_scope_type?: string;
+  post_name?: string;
+  sector?: string;
   full_name?: string;
+  latitude?: number;
+  longitude?: number;
+  operational_priority?: string;
 }
 
 export interface OfficerUpdate {
@@ -33,6 +40,7 @@ export interface OfficerUpdate {
   is_active?: boolean;
   post_scope_id?: string;
   post_scope_type?: string;
+  sector?: string;
 }
 
 export const userService = {

@@ -1,15 +1,16 @@
 import React from 'react';
 import { Camera } from '../../types/camera';
 import { StatusBadge } from '../common/StatusBadge';
-import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin } from 'lucide-react';
+import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin, Sliders, Flame, Server } from 'lucide-react';
 
 interface CameraTableProps {
   cameras: Camera[];
   onView: (camera: Camera) => void;
-  onEdit: (camera: Camera) => void;
-  onDelete: (camera: Camera) => void;
+  onEdit?: (camera: Camera) => void;
+  onDelete?: (camera: Camera) => void;
   onTest: (camera: Camera) => void;
   onLocate?: (camera: Camera) => void;
+  onConfigureAI?: (camera: Camera) => void;
 }
 
 export const CameraTable: React.FC<CameraTableProps> = ({
@@ -18,7 +19,8 @@ export const CameraTable: React.FC<CameraTableProps> = ({
   onEdit,
   onDelete,
   onTest,
-  onLocate
+  onLocate,
+  onConfigureAI
 }) => {
   return (
     <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl overflow-hidden shadow-xl">
@@ -52,7 +54,12 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                 let sourceClass = 'bg-sky-950/60 border-sky-500/30 text-sky-300';
                 let iconColor = 'text-sky-400';
 
-                if (st === 'webcam' || url.startsWith('webcam://')) {
+                if (st === 'nvr' || st === 'dvr' || url.includes('/Streaming/Channels/') || url.includes('channel=') || url.includes('/cam/realmonitor')) {
+                  SourceIcon = Server;
+                  sourceBadge = st === 'dvr' ? 'DVR' : 'NVR';
+                  sourceClass = 'bg-indigo-950/60 border-indigo-500/30 text-indigo-300';
+                  iconColor = 'text-indigo-400';
+                } else if (st === 'webcam' || url.startsWith('webcam://')) {
                   SourceIcon = Laptop;
                   sourceBadge = 'WEBCAM';
                   sourceClass = 'bg-cyan-950/60 border-cyan-500/30 text-cyan-300';
@@ -62,6 +69,16 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                   sourceBadge = 'DRONE';
                   sourceClass = 'bg-purple-950/60 border-purple-500/30 text-purple-300';
                   iconColor = 'text-purple-400';
+                } else if (st === 'thermal' || url.includes('thermal') || url.includes('/201')) {
+                  SourceIcon = Flame;
+                  sourceBadge = 'THERMAL';
+                  sourceClass = 'bg-amber-950/60 border-amber-500/30 text-amber-300';
+                  iconColor = 'text-amber-400';
+                } else if (st === 'ptz') {
+                  SourceIcon = Sliders;
+                  sourceBadge = 'PTZ';
+                  sourceClass = 'bg-blue-950/60 border-blue-500/30 text-blue-300';
+                  iconColor = 'text-blue-400';
                 } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
                   SourceIcon = Smartphone;
                   sourceBadge = 'ANDROID';
@@ -158,20 +175,33 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                       >
                         <Activity className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => onEdit(camera)}
-                        className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
-                        title="Edit Configuration"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => onDelete(camera)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition cursor-pointer"
-                        title="Delete Camera"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {onConfigureAI && (
+                        <button
+                          onClick={() => onConfigureAI(camera)}
+                          className="p-1.5 text-slate-400 hover:text-purple-400 hover:bg-slate-800 rounded transition cursor-pointer"
+                          title="Tune AI Object Detection & Thresholds"
+                        >
+                          <Sliders className="w-4 h-4" />
+                        </button>
+                      )}
+                      {onEdit && (
+                        <button
+                          onClick={() => onEdit(camera)}
+                          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
+                          title="Edit Configuration"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(camera)}
+                          className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition cursor-pointer"
+                          title="Delete Camera"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -1,3 +1,5 @@
+import { authService } from './authService';
+
 export class LiveFeedWebSocket {
   private ws: WebSocket | null = null;
   private cameraId: string;
@@ -17,7 +19,7 @@ export class LiveFeedWebSocket {
     if (this.isDestroyed) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const token = localStorage.getItem('ibvap_token');
+    const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const wsUrl = `${protocol}//${host}/api/v1/ws/live-feed/${this.cameraId}${tokenParam}`;
 
@@ -129,7 +131,7 @@ export class AlertsWebSocket {
     if (this.isDestroyed) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const token = localStorage.getItem('ibvap_token');
+    const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const wsUrl = `${protocol}//${host}/api/v1/ws/alerts${tokenParam}`;
 
@@ -140,6 +142,8 @@ export class AlertsWebSocket {
         try {
           const parsed = JSON.parse(event.data);
           this.onAlert(parsed);
+          window.dispatchEvent(new CustomEvent('ibvap:alert-received', { detail: parsed }));
+          window.dispatchEvent(new CustomEvent('ibvap:refresh-all'));
         } catch (e) {
           // ignore
         }

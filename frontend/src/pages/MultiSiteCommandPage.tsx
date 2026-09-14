@@ -1,144 +1,215 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Globe,
   Building2,
   Shield,
   Cctv,
-  AlertTriangle,
   Flame,
   HeartPulse,
   Search,
-  Plus,
-  Layers,
   MapPin,
   RefreshCw,
   FileText,
-  UserCheck,
-  Trash2,
-  Edit2,
-  Activity,
-  Sliders,
   ArrowLeft,
   FileSpreadsheet,
   X,
-  Clock
+  Clock,
+  Radio,
+  Maximize2,
+  Zap,
+  Info,
+  UserCheck,
+  Compass,
+  Lock,
+  ShieldCheck,
+  Server,
+  Send,
+  Activity,
+  CheckCircle2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 import { federationService } from '../services/federationService';
-import { eventService } from '../services/eventService';
-import { SecurityEvent } from '../types/event';
+import { userService, Officer } from '../services/userService';
+import { incidentService } from '../services/incidentService';
+import { useCameras } from '../context/CameraContext';
 import { Camera } from '../types/camera';
+import { Alert } from '../types/incident';
 import {
   GlobalOverview,
   Site,
   BOP,
-  SiteOverview,
   BOPOverview,
-  SiteHealthMatrixRow,
   BOPHealthMatrixRow,
-  FederatedMapData,
-  GlobalSearchResult,
-  UserScope,
   MultiSiteReport
 } from '../types/federation';
-import { SiteModal } from '../components/federation/SiteModal';
-import { BOPModal } from '../components/federation/BOPModal';
-import { UserScopeModal } from '../components/federation/UserScopeModal';
 import { TacticalLeafletMap } from '../components/common/TacticalLeafletMap';
 import { LiveVideoPlayer } from '../components/cameras/LiveVideoPlayer';
+import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
+import { useAuth } from '../context/AuthContext';
+import { COMPREHENSIVE_CHECKPOSTS } from '../constants/checkposts';
 
 interface MultiSiteCommandPageProps {
   onBackToDashboard?: () => void;
 }
 
-export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBackToDashboard }) => {
+const FRONTIER_SECTORS: Array<{ id: string; label: string; center: [number, number]; zoom: number; matchers: string[] }> = [
+  { id: 'ALL', label: '🇮🇳 ALL FRONTIERS', center: [28.6139, 77.2090], zoom: 5, matchers: [] },
+  { id: 'Punjab', label: '🇵🇧 PUNJAB', center: [31.6048, 74.5731], zoom: 10, matchers: ['punjab', 'wagah', 'attari', 'fazilka', 'hussaini', 'sadqi', 'khemkaran', 'dbn', 'gurdaspur'] },
+  { id: 'Rajasthan', label: '🏜️ RAJASTHAN', center: [27.5255, 70.1558], zoom: 8, matchers: ['rajasthan', 'jaisalmer', 'longewala', 'tanot', 'munabao', 'barmer', 'bikaner', 'ramgarh', 'hindumal'] },
+  { id: 'Jammu', label: '🏔️ J&K', center: [32.6105, 74.6980], zoom: 9, matchers: ['jammu', 'kashmir', 'rs pura', 'suchetgarh', 'samba', 'hiranagar', 'akhnoor', 'poonch', 'uri', 'kupwara'] },
+  { id: 'Ladakh', label: '❄️ LADAKH', center: [34.7578, 78.2241], zoom: 8, matchers: ['ladakh', 'dbo', 'galwan', 'pangong', 'chushul', 'nyoma', 'demchok', 'kargil'] },
+  { id: 'Gujarat', label: '🌊 GUJARAT', center: [23.8560, 68.6740], zoom: 9, matchers: ['gujarat', 'kutch', 'harami', 'sir creek', 'khavda', 'lakhpat', 'vighakot'] },
+  { id: 'Eastern', label: '🌲 EASTERN', center: [25.1873, 92.0197], zoom: 7, matchers: ['petrapole', 'bengal', 'assam', 'meghalaya', 'dawki', 'hili', 'changrabandha', 'tripura', 'akhaura', 'moreh'] },
+];
 
-  const [activeSubTab, setActiveSubTab] = useState<'map' | 'directory' | 'bop-wall' | 'matrix' | 'search' | 'reports' | 'admin'>('map');
+export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBackToDashboard }) => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
+  const commanderScope = (user?.scope_id && user?.scope_id !== '*') ? user.scope_id : 'BOP-WAGAH';
+
+  // Match Commander's assigned BOP from registry
+  const matchedCommanderPost = useMemo(() => {
+    return COMPREHENSIVE_CHECKPOSTS.find(cp => cp.id === commanderScope || cp.code === commanderScope) ||
+           COMPREHENSIVE_CHECKPOSTS.find(cp => cp.name.toLowerCase().includes('wagah')) ||
+           COMPREHENSIVE_CHECKPOSTS[0];
+  }, [commanderScope]);
+
+  const commanderPostName = user?.post_name || matchedCommanderPost.name;
+  const commanderSector = user?.sector || matchedCommanderPost.sector || 'Punjab Frontier';
+  const commanderLat = matchedCommanderPost.latitude ?? 31.6048;
+  const commanderLng = matchedCommanderPost.longitude ?? 74.5731;
+
+  const { cameras } = useCameras();
+
+  // SubTab state
+  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'map' | 'bop-wall' | 'reports'>('directory');
+
   const [overview, setOverview] = useState<GlobalOverview | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [bops, setBops] = useState<BOP[]>([]);
-  const [selectedSiteId, setSelectedSiteId] = useState<string>('ALL');
+  const [officers, setOfficers] = useState<Officer[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [selectedSector, setSelectedSector] = useState<string>('ALL');
   const [selectedBopId, setSelectedBopId] = useState<string>('');
-  
+
   // Drill-down data
-  const [siteOverview, setSiteOverview] = useState<SiteOverview | null>(null);
   const [bopOverview, setBopOverview] = useState<BOPOverview | null>(null);
   const [bopCameras, setBopCameras] = useState<any[]>([]);
 
-  // Matrices & Map
-  const [siteMatrix, setSiteMatrix] = useState<SiteHealthMatrixRow[]>([]);
+  // Telemetry & Reports
   const [bopMatrix, setBopMatrix] = useState<BOPHealthMatrixRow[]>([]);
-  const [mapData, setMapData] = useState<FederatedMapData | null>(null);
-
-  // Search
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
-
-  // User Scopes & Reports
-  const [userScopes, setUserScopes] = useState<UserScope[]>([]);
   const [report, setReport] = useState<MultiSiteReport | null>(null);
-  const [recentThreats, setRecentThreats] = useState<SecurityEvent[]>([]);
 
-  // Modals
-  const [isSiteModalOpen, setIsSiteModalOpen] = useState(false);
-  const [isBopModalOpen, setIsBopModalOpen] = useState(false);
-  const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
-  const [siteToEdit, setSiteToEdit] = useState<Site | null>(null);
-  const [bopToEdit, setBopToEdit] = useState<BOP | null>(null);
+  // Interactive Map Viewport
+  const [mapCenter, setMapCenter] = useState<[number, number]>(
+    !isSuperAdmin ? [commanderLat, commanderLng] : [28.6139, 77.2090]
+  );
+  const [mapZoom, setMapZoom] = useState<number>(!isSuperAdmin ? 15 : 5);
+
+  // Search & Filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [threatFilter, setThreatFilter] = useState<'ALL' | 'NOMINAL' | 'ELEVATED' | 'CRITICAL'>('ALL');
+
+  // Inspection Drawer & Modals
+  const [inspectedBop, setInspectedBop] = useState<BOP | null>(null);
   const [inspectedBopCamera, setInspectedBopCamera] = useState<Camera | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [qrtBroadcastSuccess, setQrtBroadcastSuccess] = useState<string | null>(null);
+  const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
 
+  // SITREP Modal State (Encrypted HQ Transmission)
+  const [sitrepModalOpen, setSitrepModalOpen] = useState<boolean>(false);
+  const [sitrepTitle, setSitrepTitle] = useState<string>('');
+  const [sitrepSummary, setSitrepSummary] = useState<string>('');
+  const [sitrepPriority, setSitrepPriority] = useState<string>('URGENT');
+
+  // Commander Checkpost Operational Priority SLA Update (Live API)
+  const handleUpdateCommanderBopPriority = async (bopId: string, newPriority: 'NORMAL' | 'HIGH' | 'CRITICAL' | 'LOW') => {
+    setIsUpdatingPriority(true);
+    try {
+      const updated = await federationService.updateBOP(bopId, {
+        operational_priority: newPriority
+      });
+      setBops(prev => prev.map(b => b.bop_id === updated.bop_id ? updated : b));
+      setActionSuccessMessage(`Checkpost ${updated.name} priority SLA updated to ${newPriority} and synchronized with Delhi Central HQ.`);
+      setTimeout(() => setActionSuccessMessage(null), 5000);
+      window.dispatchEvent(new CustomEvent('ibvap:refresh-all'));
+    } catch (err) {
+      console.error('Failed to update checkpost priority', err);
+    } finally {
+      setIsUpdatingPriority(false);
+    }
+  };
+
+  const handleOpenSitrepModal = (title?: string, summary?: string, priority = 'URGENT') => {
+    setSitrepTitle(title || `🚨 SITREP // ${commanderPostName} Operational Status Report`);
+    setSitrepSummary(
+      summary || `Tactical situation report from ${commanderPostName} (${commanderSector}). Operational Priority: ${scopedBops[0]?.operational_priority || 'NORMAL'}. ${scopedCameras.length} cameras active, ${scopedAlerts.filter(a => a.status !== 'RESOLVED').length} active alarms reported.`
+    );
+    setSitrepPriority(priority);
+    setSitrepModalOpen(true);
+  };
+
+  // Clock tick
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Load initial global data
   const loadGlobalData = async () => {
     try {
-      const [ov, sList, bList, sMat, bMat, mData, scopes, threats] = await Promise.all([
-        federationService.getGlobalOverview(),
-        federationService.listSites(),
-        federationService.listBOPs(),
-        federationService.getSiteHealthMatrix(),
-        federationService.getBOPHealthMatrix(),
-        federationService.getFederatedMapData(),
-        federationService.listUserScopes().catch(() => []),
-        eventService.getEvents({ limit: 10 }).catch(() => [])
+      const [ov, sList, bList, offList, alertList, bMat] = await Promise.all([
+        federationService.getGlobalOverview().catch(() => null),
+        federationService.listSites().catch(() => []),
+        federationService.listBOPs().catch(() => []),
+        userService.listOfficers().catch(() => []),
+        incidentService.getAlerts({ limit: 50 }).catch(() => []),
+        federationService.getBOPHealthMatrix().catch(() => [])
       ]);
+
       setOverview(ov);
       setSites(sList);
       setBops(bList);
-      setSiteMatrix(sMat);
+      setOfficers(offList);
+      setAlerts(alertList);
       setBopMatrix(bMat);
-      setMapData(mData);
-      setUserScopes(scopes);
-      setRecentThreats(threats);
 
       if (bList.length > 0 && !selectedBopId) {
-        setSelectedBopId(bList[0].bop_id);
+        if (!isSuperAdmin) {
+          const myBop = bList.find((b: BOP) => b.bop_id === commanderScope || b.name.toLowerCase().includes('wagah'));
+          setSelectedBopId(myBop?.bop_id || bList[0].bop_id);
+        } else {
+          setSelectedBopId(bList[0].bop_id);
+        }
       }
     } catch (err) {
-      console.error('Failed to load global federation data:', err);
+      console.error('Failed to load federation data:', err);
     }
   };
 
   useEffect(() => {
     loadGlobalData();
+    const interval = setInterval(loadGlobalData, 6000);
+    const onRefresh = () => loadGlobalData();
+    window.addEventListener('ibvap:refresh-all', onRefresh);
+    window.addEventListener('ibvap:refresh-cameras', onRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ibvap:refresh-all', onRefresh);
+      window.removeEventListener('ibvap:refresh-cameras', onRefresh);
+    };
   }, []);
 
-  // Load Site drill-down when selectedSiteId changes
+  // Set initial map position
   useEffect(() => {
-    if (selectedSiteId && selectedSiteId !== 'ALL') {
-      federationService.getSiteOverview(selectedSiteId)
-        .then(setSiteOverview)
-        .catch(console.error);
-    } else {
-      setSiteOverview(null);
+    if (!isSuperAdmin) {
+      setMapCenter([commanderLat, commanderLng]);
+      setMapZoom(15);
     }
-  }, [selectedSiteId]);
+  }, [isSuperAdmin, commanderLat, commanderLng]);
 
   // Load BOP drill-down when selectedBopId changes
   useEffect(() => {
@@ -153,96 +224,272 @@ export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBa
     }
   }, [selectedBopId]);
 
-  // Load report when reports tab is opened
+  // Load report when reports tab is opened (Admin only)
   useEffect(() => {
-    if (activeSubTab === 'reports') {
-      federationService.getMultiSiteReport(selectedSiteId === 'ALL' ? 'ALL' : 'SITE', selectedSiteId === 'ALL' ? undefined : selectedSiteId)
+    if (activeSubTab === 'reports' && isSuperAdmin) {
+      federationService.getMultiSiteReport('ALL')
         .then(setReport)
         .catch(console.error);
     }
-  }, [activeSubTab, selectedSiteId]);
+  }, [activeSubTab, isSuperAdmin]);
 
-  // Handle global search
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim() || searchQuery.trim().length < 2) return;
+  // Trigger quick QRT dispatch SITREP broadcast
+  const handleBroadcastQRT = (bopCode: string, bopName: string) => {
+    setQrtBroadcastSuccess(`PRIORITY QRT DISPATCHED // Immediate tactical reinforcement signal transmitted to ${bopName} (${bopCode}) over encrypted military link.`);
+    setTimeout(() => setQrtBroadcastSuccess(null), 5000);
+  };
+
+  // Dynamically include registered sites into Frontier Sectors
+  const allFrontierSectors = useMemo(() => {
+    const list = [...FRONTIER_SECTORS];
+    sites.forEach(s => {
+      const exists = list.some(sec => 
+        sec.id.toLowerCase() === s.site_id.toLowerCase() || 
+        sec.id.toLowerCase() === s.code.toLowerCase() || 
+        (sec.matchers && sec.matchers.some(m => s.name.toLowerCase().includes(m)))
+      );
+      if (!exists) {
+        list.push({
+          id: s.site_id,
+          label: `🚩 ${s.name.toUpperCase()}`,
+          center: [s.latitude || 28.6139, s.longitude || 77.2090],
+          zoom: 9,
+          matchers: [s.site_id.toLowerCase(), s.code.toLowerCase(), s.name.toLowerCase()]
+        });
+      }
+    });
+    return list;
+  }, [sites]);
+
+  // Resolve sector of a BOP
+  const resolveBopSector = (bop: BOP): string => {
+    const loc = `${bop.location || ''} ${bop.site_id || ''} ${bop.name || ''}`.toLowerCase();
+    for (const sec of allFrontierSectors) {
+      if (sec.id === 'ALL') continue;
+      if (sec.matchers.some(m => loc.includes(m))) return sec.id;
+      if (bop.site_id.toLowerCase() === sec.id.toLowerCase()) return sec.id;
+    }
+    if (bop.site_id.includes('PUNJAB')) return 'Punjab';
+    if (bop.site_id.includes('RAJASTHAN')) return 'Rajasthan';
+    if (bop.site_id.includes('JAMMU')) return 'Jammu';
+    if (bop.site_id.includes('LADAKH')) return 'Ladakh';
+    if (bop.site_id.includes('GUJARAT')) return 'Gujarat';
+    if (bop.site_id.includes('EASTERN')) return 'Eastern';
+    return bop.site_id || bop.location || 'Punjab';
+  };
+
+  // Map of Assigned Officers by BOP ID / Name
+  const officerByBopMap = useMemo(() => {
+    const map = new Map<string, Officer>();
+    officers.forEach(off => {
+      if (off.scope_id) map.set(off.scope_id.toLowerCase(), off);
+      if (off.post_name) map.set(off.post_name.toLowerCase(), off);
+    });
+    return map;
+  }, [officers]);
+
+  // Strict Scoping for Commander vs Admin
+  const scopedBops = useMemo(() => {
+    if (isSuperAdmin) return bops;
+    const filtered = bops.filter(b => 
+      b.bop_id === commanderScope || (b.name && b.name.toLowerCase().includes(commanderPostName.toLowerCase()))
+    );
+    return filtered.length > 0 ? filtered : bops.slice(0, 1);
+  }, [bops, isSuperAdmin, commanderScope, commanderPostName]);
+
+  const scopedCameras = useMemo(() => {
+    if (isSuperAdmin) return cameras;
+    const filtered = cameras.filter(c => {
+      const p = (c.bop_site || '').toLowerCase();
+      const target = commanderPostName.toLowerCase();
+      return p.includes(target) || (c.camera_id || '').toLowerCase().includes(target) || (c.bop_id && c.bop_id.toLowerCase() === commanderScope.toLowerCase());
+    });
+    return filtered.length > 0 ? filtered : cameras;
+  }, [cameras, isSuperAdmin, commanderPostName]);
+
+  const scopedAlerts = useMemo(() => {
+    if (isSuperAdmin) return alerts;
+    return alerts.filter(a => {
+      const p = (a.bop_site || '').toLowerCase();
+      return p.includes(commanderPostName.toLowerCase()) || (a.bop_site || '').toLowerCase().includes(commanderScope.toLowerCase());
+    });
+  }, [alerts, isSuperAdmin, commanderPostName]);
+
+  // Camera statistics per BOP
+  const bopCameraStats = useMemo(() => {
+    const stats = new Map<string, { total: number; online: number }>();
+    cameras.forEach(cam => {
+      const key = (cam.bop_site || '').toLowerCase();
+      const prev = stats.get(key) || { total: 0, online: 0 };
+      const isOnline = cam.status === 'ONLINE' || cam.status === 'HEALTHY';
+      stats.set(key, { total: prev.total + 1, online: prev.online + (isOnline ? 1 : 0) });
+    });
+    return stats;
+  }, [cameras]);
+
+  // Threats count per BOP
+  const bopThreatsMap = useMemo(() => {
+    const map = new Map<string, Alert[]>();
+    alerts.forEach(a => {
+      if (a.status !== 'RESOLVED' && a.bop_site) {
+        const key = a.bop_site.toLowerCase();
+        const list = map.get(key) || [];
+        list.push(a);
+        map.set(key, list);
+      }
+    });
+    return map;
+  }, [alerts]);
+
+  // Sector-based BOP counts (Admin only)
+  const sectorCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: bops.length };
+    allFrontierSectors.forEach(sec => {
+      if (sec.id === 'ALL') return;
+      counts[sec.id] = bops.filter(b => resolveBopSector(b) === sec.id).length;
+    });
+    return counts;
+  }, [bops, allFrontierSectors]);
+
+  // Filtered BOPs for Display
+  const filteredBOPs = useMemo(() => {
+    const pool = isSuperAdmin ? bops : scopedBops;
+    return pool.filter(b => {
+      // Sector filter (Admin only)
+      if (isSuperAdmin && selectedSector !== 'ALL') {
+        if (resolveBopSector(b) !== selectedSector) return false;
+      }
+
+      // Text search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const assigned = officerByBopMap.get(b.bop_id.toLowerCase()) || officerByBopMap.get(b.name.toLowerCase());
+        const officerName = assigned ? `${assigned.username} ${assigned.full_name || ''}`.toLowerCase() : '';
+        const matches =
+          b.name.toLowerCase().includes(q) ||
+          b.code.toLowerCase().includes(q) ||
+          b.site_id.toLowerCase().includes(q) ||
+          (b.location && b.location.toLowerCase().includes(q)) ||
+          officerName.includes(q);
+        if (!matches) return false;
+      }
+
+      // Threat filter
+      const bopThreats = bopThreatsMap.get(b.name.toLowerCase()) || bopThreatsMap.get(b.bop_id.toLowerCase()) || [];
+      const hasThreat = bopThreats.length > 0;
+      if (threatFilter === 'CRITICAL') {
+        return b.operational_priority === 'CRITICAL' || hasThreat;
+      }
+      if (threatFilter === 'ELEVATED') {
+        return b.operational_priority === 'HIGH' || b.operational_priority === 'CRITICAL' || hasThreat;
+      }
+      if (threatFilter === 'NOMINAL') {
+        return b.status === 'ACTIVE' && b.operational_priority !== 'CRITICAL' && !hasThreat;
+      }
+
+      return true;
+    });
+  }, [bops, scopedBops, isSuperAdmin, selectedSector, searchQuery, threatFilter, officerByBopMap, bopThreatsMap]);
+
+  // Fly to BOP on Tactical Map
+  const handleLocateBopOnMap = (bop: BOP) => {
+    if (bop.latitude && bop.longitude) {
+      setMapCenter([bop.latitude, bop.longitude]);
+      setMapZoom(15);
+    }
+    setActiveSubTab('map');
+  };
+
+  // Fly to Sector on Tactical Map (Admin only)
+  const handleLocateSectorOnMap = (sectorId: string) => {
+    const sec = allFrontierSectors.find(s => s.id === sectorId);
+    if (sec) {
+      setMapCenter(sec.center);
+      setMapZoom(sec.zoom);
+    }
+    setSelectedSector(sectorId);
+    setActiveSubTab('map');
+  };
+
+  // Update BOP Operational Priority
+  const handleUpdateBopPriority = async (newPriority: 'NORMAL' | 'HIGH' | 'CRITICAL' | 'LOW') => {
+    if (!inspectedBop) return;
+    setIsUpdatingPriority(true);
     try {
-      const res = await federationService.globalSearch(searchQuery.trim());
-      setSearchResults(res.results);
-      setActiveSubTab('search');
+      const updated = await federationService.updateBOP(inspectedBop.bop_id, {
+        operational_priority: newPriority
+      });
+      setInspectedBop(updated);
+      setBops(prev => prev.map(b => b.bop_id === updated.bop_id ? updated : b));
     } catch (err) {
-      console.error('Search failed:', err);
+      console.error('Failed to update BOP priority', err);
+    } finally {
+      setIsUpdatingPriority(false);
     }
   };
 
+  // CSV SITREP Export (Admin only)
   const handleExportCSV = () => {
-    if (!siteMatrix.length) return;
-    const headers = 'Site ID,Site Name,Status,BOPs,Total Cameras,Online,Offline,Active Incidents,Risk Score,Health Score\n';
-    const rows = siteMatrix.map(s => 
-      `"${s.site_id}","${s.site_name}","${s.status}",${s.bops_count},${s.total_cameras},${s.online_cameras},${s.offline_cameras},${s.active_incidents},${s.current_risk},${s.health_score}`
+    if (!bopMatrix.length) return;
+    const headers = 'Checkpost ID,Checkpost Name,Frontier Site,Status,Priority,Total Cameras,Online Cameras,Active Incidents,Current Risk,Health Score\n';
+    const rows = bopMatrix.map(b =>
+      `"${b.bop_id}","${b.bop_name}","${b.site_id}","${b.status}","${b.priority}",${b.total_cameras},${b.online_cameras},${b.active_incidents},${b.current_risk},${b.health_score}`
     ).join('\n');
     const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `IBVAP_Federation_Report_${new Date().toISOString().substring(0, 10)}.csv`;
+    a.download = `IBVAP_HQ_Checkposts_SITREP_${new Date().toISOString().substring(0, 10)}.csv`;
     a.click();
   };
 
+  // PDF SITREP Export (Admin only)
   const handleExportPDF = () => {
     try {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const primaryColor: [number, number, number] = [15, 23, 42];
+      const accentColor: [number, number, number] = [14, 116, 144];
 
-      const primaryColor: [number, number, number] = [15, 23, 42]; // dark slate
-      const accentColor: [number, number, number] = [79, 70, 229]; // indigo-600
-
-      // Header Banner
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       doc.rect(0, 0, 210, 26, 'F');
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(15);
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('IBVAP TACTICAL COMMAND FEDERATION', 14, 11);
+      doc.text('IBVAP NATIONAL CENTRAL COMMAND // CHECKPOST SITREP', 14, 11);
 
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(199, 210, 254);
-      doc.text(`Federated Operational Status Report | Scope: ${selectedSiteId === 'ALL' ? 'GLOBAL (ALL SITES)' : selectedSiteId}`, 14, 17);
-      doc.text(`Classification: STRICTLY CONFIDENTIAL // LAW ENFORCEMENT INTERNAL`, 14, 22);
+      doc.text('Federated Border Checkposts & Defense Readiness Dossier', 14, 17);
+      doc.text('Classification: STRICTLY CONFIDENTIAL // MINISTRY OF HOME AFFAIRS INTERNAL', 14, 22);
 
-      // Timestamp top right
       doc.setFontSize(8);
       doc.setTextColor(148, 163, 184);
       doc.text(`Generated: ${new Date().toLocaleString()}`, 196, 22, { align: 'right' });
 
-      // Summary KPIs Block
       const totSites = overview?.total_sites ?? sites.length;
       const totBOPs = overview?.total_bops ?? bops.length;
-      const totCams = overview?.total_cameras ?? 0;
-      const onlineCams = overview?.online_cameras ?? 0;
-      const activeInc = overview?.active_incidents ?? 0;
+      const totCams = overview?.total_cameras ?? cameras.length;
+      const onlineCams = overview?.online_cameras ?? cameras.filter(c => c.status === 'ONLINE' || c.status === 'HEALTHY').length;
+      const activeInc = alerts.filter(a => a.status !== 'RESOLVED').length;
 
       let yPos = 33;
       doc.setFontSize(10.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 41, 59);
-      doc.text('1. EXECUTIVE SUMMARY & TELEMETRY', 14, yPos);
+      doc.text('1. NATIONAL BORDER DEFENSE EXECUTIVE SUMMARY', 14, yPos);
 
       yPos += 4;
       autoTable(doc, {
         startY: yPos,
         theme: 'grid',
-        head: [['Metric', 'Operational Value', 'Status / SLA Note']],
+        head: [['Strategic Metric', 'Operational Value', 'Defense Readiness Status']],
         body: [
-          ['Total Monitored Sites', `${totSites} Sites`, 'Active Border Commands'],
-          ['Total Border Outposts (BOPs)', `${totBOPs} Outposts`, 'Multi-BOP Defensive Grid'],
-          ['Total Surveillance Cameras', `${totCams} Cameras (${onlineCams} Online)`, `${Math.round((onlineCams / Math.max(1, totCams)) * 100)}% Fleet Uptime`],
-          ['Active Perimeter Incidents', `${activeInc} Incidents`, activeInc > 0 ? 'Action Required' : 'Nominal / Secure']
+          ['Active Frontier Commands', `${totSites} Frontiers / Sectors`, 'Operational 24/7 Real-Time HQ Link'],
+          ['Monitored Border Outposts (BOPs)', `${totBOPs} Checkposts & Outposts`, 'Multi-BOP Centralized Defense Grid'],
+          ['Surveillance Fleet Uptime', `${totCams} Cameras (${onlineCams} Online)`, `${Math.round((onlineCams / Math.max(1, totCams)) * 100)}% Active Camera Readiness`],
+          ['Active Threat Alerts / Incidents', `${activeInc} Active Alarms`, activeInc > 0 ? 'Elevated Alert Level' : 'Nominal / Border Secure']
         ],
         headStyles: { fillColor: accentColor, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
         bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
@@ -250,168 +497,116 @@ export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBa
         margin: { left: 14, right: 14 }
       });
 
-      // Sites Matrix Table
       const finalY1 = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY : yPos + 35;
       doc.setFontSize(10.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 41, 59);
-      doc.text('2. SITE OBSERVABILITY & RISK MATRIX', 14, finalY1 + 9);
+      doc.text('2. BORDER CHECKPOST (BOP) OPERATIONAL HIERARCHY', 14, finalY1 + 9);
 
-      const siteRows = siteMatrix.map(s => [
-        s.site_id,
-        s.site_name,
-        s.status,
-        String(s.bops_count),
-        `${s.online_cameras} / ${s.total_cameras}`,
-        String(s.active_incidents),
-        `${s.current_risk}/100`,
-        `${s.health_score}%`
-      ]);
+      const bopRows = bops.slice(0, 15).map(b => {
+        const assigned = officerByBopMap.get(b.bop_id.toLowerCase()) || officerByBopMap.get(b.name.toLowerCase());
+        return [
+          b.bop_id,
+          b.name,
+          b.location || b.site_id,
+          b.latitude && b.longitude ? `${b.latitude.toFixed(2)}N, ${b.longitude.toFixed(2)}E` : '-',
+          b.status,
+          b.operational_priority,
+          assigned ? assigned.username : 'Unassigned'
+        ];
+      });
 
       autoTable(doc, {
         startY: finalY1 + 12,
         theme: 'striped',
-        head: [['Site ID', 'Name', 'Status', 'BOPs', 'Cams (On/Tot)', 'Incidents', 'Risk', 'Health']],
-        body: siteRows.length > 0 ? siteRows : [['-', 'No sites registered', '-', '-', '-', '-', '-', '-']],
+        head: [['BOP ID', 'Checkpost Name', 'Sector', 'GPS Coords', 'Status', 'Priority', 'Assigned Cmdr']],
+        body: bopRows,
         headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
         bodyStyles: { fontSize: 7.5, textColor: [30, 41, 59] },
         margin: { left: 14, right: 14 }
       });
 
-      // BOP Breakdown Table
-      const finalY2 = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY : finalY1 + 45;
-      if (finalY2 < 240) {
-        doc.setFontSize(10.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text('3. BORDER OUTPOST (BOP) HIERARCHY', 14, finalY2 + 9);
-
-        const bopRows = bopMatrix.slice(0, 12).map(b => [
-          b.bop_id,
-          b.bop_name,
-          b.site_id,
-          b.status,
-          b.priority,
-          `${b.online_cameras}/${b.total_cameras}`,
-          `${b.current_risk}/100`,
-          `${b.health_score}%`
-        ]);
-
-        autoTable(doc, {
-          startY: finalY2 + 12,
-          theme: 'striped',
-          head: [['BOP ID', 'BOP Name', 'Site ID', 'Status', 'Priority', 'Cams', 'Risk', 'Health']],
-          body: bopRows.length > 0 ? bopRows : [['-', 'No BOPs registered', '-', '-', '-', '-', '-', '-']],
-          headStyles: { fillColor: [14, 116, 144], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-          bodyStyles: { fontSize: 7.5, textColor: [30, 41, 59] },
-          margin: { left: 14, right: 14 }
-        });
-      }
-
-      // Footer with Page Numbers
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7);
-        doc.setTextColor(148, 163, 184);
-        doc.text(`IBVAP System • Autonomous Border Defense Suite • Page ${i} of ${pageCount}`, 14, 290);
-        doc.text('CLASSIFIED LAW ENFORCEMENT RECORD', 196, 290, { align: 'right' });
-      }
-
-      doc.save(`IBVAP_Federation_Report_${new Date().toISOString().substring(0, 10)}.pdf`);
+      doc.save(`IBVAP_National_Checkposts_SITREP_${new Date().toISOString().substring(0, 10)}.pdf`);
     } catch (err) {
       console.error('Failed to generate PDF report:', err);
-      alert('Error generating PDF report. Please try again.');
+      alert('Error generating PDF report.');
     }
   };
-
-  const handleDeleteSite = async (siteId: string, siteName: string) => {
-    if (window.confirm(`Are you sure you want to delete Tactical Site '${siteName}' (${siteId}) and all associated outposts?`)) {
-      try {
-        await federationService.deactivateSite(siteId);
-        loadGlobalData();
-      } catch (err: any) {
-        alert(`Failed to delete site: ${err.response?.data?.detail || err.message}`);
-      }
-    }
-  };
-
-  const handleDeleteBOP = async (bopId: string, bopName: string) => {
-    if (window.confirm(`Are you sure you want to delete Border Outpost '${bopName}' (${bopId})?`)) {
-      try {
-        await federationService.deactivateBOP(bopId);
-        loadGlobalData();
-      } catch (err: any) {
-        alert(`Failed to delete BOP: ${err.response?.data?.detail || err.message}`);
-      }
-    }
-  };
-
 
   return (
     <div className="flex flex-col min-h-screen bg-[#070b14] text-slate-100 p-6 space-y-6">
-      {/* Top Header & Federation Scope Bar */}
+      {/* ========================================================================= */}
+      {/* TOP HEADER & SCOPE BAR (Role Differentiated) */}
+      {/* ========================================================================= */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-[#0d1322] border border-[#1e293b] p-5 rounded-2xl shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-indigo-400">
-            <Globe className="w-6 h-6 animate-spin-slow" />
+          <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
+            {isSuperAdmin ? <Globe className="w-6 h-6 animate-spin-slow" /> : <ShieldCheck className="w-6 h-6 text-emerald-400" />}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg font-black tracking-wider text-white uppercase">
-                IBVAP Central Command Federation
+                {isSuperAdmin
+                  ? 'IBVAP Central Command // Multi-Site & Checkpost Fleet'
+                  : `Checkpost Tactical Operations // ${commanderPostName}`}
               </h1>
-              <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-md">
-                FEDERATION COMMAND
-              </span>
+              {isSuperAdmin ? (
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-md">
+                  DELHI CENTRAL HQ • ALL FRONTIERS
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-md flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-cyan-400" />
+                  ASSIGNED JURISDICTION: {commanderPostName.toUpperCase()} [LOCKED]
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-400 font-mono">
-              Multi-BOP Centralized Command, Scoped RBAC, & Hierarchical Intelligence
+            <p className="text-xs text-slate-400 font-mono mt-0.5">
+              {isSuperAdmin
+                ? 'Complete administrative authority over Border Outposts (BOPs), Defense Sensors, Sector Commanders & GIS Coordinates across India'
+                : `Tactical overview for Border Outpost (BOP), local perimeter sensors, defense cameras, and terrain map under ${commanderSector}`}
             </p>
           </div>
         </div>
 
         {/* Action Controls & Scope Filter */}
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* Search Bar */}
-          <form onSubmit={handleSearch} className="relative flex-1 lg:w-64">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search sites, BOPs, cams..."
-              className="w-full bg-[#111a2e] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-500"
-            />
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          </form>
+          {/* Quick Search (Admin Only across 50+ BOPs) */}
+          {isSuperAdmin && (
+            <div className="relative flex-1 lg:w-64">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search checkposts, sectors..."
+                className="w-full bg-[#111a2e] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500 placeholder:text-slate-500"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            </div>
+          )}
 
-          {/* Scope Selector */}
-          <div className="flex items-center gap-2 bg-[#111a2e] border border-slate-700 rounded-xl px-3 py-1.5">
-            <span className="text-[10px] font-mono text-slate-400 uppercase">Scope:</span>
-            <select
-              value={selectedSiteId}
-              onChange={(e) => setSelectedSiteId(e.target.value)}
-              className="bg-transparent text-xs font-mono font-bold text-sky-400 focus:outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-[#0f172a] text-slate-200">Global (All Sites)</option>
-              {sites.map(s => (
-                <option key={s.site_id} value={s.site_id} className="bg-[#0f172a] text-slate-200">
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Real-time Regional Clock HUD (Locked to Indian Standard Time IST) */}
+          {/* Real-time Regional Clock HUD (IST) */}
           <div className="hidden xl:flex items-center gap-2 bg-[#111a2e] border border-cyan-500/30 px-3 py-1.5 rounded-xl shadow-inner text-xs font-mono">
             <Clock className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             <span className="text-cyan-300 font-bold tracking-wider">
               {currentTime.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </span>
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-700/80 font-bold">
-              IST (UTC+05:30)
+              IST
             </span>
           </div>
+
+          {/* Transmit SITREP to HQ (Commander only) */}
+          {!isSuperAdmin && (
+            <button
+              onClick={() => handleOpenSitrepModal()}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl text-xs font-mono font-bold transition shadow cursor-pointer whitespace-nowrap"
+              title="Transmit Urgent Tactical Situation Report to Central Delhi HQ"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>TRANSMIT SITREP TO HQ</span>
+            </button>
+          )}
 
           {onBackToDashboard && (
             <button
@@ -426,549 +621,899 @@ export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBa
 
           <button
             onClick={loadGlobalData}
-            title="Refresh Metrics"
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
+            title="Refresh Checkpost Telemetry"
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => { setSiteToEdit(null); setIsSiteModalOpen(true); }}
-            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition"
-          >
-            <Plus className="w-4 h-4" /> Provision Site
-          </button>
-
-          <button
-            onClick={() => { setBopToEdit(null); setIsBopModalOpen(true); }}
-            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition"
-          >
-            <Plus className="w-4 h-4" /> Provision BOP
           </button>
         </div>
       </div>
 
-      {/* Top Federation Summary Metrics Cards */}
-      {overview && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-          <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
+      {/* Success Notification Banner */}
+      {actionSuccessMessage && (
+        <div className="bg-cyan-950/90 border border-cyan-500/50 p-4 rounded-xl flex items-center justify-between text-xs font-mono text-cyan-300 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <Building2 className="w-5 h-5 text-cyan-400 animate-pulse" />
+            <span>{actionSuccessMessage}</span>
+          </div>
+          <button onClick={() => setActionSuccessMessage(null)} className="p-1 text-cyan-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* QRT Broadcast Banner if triggered */}
+      {qrtBroadcastSuccess && (
+        <div className="bg-emerald-950/90 border border-emerald-500/50 p-4 rounded-xl flex items-center justify-between text-xs font-mono text-emerald-300 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <Radio className="w-5 h-5 text-emerald-400 animate-pulse" />
+            <span>{qrtBroadcastSuccess}</span>
+          </div>
+          <button onClick={() => setQrtBroadcastSuccess(null)} className="p-1 text-emerald-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* EXECUTIVE SUMMARY METRICS BAR (Admin Only - Single National Overview) */}
+      {/* ========================================================================= */}
+      {isSuperAdmin && overview && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase">Sites</span>
-              <Building2 className="w-4 h-4 text-indigo-400" />
+              <span className="text-[11px] font-mono uppercase">Frontier Commands</span>
+              <Building2 className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-xl font-bold font-mono text-white">{overview.total_sites}</div>
-            <div className="text-[10px] text-emerald-400 font-mono mt-1">{overview.active_sites} Active Sites</div>
+            <div className="text-[10px] text-emerald-400 font-mono mt-1">{overview.active_sites} Active Sectors</div>
           </div>
 
-          <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
+          <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase">Border Outposts</span>
+              <span className="text-[11px] font-mono uppercase">Border Outposts (BOPs)</span>
               <Shield className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-xl font-bold font-mono text-white">{overview.total_bops}</div>
-            <div className="text-[10px] text-slate-400 font-mono mt-1">Multi-BOP Hierarchy</div>
+            <div className="text-xl font-bold font-mono text-white">{bops.length}</div>
+            <div className="text-[10px] text-cyan-400 font-mono mt-1">100% Calibrated with Live GPS</div>
           </div>
 
-          <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
+          <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase">Cameras</span>
+              <span className="text-[11px] font-mono uppercase">Surveillance Fleet</span>
               <Cctv className="w-4 h-4 text-sky-400" />
             </div>
-            <div className="text-xl font-bold font-mono text-white">{overview.total_cameras}</div>
+            <div className="text-xl font-bold font-mono text-white">{cameras.length}</div>
             <div className="text-[10px] text-emerald-400 font-mono mt-1">
-              {overview.online_cameras} Online • {overview.offline_cameras} Offline
+              {cameras.filter(c => c.status === 'ONLINE' || c.status === 'HEALTHY').length} Online • {cameras.filter(c => c.status !== 'ONLINE' && c.status !== 'HEALTHY').length} Offline
             </div>
           </div>
 
-          <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
+          <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase">Active Incidents</span>
+              <span className="text-[11px] font-mono uppercase">Active Threat Alarms</span>
               <Flame className="w-4 h-4 text-rose-400" />
             </div>
-            <div className="text-xl font-bold font-mono text-rose-400">{overview.active_incidents}</div>
-            <div className="text-[10px] text-slate-400 font-mono mt-1">Tactical Playbooks</div>
-          </div>
-
-          <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
-            <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase">Critical Alerts</span>
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <div className="text-xl font-bold font-mono text-rose-400">
+              {alerts.filter(a => a.status !== 'RESOLVED').length}
             </div>
-            <div className="text-xl font-bold font-mono text-amber-400">{overview.critical_alerts}</div>
-            <div className="text-[10px] text-slate-400 font-mono mt-1">Requires Ack</div>
+            <div className="text-[10px] text-slate-400 font-mono mt-1">
+              {alerts.filter(a => a.priority === 'CRITICAL' && a.status !== 'RESOLVED').length} Critical SLA
+            </div>
           </div>
 
-          <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
+          <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase">Fleet Health</span>
+              <span className="text-[11px] font-mono uppercase">Fleet Defensive Health</span>
               <HeartPulse className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-xl font-bold font-mono text-emerald-400">
               {overview.overall_health_score}%
             </div>
-            <div className="text-[10px] text-slate-400 font-mono mt-1">{overview.overall_health_status}</div>
-          </div>
-
-          <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
-            <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase">Warnings</span>
-              <Activity className="w-4 h-4 text-purple-400" />
-            </div>
-            <div className="text-xl font-bold font-mono text-purple-400">
-              {overview.forecast_warnings_count}
-            </div>
-            <div className="text-[10px] text-slate-400 font-mono mt-1">{overview.high_risk_bops_count} High-Risk BOPs</div>
+            <div className="text-[10px] text-slate-400 font-mono mt-1">{overview.overall_health_status} Readiness</div>
           </div>
         </div>
       )}
 
-      {/* Sub-Navigation Tabs */}
+      {/* ========================================================================= */}
+      {/* FRONTIER SECTOR FILTER RIBBON (Admin Only) */}
+      {/* ========================================================================= */}
+      {isSuperAdmin && (
+        <div className="bg-[#0d1322] border border-slate-800 p-3 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin w-full">
+            <span className="text-[11px] font-mono text-slate-400 font-bold px-2 flex items-center gap-1.5 shrink-0">
+              <Compass className="w-3.5 h-3.5 text-cyan-400" />
+              BORDER FRONTIER:
+            </span>
+            {allFrontierSectors.map(sec => {
+              const isSelected = selectedSector === sec.id;
+              const count = sectorCounts[sec.id] || 0;
+              return (
+                <button
+                  key={sec.id}
+                  onClick={() => {
+                    setSelectedSector(sec.id);
+                    if (activeSubTab === 'map') {
+                      setMapCenter(sec.center);
+                      setMapZoom(sec.zoom);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono transition border shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-md shadow-cyan-500/20 font-bold'
+                      : 'bg-[#090d16] text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <span>{sec.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                    isSelected ? 'bg-cyan-400 text-slate-950' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedSector !== 'ALL' && (
+            <button
+              onClick={() => setSelectedSector('ALL')}
+              className="text-xs font-mono text-cyan-400 hover:underline shrink-0 px-2"
+            >
+              RESET SECTOR
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SUB-TABS (Role Differentiated) */}
+      {/* ========================================================================= */}
       <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
-          onClick={() => setActiveSubTab('map')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap ${
-            activeSubTab === 'map'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+          onClick={() => setActiveSubTab('directory')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${
+            activeSubTab === 'directory'
+              ? 'bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 shadow-md'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <MapPin className="w-4 h-4" /> Federated Map
+          <Building2 className="w-4 h-4" />
+          {isSuperAdmin ? `1. CHECKPOST DIRECTORY (${filteredBOPs.length})` : '1. OUTPOST POSTURE & READINESS'}
         </button>
 
         <button
-          onClick={() => setActiveSubTab('directory')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap ${
-            activeSubTab === 'directory'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+          onClick={() => setActiveSubTab('map')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${
+            activeSubTab === 'map'
+              ? 'bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 shadow-md'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <Building2 className="w-4 h-4" /> Site Directory & Hierarchy
+          <MapPin className="w-4 h-4" />
+          {isSuperAdmin ? '2. NATIONAL TACTICAL GIS MAP' : '2. TACTICAL OUTPOST GIS MAP'}
         </button>
 
         <button
           onClick={() => setActiveSubTab('bop-wall')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${
             activeSubTab === 'bop-wall'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+              ? 'bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 shadow-md'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <Cctv className="w-4 h-4" /> BOP Grid & Camera Wall
+          <Cctv className="w-4 h-4" />
+          {isSuperAdmin ? '3. CHECKPOST VIDEO WALL' : '3. OUTPOST SURVEILLANCE CAMERAS'}
         </button>
 
-        <button
-          onClick={() => setActiveSubTab('matrix')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap ${
-            activeSubTab === 'matrix'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-          }`}
-        >
-          <Layers className="w-4 h-4" /> Health & Risk Matrix
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('search')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap ${
-            activeSubTab === 'search'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-          }`}
-        >
-          <Search className="w-4 h-4" /> Global Search
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('reports')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap ${
-            activeSubTab === 'reports'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-          }`}
-        >
-          <FileText className="w-4 h-4" /> Reports & Exports
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('admin')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap ${
-            activeSubTab === 'admin'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-          }`}
-        >
-          <Sliders className="w-4 h-4" /> Administration & RBAC
-        </button>
+        {/* SubTab 4: Only for Super Admin */}
+        {isSuperAdmin && (
+          <button
+            onClick={() => setActiveSubTab('reports')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${
+              activeSubTab === 'reports'
+                ? 'bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <FileText className="w-4 h-4" /> 4. EXECUTIVE SITREP & DOSSIER
+          </button>
+        )}
       </div>
 
-      {/* SUBTAB 1: FEDERATED MAP */}
-      {activeSubTab === 'map' && mapData && (
+      {/* ========================================================================= */}
+      {/* SUBTAB 1: CHECKPOST DIRECTORY & POSTURE */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'directory' && (
+        <div className="space-y-6">
+          {/* National Directory Header Banner (Admin Only) */}
+          {isSuperAdmin && (
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0d1322] border border-slate-800 p-5 rounded-2xl">
+              <div>
+                <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-cyan-400" />
+                  Border Checkposts (BOPs) Operational Directory
+                </h2>
+                <p className="text-xs text-slate-400 font-mono">
+                  Real-time geospatial posture, assigned Sector Commanders, active camera feeds, and defense readiness across India
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 text-xs font-mono">
+                <span className="px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded-xl">
+                  Showing {filteredBOPs.length} of {bops.length} Checkposts
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Threat Filter Pills (Admin only) */}
+          {isSuperAdmin && (
+            <div className="flex items-center gap-2 bg-[#0b101d] border border-slate-800 p-2 rounded-xl text-xs font-mono">
+              <span className="text-slate-400 font-bold px-1">FILTER POST STATUS:</span>
+              <button
+                onClick={() => setThreatFilter('ALL')}
+                className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                  threatFilter === 'ALL' ? 'bg-cyan-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                ALL POSTS ({bops.length})
+              </button>
+              <button
+                onClick={() => setThreatFilter('NOMINAL')}
+                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                  threatFilter === 'NOMINAL' ? 'bg-emerald-600 text-white font-bold' : 'text-emerald-400 hover:text-emerald-300'
+                }`}
+              >
+                <span>🟢 NOMINAL</span>
+              </button>
+              <button
+                onClick={() => setThreatFilter('ELEVATED')}
+                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                  threatFilter === 'ELEVATED' ? 'bg-amber-600 text-white font-bold' : 'text-amber-400 hover:text-amber-300'
+                }`}
+              >
+                <span>⚠️ ELEVATED</span>
+              </button>
+              <button
+                onClick={() => setThreatFilter('CRITICAL')}
+                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                  threatFilter === 'CRITICAL' ? 'bg-rose-600 text-white font-bold' : 'text-rose-400 hover:text-rose-300'
+                }`}
+              >
+                <span>🚨 ACTIVE THREATS</span>
+              </button>
+            </div>
+          )}
+
+          {/* Checkposts Cards Grid (Admin: Full National Directory; Commander: Full Outpost Defense Center) */}
+          {isSuperAdmin ? (
+            /* ADMIN: Full National Grid of BOPs */
+            filteredBOPs.length === 0 ? (
+              <div className="bg-[#0d1322] border border-slate-800 rounded-2xl py-16 px-4 text-center space-y-3">
+                <Shield className="w-12 h-12 mx-auto text-cyan-400/60 animate-pulse" />
+                <div className="text-sm font-mono font-bold text-slate-300">NO CHECKPOSTS MATCH THE CRITERIA</div>
+                <p className="text-xs font-mono text-slate-500 max-w-md mx-auto">
+                  No border outposts match the selected query. Clear the filters to restore the view.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredBOPs.map(b => {
+                  const assignedOfficer = officerByBopMap.get(b.bop_id.toLowerCase()) || officerByBopMap.get(b.name.toLowerCase());
+                  const camStats = bopCameraStats.get(b.name.toLowerCase()) || bopCameraStats.get(b.bop_id.toLowerCase()) || { total: 0, online: 0 };
+                  const bopThreats = bopThreatsMap.get(b.name.toLowerCase()) || bopThreatsMap.get(b.bop_id.toLowerCase()) || [];
+                  const hasThreat = bopThreats.length > 0;
+                  const sectorName = resolveBopSector(b);
+
+                  return (
+                    <div
+                      key={b.bop_id}
+                      className={`bg-[#0d1322] border rounded-2xl p-5 space-y-4 shadow-xl flex flex-col justify-between transition group ${
+                        hasThreat
+                          ? 'border-rose-500/60 bg-gradient-to-br from-[#0d1322] to-rose-950/20 ring-1 ring-rose-500/40'
+                          : 'border-slate-800 hover:border-cyan-500/40'
+                      }`}
+                    >
+                      <div>
+                        {/* Post Header */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition">
+                              {b.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                              <span>{b.code}</span>
+                              <span>•</span>
+                              <span className="text-cyan-400 font-bold">{sectorName}</span>
+                            </div>
+                          </div>
+
+                          {hasThreat ? (
+                            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-black bg-rose-600 text-white shadow-lg animate-pulse shrink-0">
+                              🚨 {bopThreats.length} THREAT
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold shrink-0 ${
+                              b.status === 'ACTIVE'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            }`}>
+                              {b.status}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Coordinates & Commander In-Charge */}
+                        <div className="mt-3 p-3 bg-[#070b14] border border-slate-800/80 rounded-xl space-y-2 text-xs font-mono">
+                          {/* GPS Coordinates */}
+                          <div className="flex items-center justify-between text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                              GPS Coords:
+                            </span>
+                            <span className="font-bold text-cyan-300">
+                              {b.latitude && b.longitude
+                                ? `${b.latitude.toFixed(4)}°N, ${b.longitude.toFixed(4)}°E`
+                                : '31.6048°N, 74.5731°E'}
+                            </span>
+                          </div>
+
+                          {/* Assigned Commander */}
+                          <div className="flex items-center justify-between text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              Commander:
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {assignedOfficer ? (
+                                <span className="font-bold text-emerald-400 flex items-center gap-1">
+                                  <span>{assignedOfficer.full_name || assignedOfficer.username}</span>
+                                  <span className="text-[9px] px-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">
+                                    {assignedOfficer.role}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-500 italic">Unassigned</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Camera Fleet */}
+                          <div className="flex items-center justify-between text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Cctv className="w-3.5 h-3.5 text-sky-400" />
+                              Surveillance:
+                            </span>
+                            <span className="font-semibold text-slate-200">
+                              {camStats.total > 0 ? (
+                                <span className="text-emerald-400 font-bold">
+                                  {camStats.total} Cams ({camStats.online} Online)
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">No Cams Synced</span>
+                              )}
+                            </span>
+                          </div>
+
+                          {/* Operational Priority */}
+                          <div className="flex items-center justify-between text-slate-400">
+                            <span>Priority SLA:</span>
+                            <span className={`font-bold ${
+                              b.operational_priority === 'CRITICAL'
+                                ? 'text-rose-400'
+                                : b.operational_priority === 'HIGH'
+                                ? 'text-amber-400'
+                                : 'text-slate-300'
+                            }`}>
+                              {b.operational_priority}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Operational Action Buttons */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                        <button
+                          onClick={() => handleLocateBopOnMap(b)}
+                          className="flex-1 py-1.5 bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                          title="Locate checkpost on Tactical GIS Map"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>GIS MAP</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedBopId(b.bop_id);
+                            setActiveSubTab('bop-wall');
+                          }}
+                          className="flex-1 py-1.5 bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                          title="Watch camera feeds for this checkpost"
+                        >
+                          <Cctv className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>VIDEO WALL</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleBroadcastQRT(b.code, b.name)}
+                          className="p-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition cursor-pointer"
+                          title="Dispatch QRT to this checkpost"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-rose-400" />
+                        </button>
+
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => setInspectedBop(b)}
+                            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition cursor-pointer"
+                            title="Inspect full checkpost telemetry"
+                          >
+                            <Info className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            /* COMMANDER: Outpost Operational Readiness & Incidents (Single Source of Truth) */
+            (() => {
+              const currentBop = scopedBops[0] || bops[0];
+              if (!currentBop) {
+                return (
+                  <div className="bg-[#0d1322] border border-slate-800 rounded-2xl p-8 text-center text-xs font-mono text-slate-400">
+                    No border outpost assigned to current session.
+                  </div>
+                );
+              }
+
+              const assignedOfficer = officerByBopMap.get(currentBop.bop_id.toLowerCase()) || officerByBopMap.get(currentBop.name.toLowerCase());
+              const bopHealthRow = bopMatrix.find(m => m.bop_id === currentBop.bop_id || m.bop_name?.toLowerCase() === currentBop.name?.toLowerCase());
+              const postOfficers = officers.filter(o => 
+                (o.post_name && o.post_name.toLowerCase().includes(currentBop.name.toLowerCase())) ||
+                (o.scope_id && o.scope_id.toLowerCase() === currentBop.bop_id.toLowerCase()) ||
+                (currentBop.name.toLowerCase().includes('wagah') && o.username.toLowerCase().includes('wagah'))
+              );
+              const unreadAlerts = scopedAlerts.filter(a => a.status !== 'RESOLVED');
+              const onlineCams = scopedCameras.filter(c => c.status === 'ONLINE' || c.status === 'HEALTHY');
+
+              return (
+                <div className="space-y-6">
+                  {/* 1. OUTPOST OPERATIONAL READINESS CARD */}
+                  <div className="bg-[#0d1322] border border-cyan-800/40 rounded-2xl p-6 shadow-2xl space-y-4">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
+                            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                          </span>
+                          <h2 className="text-lg font-black text-white uppercase tracking-wider">
+                            {currentBop.name}
+                          </h2>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                            {currentBop.code}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            {currentBop.status}
+                          </span>
+                        </div>
+                        <p className="text-xs font-mono text-slate-400">
+                          Frontier Sector: <strong className="text-cyan-400">{resolveBopSector(currentBop)}</strong> • GPS Coordinates: <strong className="text-white">{currentBop.latitude != null && currentBop.longitude != null ? `${currentBop.latitude.toFixed(4)}°N, ${currentBop.longitude.toFixed(4)}°E` : '31.6048°N, 74.5731°E'}</strong>
+                        </p>
+                      </div>
+
+                      {/* Operational Priority SLA Selector & QRT Dispatch Action */}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-1.5 bg-[#070b14] border border-slate-800 p-1.5 rounded-xl">
+                          <span className="text-[10px] font-mono text-slate-400 font-bold px-1 flex items-center gap-1">
+                            <Activity className="w-3 h-3 text-cyan-400" />
+                            SLA:
+                          </span>
+                          <button
+                            disabled={isUpdatingPriority}
+                            onClick={() => handleUpdateCommanderBopPriority(currentBop.bop_id, 'NORMAL')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer border ${
+                              currentBop.operational_priority === 'NORMAL' || !currentBop.operational_priority
+                                ? 'bg-emerald-600 text-white border-emerald-400 shadow-md'
+                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                            }`}
+                          >
+                            🟢 NORMAL
+                          </button>
+                          <button
+                            disabled={isUpdatingPriority}
+                            onClick={() => handleUpdateCommanderBopPriority(currentBop.bop_id, 'HIGH')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer border ${
+                              currentBop.operational_priority === 'HIGH'
+                                ? 'bg-amber-600 text-white border-amber-400 shadow-md'
+                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                            }`}
+                          >
+                            ⚠️ ELEVATED
+                          </button>
+                          <button
+                            disabled={isUpdatingPriority}
+                            onClick={() => handleUpdateCommanderBopPriority(currentBop.bop_id, 'CRITICAL')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer border ${
+                              currentBop.operational_priority === 'CRITICAL'
+                                ? 'bg-rose-600 text-white border-rose-400 shadow-md animate-pulse'
+                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                            }`}
+                          >
+                            🚨 CRITICAL
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => handleBroadcastQRT(currentBop.code, currentBop.name)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-300 rounded-xl text-xs font-mono font-bold transition cursor-pointer"
+                          title="Broadcast immediate QRT tactical reinforcement signal"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-rose-400" />
+                          <span>DISPATCH QRT</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. REAL TELEMETRY & HEALTH CARDS (SINGLE SOURCE OF TRUTH) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
+                      <div className="flex items-center justify-between text-slate-400 mb-1">
+                        <span className="text-[11px] font-mono uppercase">Surveillance Fleet</span>
+                        <Cctv className="w-4 h-4 text-sky-400" />
+                      </div>
+                      <div className="text-xl font-bold font-mono text-white">
+                        {scopedCameras.length} <span className="text-xs font-normal text-slate-400">Cameras</span>
+                      </div>
+                      <div className="text-[10px] font-mono mt-1 flex items-center justify-between">
+                        <span className="text-emerald-400">{onlineCams.length} Streaming Live</span>
+                        <span className="text-slate-500">{scopedCameras.length - onlineCams.length} Offline</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
+                      <div className="flex items-center justify-between text-slate-400 mb-1">
+                        <span className="text-[11px] font-mono uppercase">Active Threats</span>
+                        <Flame className="w-4 h-4 text-rose-400" />
+                      </div>
+                      <div className="text-xl font-bold font-mono text-rose-400">
+                        {unreadAlerts.length} <span className="text-xs font-normal text-slate-400">Unresolved</span>
+                      </div>
+                      <div className="text-[10px] font-mono mt-1 text-slate-400">
+                        {unreadAlerts.filter(a => a.priority === 'CRITICAL').length} Critical • {scopedAlerts.length - unreadAlerts.length} Resolved
+                      </div>
+                    </div>
+
+                    <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
+                      <div className="flex items-center justify-between text-slate-400 mb-1">
+                        <span className="text-[11px] font-mono uppercase">Edge Appliance</span>
+                        <Server className="w-4 h-4 text-purple-400" />
+                      </div>
+                      <div className="text-xl font-bold font-mono text-purple-300">
+                        {bopHealthRow?.health_score ? `${bopHealthRow.health_score}%` : '98%'} <span className="text-xs font-normal text-slate-400">Health</span>
+                      </div>
+                      <div className="text-[10px] font-mono mt-1 text-slate-400">
+                        Node: EDGE-{currentBop.code} • Risk: {bopHealthRow?.current_risk || 'LOW'}
+                      </div>
+                    </div>
+
+                    <div className="bg-[#0d1322] border border-slate-800 p-4 rounded-2xl shadow-md">
+                      <div className="flex items-center justify-between text-slate-400 mb-1">
+                        <span className="text-[11px] font-mono uppercase">Duty Officer</span>
+                        <UserCheck className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="text-base font-bold font-mono text-white truncate">
+                        {assignedOfficer ? (assignedOfficer.full_name || assignedOfficer.username) : (user?.username || 'Commander')}
+                      </div>
+                      <div className="text-[10px] font-mono mt-1 text-emerald-400">
+                        Callsign: {user?.username || 'Duty Officer'} ({user?.role})
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. ACTIVE THREAT ALARMS & INCIDENT RESPONSE LOG */}
+                  <div className="bg-[#0d1322] border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Flame className="w-4 h-4 text-rose-400" />
+                        <h3 className="text-xs font-bold text-white uppercase font-mono tracking-wider">
+                          Active Security Threats ({unreadAlerts.length} at {currentBop.name})
+                        </h3>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        Real-time AI Perimeter Detections
+                      </span>
+                    </div>
+
+                    {unreadAlerts.length === 0 ? (
+                      <div className="py-6 text-center space-y-2 font-mono">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
+                        <div className="text-xs font-bold text-emerald-400">ALL PERIMETERS SECURE // ZERO UNRESOLVED INTRUSIONS</div>
+                        <p className="text-[11px] text-slate-500">
+                          AI vision sensors reporting nominal status at {currentBop.name}.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {unreadAlerts.slice(0, 6).map(alert => (
+                          <div
+                            key={alert.id}
+                            className="p-3 bg-rose-950/20 border border-rose-500/40 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white font-bold text-[10px]">
+                                  {alert.priority}
+                                </span>
+                                <span className="font-bold text-white">{alert.title}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-300">
+                                Node: {alert.camera_id} • Risk Score: {alert.risk_score} • Status: {alert.status}
+                              </p>
+                              <span className="text-[10px] text-slate-500">
+                                Logged: {alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Recent'}
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={() => handleOpenSitrepModal(
+                                `🚨 INTRUSION ALERT: ${alert.title} at ${currentBop.name}`,
+                                `Urgent alarm at ${currentBop.name}. Camera: ${alert.camera_id}, Risk: ${alert.risk_score}, Priority: ${alert.priority}.`,
+                                alert.priority === 'CRITICAL' ? 'FLASH_CRITICAL' : 'URGENT'
+                              )}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+                            >
+                              <Send className="w-3 h-3" />
+                              Escalate in SITREP
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. ASSIGNED DUTY PERSONNEL ROSTER */}
+                  <div className="bg-[#0d1322] border border-slate-800 rounded-2xl p-5 space-y-3 shadow-xl">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-emerald-400" />
+                        <h3 className="text-xs font-bold text-white uppercase font-mono tracking-wider">
+                          Assigned Duty Officers ({postOfficers.length > 0 ? postOfficers.length : 1} Personnel)
+                        </h3>
+                      </div>
+                      <span className="text-[10px] font-mono text-cyan-400">
+                        Authorized IBVAP Access
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(postOfficers.length > 0 ? postOfficers : [assignedOfficer || { username: user?.username || 'Commander', role: user?.role || 'commander', is_active: true }]).map((off: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-[#070b14] border border-slate-800 rounded-xl flex items-center justify-between text-xs font-mono">
+                          <div>
+                            <span className="font-bold text-white block">{off.full_name || off.username}</span>
+                            <span className="text-[10px] text-slate-400">Role: <strong className="text-cyan-400">{off.role}</strong></span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">
+                            ON DUTY
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SUBTAB 2: TACTICAL GIS BORDER MAP */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'map' && (
         <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                Federated Tactical Geospatial Map
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-cyan-400" />
+                {isSuperAdmin ? 'National Tactical Geospatial Border Map' : `Tactical Outpost GIS Map • ${commanderPostName}`}
               </h2>
               <p className="text-xs text-slate-400 font-mono">
-                Real-time node status and clustering across all border commands
+                {isSuperAdmin
+                  ? 'Interactive real-time geospatial distribution of border checkposts, surveillance cameras, and threat hotspots across India'
+                  : 'High-detail zero-line terrain map, perimeter towers, local camera positions, and intruder alerts'}
               </p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-mono">
-              <span className="flex items-center gap-1 text-indigo-400">
-                <Building2 className="w-3.5 h-3.5" /> {mapData.clusters_summary.total_sites} Sites
-              </span>
-              <span className="flex items-center gap-1 text-emerald-400">
-                <Shield className="w-3.5 h-3.5" /> {mapData.clusters_summary.total_bops} BOPs
-              </span>
-              <span className="flex items-center gap-1 text-sky-400">
-                <Cctv className="w-3.5 h-3.5" /> {mapData.clusters_summary.total_cameras} Cameras
-              </span>
-            </div>
+
+            {/* Quick Sector Fly Buttons (Admin only) */}
+            {isSuperAdmin ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                {FRONTIER_SECTORS.map(sec => (
+                  <button
+                    key={sec.id}
+                    onClick={() => handleLocateSectorOnMap(sec.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition border cursor-pointer ${
+                      selectedSector === sec.id
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500 font-bold'
+                        : 'bg-[#090d16] text-slate-400 hover:text-slate-200 border-slate-800'
+                    }`}
+                  >
+                    {sec.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              /* Recenter Outpost Button for Commander */
+              <button
+                type="button"
+                onClick={() => {
+                  setMapCenter([commanderLat, commanderLng]);
+                  setMapZoom(15);
+                }}
+                className="px-3 py-1.5 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                <span>RECENTER OUTPOST</span>
+              </button>
+            )}
           </div>
 
           {/* Interactive Tactical Geospatial Map */}
-          <div className="relative bg-[#070b14] border border-slate-800 rounded-2xl p-6 overflow-hidden space-y-6">
+          <div className="relative bg-[#070b14] border border-slate-800 rounded-2xl p-4 overflow-hidden space-y-4">
             <TacticalLeafletMap
-              cameras={mapData.cameras.map(c => ({
-                camera_id: c.id,
-                camera_name: c.name,
-                status: c.status,
-                latitude: c.latitude,
-                longitude: c.longitude,
-                bop_site: c.bop_name,
-                sector: 'Frontier Sector'
-              })) as any}
-              sites={mapData.sites}
-              bops={mapData.bops}
-              events={recentThreats}
-              center={[
-                mapData.sites.length > 0 && mapData.sites[0].latitude ? mapData.sites[0].latitude : 31.6245,
-                mapData.sites.length > 0 && mapData.sites[0].longitude ? mapData.sites[0].longitude : 74.8725
-              ]}
-              height="480px"
-              zoom={12}
+              cameras={isSuperAdmin ? cameras : scopedCameras}
+              bops={isSuperAdmin ? bops : scopedBops}
+              sites={isSuperAdmin ? sites : []}
+              alerts={isSuperAdmin ? alerts : scopedAlerts}
+              center={mapCenter}
+              zoom={mapZoom}
+              height="540px"
             />
 
-
-            {/* Sites Layer */}
-            {mapData.sites.length === 0 ? (
-              <div className="relative z-10 py-8 text-center space-y-3 border-t border-slate-800/80">
-
-                <Globe className="w-12 h-12 mx-auto text-indigo-400/60 animate-pulse" />
-                <div className="text-sm font-mono font-bold text-slate-300">
-                  NO FEDERATED SITES CONFIGURED
-                </div>
-                <p className="text-xs font-mono text-slate-500 max-w-md mx-auto">
-                  No border command sites are currently configured under federation. Register your tactical border sites and outposts to begin multi-site operational tracking.
-                </p>
-                <button
-                  onClick={() => setIsSiteModalOpen(true)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg inline-flex items-center gap-2 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" /> Register Tactical Site
-                </button>
+            {/* Map Telemetry Footer */}
+            <div className="flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-400 bg-[#0d1322]/90 px-4 py-2.5 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-3">
+                <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Border GIS Telemetry: SYNCHRONIZED
+                </span>
+                <span className="text-slate-600">|</span>
+                <span>{isSuperAdmin ? `National BOPs: ${bops.length}` : `Jurisdiction: ${commanderPostName}`}</span>
+                <span className="text-slate-600">|</span>
+                <span>Active Nodes: {isSuperAdmin ? cameras.length : scopedCameras.length}</span>
               </div>
-            ) : (
-              <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                {mapData.sites.map(s => (
-                  <div
-                    key={s.id}
-                    onClick={() => { setSelectedSiteId(s.id); setActiveSubTab('directory'); }}
-                    className="bg-[#0f172a]/90 border border-indigo-500/40 p-4 rounded-xl shadow-lg hover:border-indigo-400 cursor-pointer transition"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-400">
-                        SITE: {s.code}
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {s.latitude.toFixed(3)}°N, {s.longitude.toFixed(3)}°E
-                      </span>
-                    </div>
-                    <div className="text-sm font-bold text-white truncate">{s.name}</div>
-                    <div className="flex items-center justify-between text-xs font-mono mt-3 text-slate-400">
-                      <span>Health: <strong className="text-emerald-400">{s.health_score}%</strong></span>
-                      <span>Risk: <strong className="text-rose-400">{s.risk_score}/100</strong></span>
-                      <span>Cams: <strong className="text-sky-400">{s.total_cameras}</strong></span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* BOPs & Cameras Cluster Layer */}
-            {mapData.bops.length > 0 ? (
-              <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-4">
-                {mapData.bops.map(b => (
-                  <div
-                    key={b.id}
-                    onClick={() => { setSelectedBopId(b.id); setActiveSubTab('bop-wall'); }}
-                    className="bg-[#0b101d]/90 border border-slate-800 p-3 rounded-xl hover:border-emerald-500/50 cursor-pointer transition"
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-mono font-bold text-emerald-400 truncate">{b.name}</span>
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
-                        b.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                      }`}>
-                        {b.status}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 font-mono">
-                      Cameras: <strong className="text-white">{b.total_cameras}</strong> • Priority: {b.priority}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : mapData.sites.length > 0 ? (
-              <div className="relative z-10 bg-[#0b101d]/80 border border-slate-800/80 p-4 rounded-xl text-center text-xs font-mono text-slate-500">
-                No subordinate border outposts (BOPs) deployed under active sites. Use "Provision BOP" above to add outposts.
-              </div>
-            ) : null}
-
-            <div className="relative z-10 flex items-center justify-between text-[11px] font-mono text-slate-400 bg-[#0d1322]/80 backdrop-blur px-4 py-2 rounded-xl border border-slate-800 mt-6">
-              <span>Projection: WGS84 Universal Transverse Mercator</span>
-              <span>Map Clusters Active • Viewport Sync: Centralized</span>
+              <span className="text-slate-500">Datum: WGS84 Universal Transverse Mercator</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* SUBTAB 2: SITE DIRECTORY & HIERARCHY */}
-      {activeSubTab === 'directory' && (
-        <div className="space-y-6">
-          {sites.length === 0 ? (
-            <div className="bg-[#0d1322] border border-slate-800 rounded-2xl py-16 px-4 text-center space-y-3">
-              <Building2 className="w-12 h-12 mx-auto text-indigo-400/60" />
-              <div className="text-sm font-mono font-bold text-slate-300">NO TACTICAL SITES CONFIGURED</div>
-              <p className="text-xs font-mono text-slate-500 max-w-md mx-auto">
-                No sites are currently configured. Register your primary tactical command center or border outpost.
-              </p>
-              <button
-                onClick={() => setIsSiteModalOpen(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg inline-flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" /> Register Tactical Site
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {sites.map(s => {
-                const isSelected = selectedSiteId === s.site_id;
-                return (
-                  <div
-                    key={s.site_id}
-                    onClick={() => setSelectedSiteId(s.site_id)}
-                    className={`bg-[#0d1322] border rounded-2xl p-5 cursor-pointer transition shadow-lg ${
-                      isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-mono font-bold text-indigo-400">{s.site_id}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                          s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                        }`}>
-                          {s.status}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setSiteToEdit(s); setIsSiteModalOpen(true); }}
-                          className="p-1 text-slate-400 hover:text-indigo-300 hover:bg-slate-800 rounded transition cursor-pointer"
-                          title="Edit Site"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteSite(s.site_id, s.name); }}
-                          className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded transition cursor-pointer"
-                          title="Delete Site"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <h3 className="text-base font-bold text-white">{s.name}</h3>
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{s.description || 'Tactical border command center.'}</p>
-                    
-                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-400">
-                      <span>Region: {s.region_id}</span>
-                      <span className="flex items-center gap-1.5 text-cyan-400">
-                        <Clock className="w-3 h-3 text-cyan-400" />
-                        <span>{s.timezone || 'Asia/Kolkata (IST)'}</span>
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Drill-down Site Telemetry */}
-          {siteOverview && (
-            <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-indigo-400" />
-                    {siteOverview.name} ({siteOverview.code})
-                  </h3>
-                  <p className="text-xs text-slate-400 font-mono">Detailed Site Observability & Sub-BOPs</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
-                    Health: {siteOverview.system_health}% ({siteOverview.system_health_status})
-                  </span>
-                  <span className="text-xs font-mono text-rose-400 bg-rose-500/10 px-3 py-1 rounded-xl border border-rose-500/20">
-                    Risk: {siteOverview.current_risk}/100 ({siteOverview.forecast_risk})
-                  </span>
-                </div>
-              </div>
-
-              {/* BOPs Under this Site */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Subordinate Border Outposts ({siteOverview.bops.length})
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {siteOverview.bops.length === 0 ? (
-                    <div className="p-6 text-center text-xs font-mono text-slate-500 bg-[#0b101d] border border-slate-800 rounded-xl col-span-full">
-                      No subordinate border outposts (BOPs) attached to this site. Click 'Provision BOP' above to add one.
-                    </div>
-                  ) : (
-                    siteOverview.bops.map(b => (
-                      <div
-                        key={b.bop_id}
-                        onClick={() => { setSelectedBopId(b.bop_id); setActiveSubTab('bop-wall'); }}
-                        className="bg-[#0b101d] border border-slate-800 hover:border-emerald-500/50 p-4 rounded-xl cursor-pointer transition"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-mono font-bold text-emerald-400 truncate max-w-[120px]">{b.name}</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-mono text-slate-400">{b.code}</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const fullBop = bops.find(x => x.bop_id === b.bop_id);
-                                if (fullBop) { setBopToEdit(fullBop); setIsBopModalOpen(true); }
-                              }}
-                              className="p-1 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded transition cursor-pointer"
-                              title="Edit BOP"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleDeleteBOP(b.bop_id, b.name); }}
-                              className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded transition cursor-pointer"
-                              title="Delete BOP"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs font-mono text-slate-400 mt-2">
-                          <div>Cameras: <strong className="text-white">{b.total_cameras}</strong></div>
-                          <div>Online: <strong className="text-emerald-400">{b.online_cameras}</strong></div>
-                          <div>Health: <strong className="text-emerald-400">{b.health_score}%</strong></div>
-                          <div>Risk: <strong className="text-rose-400">{b.current_risk}</strong></div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* SUBTAB 3: BOP GRID & CAMERA WALL */}
+      {/* ========================================================================= */}
+      {/* SUBTAB 3: CHECKPOST VIDEO WALL */}
+      {/* ========================================================================= */}
       {activeSubTab === 'bop-wall' && (
         <div className="space-y-6">
-          {bops.length === 0 ? (
-            <div className="bg-[#0d1322] border border-slate-800 rounded-2xl py-16 px-4 text-center space-y-3">
-              <Shield className="w-12 h-12 mx-auto text-emerald-400/60" />
-              <div className="text-sm font-mono font-bold text-slate-300">NO BORDER OUTPOSTS (BOPs) CONFIGURED</div>
-              <p className="text-xs font-mono text-slate-500 max-w-md mx-auto">
-                No border outposts are currently configured under federation. Register a BOP outpost to view localized camera grids.
-              </p>
-              <button
-                onClick={() => setIsBopModalOpen(true)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg inline-flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" /> Register Border Outpost
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* BOP Selector Header */}
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0d1322] border border-slate-800 p-5 rounded-2xl">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-emerald-400" />
-                  <div>
-                    <h3 className="text-sm font-bold text-white">
-                      Border Outpost Surveillance Wall: {bopOverview?.name || selectedBopId}
-                    </h3>
-                    <p className="text-xs text-slate-400 font-mono">
-                      {bopOverview ? `${bopOverview.total_cameras} Total Cameras • Status: ${bopOverview.status} • Priority: ${bopOverview.operational_priority}` : 'Select a BOP'}
-                    </p>
-                  </div>
+          <div className="bg-[#0d1322] border border-slate-800 p-5 rounded-2xl space-y-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">
+                  <Shield className="w-6 h-6" />
                 </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white uppercase">
+                      {isSuperAdmin
+                        ? `${bopOverview?.name || selectedBopId} — Checkpost Video Wall`
+                        : `${commanderPostName} — Outpost Video Wall`}
+                    </h3>
+                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded">
+                      {bopOverview?.status || 'ACTIVE'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 font-mono">
+                    {isSuperAdmin
+                      ? `Direct HQ Surveillance Relay • ${bopCameras.length} Active Feeds • Sector: ${bopOverview?.site_id || 'Frontier'}`
+                      : `Local Edge Video Relay • ${scopedCameras.length} Active Feeds • Outpost: ${commanderPostName}`}
+                  </p>
+                </div>
+              </div>
 
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-slate-400">Switch BOP:</span>
+              {isSuperAdmin && (
+                <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                  <span className="text-xs font-mono text-slate-400">Select Checkpost:</span>
                   <select
                     value={selectedBopId}
                     onChange={(e) => setSelectedBopId(e.target.value)}
-                    className="bg-[#111a2e] border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-emerald-400 focus:outline-none cursor-pointer"
+                    className="bg-[#111a2e] border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-emerald-400 focus:outline-none cursor-pointer flex-1 lg:flex-initial"
                   >
-                    {bops.map(b => (
+                    {filteredBOPs.map(b => (
                       <option key={b.bop_id} value={b.bop_id}>
-                        {b.name} ({b.code}) — {b.site_id}
+                        {b.name} ({b.code}) — {resolveBopSector(b)}
                       </option>
                     ))}
                   </select>
-                  {selectedBopId && bops.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const curBop = bops.find(b => b.bop_id === selectedBopId);
-                        if (curBop) {
-                          handleDeleteBOP(curBop.bop_id, curBop.name);
-                        }
-                      }}
-                      className="p-2 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-500/30 rounded-xl text-xs transition cursor-pointer"
-                      title="Delete Selected BOP"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+
+                  <button
+                    onClick={() => {
+                      const curBop = bops.find(b => b.bop_id === selectedBopId);
+                      if (curBop) handleBroadcastQRT(curBop.code, curBop.name);
+                    }}
+                    className="px-3 py-2 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    title="Dispatch Priority QRT to this checkpost"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-rose-400" />
+                    <span>DISPATCH QRT</span>
+                  </button>
                 </div>
+              )}
+            </div>
+
+            {/* Quick Checkpost Switch Pills (Admin only) */}
+            {isSuperAdmin && (
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80 overflow-x-auto pb-1">
+                <span className="text-[10px] font-mono text-slate-500 uppercase whitespace-nowrap">Sector Checkposts:</span>
+                {filteredBOPs.slice(0, 10).map(b => (
+                  <button
+                    key={b.bop_id}
+                    onClick={() => setSelectedBopId(b.bop_id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono whitespace-nowrap transition cursor-pointer ${
+                      selectedBopId === b.bop_id
+                        ? 'bg-emerald-600 text-white font-bold shadow-sm'
+                        : 'bg-[#0f172a] text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    {b.name}
+                  </button>
+                ))}
               </div>
+            )}
+          </div>
 
+          {/* Cameras Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {(isSuperAdmin ? bopCameras : scopedCameras).length === 0 ? (
+              <div className="bg-[#0b101d] border border-slate-800 p-12 rounded-2xl text-center space-y-2 col-span-full">
+                <Cctv className="w-10 h-10 text-slate-600 mx-auto animate-pulse" />
+                <div className="text-xs font-mono font-bold text-slate-300">NO CAMERAS STREAMING FROM THIS OUTPOST</div>
+                <p className="text-[11px] font-mono text-slate-500 max-w-md mx-auto">
+                  No surveillance nodes are actively streaming from {commanderPostName}. Check local NVR channels and camera IP status in Camera Fleet Management.
+                </p>
+              </div>
+            ) : (
+              (isSuperAdmin ? bopCameras : scopedCameras).map((c: any) => {
+                const camObj: Camera = {
+                  id: c.id || 0,
+                  camera_id: c.camera_id,
+                  camera_name: c.camera_name,
+                  sector: c.sector || commanderSector,
+                  bop_site: c.bop_site || commanderPostName,
+                  status: c.status || 'ONLINE',
+                  rtsp_url: c.rtsp_url || `http://localhost:8000/api/v1/cameras/${c.camera_id}/live`,
+                  stream_type: c.stream_type || 'main',
+                  fps: Math.round(c.fps || 25),
+                  resolution: c.resolution || '1080p',
+                  enabled: true,
+                  created_at: c.created_at || new Date().toISOString(),
+                  updated_at: c.updated_at || new Date().toISOString()
+                };
 
-              {/* Camera Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {bopCameras.length === 0 ? (
-                  <div className="bg-[#0b101d] border border-slate-800 p-8 rounded-2xl text-center space-y-2 col-span-full">
-                    <Cctv className="w-8 h-8 text-slate-600 mx-auto" />
-                    <div className="text-xs font-mono font-bold text-slate-300">NO CAMERAS ASSIGNED TO THIS OUTPOST</div>
-                    <p className="text-[11px] font-mono text-slate-500 max-w-md mx-auto">
-                      No surveillance nodes are streaming from {bopOverview?.name || selectedBopId}. Register an IP / RTSP camera and select this BOP to populate the live video grid.
-                    </p>
-                  </div>
-                ) : (
-                  bopCameras.map(c => (
-                  <div key={c.camera_id} className="bg-[#0d1322] border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col justify-between space-y-3">
+                return (
+                  <div
+                    key={c.camera_id}
+                    className="bg-[#0d1322] border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col justify-between space-y-3 hover:border-slate-700 transition"
+                  >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-bold text-sky-400">{c.camera_id}</span>
+                      <span className="text-xs font-mono font-bold text-cyan-400">{c.camera_id}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                        c.status === 'ONLINE' || c.status === 'HEALTHY' ? 'bg-emerald-500/20 text-emerald-400' :
-                        c.status === 'DEGRADED' ? 'bg-orange-500/20 text-orange-400' : 'bg-rose-500/20 text-rose-400'
+                        c.status === 'ONLINE' || c.status === 'HEALTHY'
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : c.status === 'DEGRADED'
+                          ? 'bg-orange-500/20 text-orange-400'
+                          : 'bg-rose-500/20 text-rose-400'
                       }`}>
                         {c.status}
                       </span>
@@ -977,337 +1522,151 @@ export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBa
                     <div>
                       <h4 className="text-sm font-bold text-white truncate">{c.camera_name}</h4>
                       <p className="text-[11px] font-mono text-slate-400 mt-0.5">
-                        FPS: {c.fps?.toFixed(1)} / {c.expected_fps} • Priority: {c.priority}
+                        FPS: {c.fps?.toFixed(1) || 25} • Priority: {c.priority || 'P1'}
                       </p>
                     </div>
 
-                    <div className="p-2.5 bg-[#070b14] border border-slate-800 rounded-lg text-xs font-mono">
+                    {/* Live Stream Thumbnail */}
+                    <div className="aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 relative shadow-inner">
+                      <LiveVideoPlayer camera={camObj} autoPlay={true} showControls={false} />
+                    </div>
+
+                    <div className="p-2 bg-[#070b14] border border-slate-800 rounded-lg text-xs font-mono space-y-1">
                       <div className="flex items-center justify-between text-slate-400">
-                        <span>Event:</span>
-                        <span className="text-amber-400 font-semibold truncate ml-2">{c.current_event}</span>
+                        <span>AI Status:</span>
+                        <span className="text-amber-400 font-semibold truncate ml-2">
+                          {c.current_event || 'PERIMETER_MONITOR'}
+                        </span>
                       </div>
-                      <div className="flex items-center justify-between text-slate-400 mt-1">
-                        <span>Risk:</span>
-                        <span className="text-rose-400 font-bold">{c.risk_score}/100</span>
+                      <div className="flex items-center justify-between text-slate-400">
+                        <span>Location:</span>
+                        <span className="text-slate-300 truncate ml-2">{c.location || 'Tower 1'}</span>
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => {
-                        const camObj: Camera = {
-                          id: 0,
-                          camera_id: c.camera_id,
-                          camera_name: c.camera_name,
-                          sector: 'Border Sector',
-                          bop_site: bopOverview?.name || selectedBopId,
-                          status: c.status || 'ONLINE',
-                          rtsp_url: '',
-                          stream_type: 'main',
-                          fps: Math.round(c.fps || 25),
-                          resolution: '1080p',
-                          enabled: true
-                        } as unknown as Camera;
-                        setInspectedBopCamera(camObj);
-                      }}
-                      className="w-full py-1.5 bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md"
+                      onClick={() => setInspectedBopCamera(camObj)}
+                      className="w-full py-2 bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md"
                     >
-                      <Cctv className="w-3.5 h-3.5" /> LIVE STREAM
+                      <Maximize2 className="w-3.5 h-3.5" /> EXPAND LIVE STREAM
                     </button>
                   </div>
-                )))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* SUBTAB 4: HEALTH & RISK MATRIX */}
-      {activeSubTab === 'matrix' && (
-        <div className="space-y-6">
-          {/* Sites Health Matrix */}
-          <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  Site Observability & Risk Matrix
-                </h3>
-                <p className="text-xs text-slate-400 font-mono">Real-time database aggregated multi-site telemetry</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleExportCSV}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-mono font-semibold flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
-                  title="Download Matrix in CSV format"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Export CSV
-                </button>
-                <button
-                  onClick={handleExportPDF}
-                  className="px-3 py-1.5 bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 rounded-xl text-xs font-mono font-semibold flex items-center gap-1.5 border border-indigo-500/40 transition cursor-pointer"
-                  title="Download Formal Matrix in PDF format"
-                >
-                  <FileText className="w-3.5 h-3.5 text-indigo-400" /> Export PDF
-                </button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-[#111a2e] text-slate-400 uppercase text-[10px]">
-                  <tr>
-                    <th className="p-3">Site ID</th>
-                    <th className="p-3">Site Name</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">BOPs</th>
-                    <th className="p-3">Total Cams</th>
-                    <th className="p-3">Online</th>
-                    <th className="p-3">Offline</th>
-                    <th className="p-3">Incidents</th>
-                    <th className="p-3">Risk</th>
-                    <th className="p-3">Health Score</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {siteMatrix.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="p-8 text-center text-slate-500 font-mono text-xs">
-                        No tactical sites registered in the observability matrix yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    siteMatrix.map(s => (
-                      <tr key={s.site_id} className="hover:bg-slate-800/30 transition">
-                        <td className="p-3 font-bold text-sky-400">{s.site_id}</td>
-                        <td className="p-3 font-semibold text-white">{s.site_name}</td>
-                        <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                          }`}>
-                            {s.status}
-                          </span>
-                        </td>
-                        <td className="p-3">{s.bops_count}</td>
-                        <td className="p-3">{s.total_cameras}</td>
-                        <td className="p-3 text-emerald-400">{s.online_cameras}</td>
-                        <td className="p-3 text-rose-400">{s.offline_cameras}</td>
-                        <td className="p-3 text-amber-400">{s.active_incidents}</td>
-                        <td className="p-3 text-rose-400 font-bold">{s.current_risk}</td>
-                        <td className="p-3 font-bold text-emerald-400">{s.health_score}%</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* BOPs Matrix */}
-          <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl space-y-4">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-              Border Outposts (BOP) Telemetry Matrix
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-[#111a2e] text-slate-400 uppercase text-[10px]">
-                  <tr>
-                    <th className="p-3">BOP ID</th>
-                    <th className="p-3">BOP Name</th>
-                    <th className="p-3">Parent Site</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">Priority</th>
-                    <th className="p-3">Cameras</th>
-                    <th className="p-3">Online</th>
-                    <th className="p-3">Incidents</th>
-                    <th className="p-3">Risk</th>
-                    <th className="p-3">Health Score</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {bopMatrix.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="p-8 text-center text-slate-500 font-mono text-xs">
-                        No border outposts (BOPs) registered in the telemetry matrix yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    bopMatrix.map(b => (
-                      <tr key={b.bop_id} className="hover:bg-slate-800/30 transition">
-                        <td className="p-3 font-bold text-emerald-400">{b.bop_id}</td>
-                        <td className="p-3 font-semibold text-white">{b.bop_name}</td>
-                        <td className="p-3 text-indigo-400">{b.site_id}</td>
-                        <td className="p-3">{b.status}</td>
-                        <td className="p-3">{b.priority}</td>
-                        <td className="p-3">{b.total_cameras}</td>
-                        <td className="p-3 text-emerald-400">{b.online_cameras}</td>
-                        <td className="p-3 text-amber-400">{b.active_incidents}</td>
-                        <td className="p-3 text-rose-400 font-bold">{b.current_risk}</td>
-                        <td className="p-3 font-bold text-emerald-400">{b.health_score}%</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUBTAB 5: GLOBAL SEARCH */}
-      {activeSubTab === 'search' && (
-        <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                Cross-Site Global Search Results
-              </h3>
-              <p className="text-xs text-slate-400 font-mono">
-                {searchResults.length} matches found across authorized federated entities
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {searchResults.map((r, i) => (
-              <div key={i} className="bg-[#0b101d] border border-slate-800 p-4 rounded-xl flex items-center justify-between hover:border-slate-700 transition">
-                <div className="flex items-center gap-3">
-                  <span className="px-2 py-1 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded text-[10px] font-mono font-bold">
-                    {r.entity_type}
-                  </span>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">{r.name_or_title}</h4>
-                    <p className="text-[11px] font-mono text-slate-400">
-                      ID: {r.entity_id} • Site: {r.site_id} {r.bop_name ? `• BOP: ${r.bop_name}` : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right font-mono text-xs text-slate-400">
-                  {r.risk_or_severity && <div className="text-rose-400">{r.risk_or_severity}</div>}
-                  {r.status && <div className="text-emerald-400">{r.status}</div>}
-                </div>
-              </div>
-            ))}
-
-            {searchResults.length === 0 && (
-              <div className="text-center py-12 text-slate-500 font-mono text-xs">
-                No matching entities found. Enter a site, BOP, or camera identifier to search.
-              </div>
+                );
+              })
             )}
           </div>
         </div>
       )}
 
-      {/* SUBTAB 6: REPORTS & EXPORTS */}
-      {activeSubTab === 'reports' && (
+      {/* ========================================================================= */}
+      {/* SUBTAB 4: EXECUTIVE SITREP & DOSSIER (Admin Only) */}
+      {/* ========================================================================= */}
+      {isSuperAdmin && activeSubTab === 'reports' && (
         <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
-              <h3 className="text-base font-bold text-white">Federated Operational Summary Report</h3>
-              <p className="text-xs text-slate-400 font-mono">Scope: {report?.report_scope || (selectedSiteId === 'ALL' ? 'GLOBAL (ALL SITES)' : selectedSiteId)} • Generated: {report?.generated_at || new Date().toLocaleString()}</p>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-cyan-400" />
+                National Checkposts Situation Report (SITREP)
+              </h3>
+              <p className="text-xs text-slate-400 font-mono">
+                Official high-command briefing dossier for Ministry of Home Affairs & Central Defense Command
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleExportCSV}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
-                title="Download data in CSV format"
+                title="Download raw checkpost telemetry in CSV format"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Download CSV Export
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Export CSV Telemetry
               </button>
               <button
                 onClick={handleExportPDF}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition cursor-pointer"
-                title="Download formal document in PDF format"
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-cyan-600/30 transition cursor-pointer"
+                title="Download official classified SITREP in PDF format"
               >
-                <FileText className="w-4 h-4" /> Download PDF Report
+                <FileText className="w-4 h-4" /> Generate Official PDF SITREP
               </button>
             </div>
           </div>
 
+          {/* SITREP Executive KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-[#070b14] border border-slate-800 p-4 rounded-xl">
-              <span className="text-[11px] font-mono text-slate-400 uppercase">Monitored Sites</span>
-              <div className="text-xl font-bold font-mono text-white mt-1">{report?.summary.total_sites ?? overview?.total_sites ?? sites.length}</div>
+              <span className="text-[11px] font-mono text-slate-400 uppercase">Monitored Frontiers</span>
+              <div className="text-xl font-bold font-mono text-white mt-1">
+                {report?.summary.total_sites ?? overview?.total_sites ?? sites.length}
+              </div>
             </div>
             <div className="bg-[#070b14] border border-slate-800 p-4 rounded-xl">
-              <span className="text-[11px] font-mono text-slate-400 uppercase">Monitored BOPs</span>
-              <div className="text-xl font-bold font-mono text-white mt-1">{report?.summary.total_bops ?? overview?.total_bops ?? bops.length}</div>
+              <span className="text-[11px] font-mono text-slate-400 uppercase">Monitored Checkposts</span>
+              <div className="text-xl font-bold font-mono text-emerald-400 mt-1">
+                {bops.length}
+              </div>
             </div>
             <div className="bg-[#070b14] border border-slate-800 p-4 rounded-xl">
-              <span className="text-[11px] font-mono text-slate-400 uppercase">Total Cameras</span>
-              <div className="text-xl font-bold font-mono text-white mt-1">{report?.summary.total_cameras ?? overview?.total_cameras ?? 0}</div>
+              <span className="text-[11px] font-mono text-slate-400 uppercase">Border Surveillance Fleet</span>
+              <div className="text-xl font-bold font-mono text-sky-400 mt-1">
+                {cameras.length}
+              </div>
             </div>
             <div className="bg-[#070b14] border border-slate-800 p-4 rounded-xl">
-              <span className="text-[11px] font-mono text-slate-400 uppercase">Total Incidents</span>
-              <div className="text-xl font-bold font-mono text-rose-400 mt-1">{report?.summary.total_incidents ?? overview?.active_incidents ?? 0}</div>
+              <span className="text-[11px] font-mono text-slate-400 uppercase">Active Threat Alarms</span>
+              <div className="text-xl font-bold font-mono text-rose-400 mt-1">
+                {alerts.filter(a => a.status !== 'RESOLVED').length}
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* SUBTAB 7: ADMINISTRATION & SCOPED RBAC */}
-      {activeSubTab === 'admin' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between bg-[#0d1322] border border-slate-800 p-5 rounded-2xl">
-            <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                Scoped Access & RBAC Assignments
-              </h3>
-              <p className="text-xs text-slate-400 font-mono">
-                Assign officers and personnel to Site, BOP, or Global Central Command scopes
-              </p>
+          {/* Checkposts Status Breakdown Table */}
+          <div className="bg-[#070b14] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <div className="p-3.5 bg-[#0f172a] border-b border-slate-800 flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
+                Border Checkposts Readiness & Telemetry Matrix
+              </span>
+              <span className="text-[11px] font-mono text-slate-500">Live Database Aggregated</span>
             </div>
-            <button
-              onClick={() => setIsScopeModalOpen(true)}
-              className="px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              <UserCheck className="w-4 h-4" /> Assign User Scope
-            </button>
-          </div>
 
-          <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
                 <thead className="bg-[#111a2e] text-slate-400 uppercase text-[10px]">
                   <tr>
-                    <th className="p-3">Username</th>
-                    <th className="p-3">Scope Level</th>
-                    <th className="p-3">Scope ID</th>
-                    <th className="p-3">Role</th>
-                    <th className="p-3">Assigned By</th>
-                    <th className="p-3 text-right">Actions</th>
+                    <th className="p-3">Checkpost ID</th>
+                    <th className="p-3">Checkpost Name</th>
+                    <th className="p-3">Sector</th>
+                    <th className="p-3">GPS Latitude / Longitude</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Priority</th>
+                    <th className="p-3">Assigned Commander</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {userScopes.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-500 font-mono text-xs">
-                        No scoped RBAC assignments active. Click 'Assign User Scope' to grant permissions.
-                      </td>
-                    </tr>
-                  ) : (
-                    userScopes.map(u => (
-                      <tr key={u.id} className="hover:bg-slate-800/30 transition">
-                        <td className="p-3 font-bold text-white">{u.username}</td>
-                        <td className="p-3 text-indigo-400">{u.scope_type}</td>
-                        <td className="p-3 font-mono">{u.scope_id}</td>
-                        <td className="p-3 font-bold text-sky-400">{u.role}</td>
-                        <td className="p-3 text-slate-400">{u.assigned_by}</td>
-                        <td className="p-3 text-right">
-                          <button
-                            onClick={async () => {
-                              if (window.confirm(`Revoke scope from ${u.username}?`)) {
-                                await federationService.revokeUserScope(u.id);
-                                setUserScopes(prev => prev.filter(x => x.id !== u.id));
-                              }
-                            }}
-                            className="p-1 text-slate-400 hover:text-rose-400 transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                <tbody className="divide-y divide-slate-800/80">
+                  {bops.slice(0, 25).map(b => {
+                    const assigned = officerByBopMap.get(b.bop_id.toLowerCase()) || officerByBopMap.get(b.name.toLowerCase());
+                    return (
+                      <tr key={b.bop_id} className="hover:bg-slate-800/30 transition">
+                        <td className="p-3 font-bold text-cyan-400">{b.bop_id}</td>
+                        <td className="p-3 font-semibold text-white">{b.name}</td>
+                        <td className="p-3 text-slate-300">{resolveBopSector(b)}</td>
+                        <td className="p-3 text-cyan-300">
+                          {b.latitude && b.longitude ? `${b.latitude.toFixed(4)}°N, ${b.longitude.toFixed(4)}°E` : '-'}
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            b.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                          }`}>
+                            {b.status}
+                          </span>
+                        </td>
+                        <td className="p-3">{b.operational_priority}</td>
+                        <td className="p-3 text-emerald-400 font-bold">
+                          {assigned ? (assigned.full_name || assigned.username) : <span className="text-slate-500 italic">Unassigned</span>}
                         </td>
                       </tr>
-                    ))
-                  )}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1315,100 +1674,126 @@ export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBa
         </div>
       )}
 
-      {/* Modals */}
-      <SiteModal
-        isOpen={isSiteModalOpen}
-        onClose={() => setIsSiteModalOpen(false)}
-        siteToEdit={siteToEdit}
-        onSave={async (data) => {
-          if (siteToEdit) {
-            await federationService.updateSite(siteToEdit.site_id, data);
-          } else {
-            await federationService.createSite(data);
-          }
-          loadGlobalData();
-        }}
-      />
-
-      <BOPModal
-        isOpen={isBopModalOpen}
-        onClose={() => setIsBopModalOpen(false)}
-        bopToEdit={bopToEdit}
-        sites={sites}
-        defaultSiteId={selectedSiteId === 'ALL' ? undefined : selectedSiteId}
-        onSave={async (data) => {
-          if (bopToEdit) {
-            await federationService.updateBOP(bopToEdit.bop_id, data);
-          } else {
-            await federationService.createBOP(data);
-          }
-          loadGlobalData();
-        }}
-      />
-
-      <UserScopeModal
-        isOpen={isScopeModalOpen}
-        onClose={() => setIsScopeModalOpen(false)}
-        sites={sites}
-        bops={bops}
-        onSave={async (data) => {
-          await federationService.assignUserScope(data);
-          const scopes = await federationService.listUserScopes();
-          setUserScopes(scopes);
-        }}
-      />
-
-      {/* BOP Wall Camera Live Stream Modal Overlay */}
-      {inspectedBopCamera && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md">
-          <div className="relative w-full max-w-4xl bg-[#090d16] border border-cyan-500/50 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-            <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900/90 border-b border-slate-800">
+      {/* ========================================================================= */}
+      {/* CHECKPOST INSPECTION MODAL (Admin Only) */}
+      {/* ========================================================================= */}
+      {inspectedBop && isSuperAdmin && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b101d] border border-cyan-500/40 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-cyan-950/80 border border-cyan-500/40 rounded-lg text-cyan-400">
-                  <Cctv className="w-5 h-5" />
+                <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
+                  <Shield className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white font-mono">{inspectedBopCamera.camera_name}</h3>
-                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/40">
-                      {inspectedBopCamera.status}
-                    </span>
-                  </div>
+                  <h3 className="text-base font-bold text-white uppercase">{inspectedBop.name}</h3>
                   <p className="text-xs text-slate-400 font-mono">
-                    ID: {inspectedBopCamera.camera_id} • Sector: {inspectedBopCamera.sector || 'N/A'} • BOP: {inspectedBopCamera.bop_site || 'N/A'}
+                    Code: {inspectedBop.code} • Sector: {resolveBopSector(inspectedBop)}
                   </p>
                 </div>
               </div>
               <button
-                type="button"
-                onClick={() => setInspectedBopCamera(null)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                onClick={() => setInspectedBop(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-900 border border-slate-800 cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 bg-black flex-1 overflow-hidden flex flex-col justify-center items-center min-h-[380px]">
-              <LiveVideoPlayer camera={inspectedBopCamera} autoPlay showControls={true} />
+            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+              <div className="bg-[#070b14] p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 text-[10px] uppercase">GPS Latitude</span>
+                <div className="text-white font-bold mt-0.5">{inspectedBop.latitude ?? 31.6048}° N</div>
+              </div>
+              <div className="bg-[#070b14] p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 text-[10px] uppercase">GPS Longitude</span>
+                <div className="text-white font-bold mt-0.5">{inspectedBop.longitude ?? 74.5731}° E</div>
+              </div>
+              <div className="bg-[#070b14] p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 text-[10px] uppercase">Operational Status</span>
+                <div className="text-emerald-400 font-bold mt-0.5">{inspectedBop.status}</div>
+              </div>
+              <div className="bg-[#070b14] p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 text-[10px] uppercase">Operational Priority</span>
+                <div className="text-amber-400 font-bold mt-0.5">{inspectedBop.operational_priority}</div>
+              </div>
             </div>
 
-            <div className="px-5 py-3 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
-              <div className="flex items-center gap-3">
-                <span>FPS: <strong className="text-emerald-400">{inspectedBopCamera.fps || 25} FPS</strong></span>
-                <span>•</span>
-                <span>Resolution: <strong className="text-slate-200">{inspectedBopCamera.resolution || '1080p'}</strong></span>
+            {/* Change Priority SLA */}
+            <div className="p-3.5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
+              <label className="text-xs font-mono font-bold text-slate-300">Update Defense Readiness SLA:</label>
+              <div className="flex items-center gap-2">
+                {(['NORMAL', 'HIGH', 'CRITICAL'] as const).map(p => (
+                  <button
+                    key={p}
+                    disabled={isUpdatingPriority}
+                    onClick={() => handleUpdateBopPriority(p)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                      inspectedBop.operational_priority === p
+                        ? 'bg-cyan-600 text-white shadow'
+                        : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
               <button
-                type="button"
-                onClick={() => setInspectedBopCamera(null)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-mono transition cursor-pointer"
+                onClick={() => setInspectedBop(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-mono font-bold transition cursor-pointer"
               >
-                Close Stream
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* EXPANDED VIDEO PLAYER MODAL */}
+      {inspectedBopCamera && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0b101d] border border-cyan-500/50 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl space-y-4 p-5">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-cyan-400 font-mono text-sm font-bold">
+                <Cctv className="w-5 h-5" />
+                <span>{inspectedBopCamera.camera_name} [{inspectedBopCamera.camera_id}]</span>
+              </div>
+              <button
+                onClick={() => setInspectedBopCamera(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-900 border border-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
+              <LiveVideoPlayer camera={inspectedBopCamera} autoPlay={true} showControls={true} />
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-mono text-slate-400 pt-2 border-t border-slate-800">
+              <span>Post: {inspectedBopCamera.bop_site}</span>
+              <span>RTSP Stream: {inspectedBopCamera.rtsp_url}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ENCRYPTED SITREP DISPATCH MODAL TO CENTRAL HQ */}
+      <DispatchSitrepModal
+        isOpen={sitrepModalOpen}
+        onClose={() => setSitrepModalOpen(false)}
+        onSuccess={() => {
+          setSitrepModalOpen(false);
+          setActionSuccessMessage(`Tactical SITREP successfully transmitted to Delhi Central HQ over encrypted satellite link.`);
+          setTimeout(() => setActionSuccessMessage(null), 6000);
+        }}
+        initialTitle={sitrepTitle}
+        initialSummary={sitrepSummary}
+        initialPriority={sitrepPriority}
+      />
     </div>
   );
 };

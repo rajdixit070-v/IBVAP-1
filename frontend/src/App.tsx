@@ -16,12 +16,12 @@ import { AIPipelinePage } from './pages/AIPipelinePage';
 import { PerimeterIntelligencePage } from './pages/PerimeterIntelligencePage';
 import { VehicleIntelligencePage } from './pages/VehicleIntelligencePage';
 import { FaceIntelligencePage } from './pages/FaceIntelligencePage';
-import { EdgeInfrastructurePage } from './pages/EdgeInfrastructurePage';
 import { SecurityEventsPage } from './pages/SecurityEventsPage';
 import { MultiSiteCommandPage } from './pages/MultiSiteCommandPage';
 import { MultimodalIntelligencePage } from './pages/MultimodalIntelligencePage';
 import { EnterpriseSecurityPage } from './pages/EnterpriseSecurityPage';
 import { ForensicEvidencePage } from './pages/ForensicEvidencePage';
+import { CheckpostDispatchesPage } from './pages/CheckpostDispatchesPage';
 import { SensorFusionPage } from './pages/SensorFusionPage';
 import { ThermalFusionPage } from './pages/ThermalFusionPage';
 import { PTZControlPage } from './pages/PTZControlPage';
@@ -36,7 +36,7 @@ import { LiveAlertToast } from './components/common/LiveAlertToast';
 import { Camera } from './types/camera';
 import { Bot } from 'lucide-react';
 
-const ADMIN_ONLY_TABS = ['federation', 'security', 'edge', 'health', 'predictive'];
+const ADMIN_ONLY_TABS = ['security', 'health', 'predictive'];
 
 const MainLayout: React.FC = () => {
   const { user } = useAuth();
@@ -151,7 +151,7 @@ const MainLayout: React.FC = () => {
               onNavigateToEvents={() => setActiveTab('events')}
               onNavigateToANPR={() => setActiveTab('anpr')}
               onNavigateToFace={() => setActiveTab('face')}
-              onNavigateToEdge={() => setActiveTab('edge')}
+              onNavigateToEdge={() => setActiveTab('health')}
               onNavigateToHealth={() => setActiveTab('health')}
               onNavigateToPredictive={() => setActiveTab('predictive')}
               onNavigateToDrones={() => setActiveTab('drone-operations')}
@@ -163,29 +163,29 @@ const MainLayout: React.FC = () => {
             />
           )}
 
-          {activeTab === 'soc' && <CommandCenterPage onBackToDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'health' && <SystemHealthCenterPage onBackToDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'federation' && <MultiSiteCommandPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'soc' && <CommandCenterPage />}
+          {activeTab === 'health' && <SystemHealthCenterPage />}
+          {activeTab === 'federation' && <MultiSiteCommandPage />}
           {activeTab === 'multimodal' && <MultimodalIntelligencePage />}
-          {activeTab === 'security' && <EnterpriseSecurityPage onBackToDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'predictive' && <PredictiveIntelligencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'behaviour' && <BehaviourIntelligencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'security' && <EnterpriseSecurityPage />}
+          {activeTab === 'predictive' && <PredictiveIntelligencePage />}
+          {activeTab === 'behaviour' && <BehaviourIntelligencePage />}
           {activeTab === 'cross-camera' && <MovementIntelligencePage />}
-          {activeTab === 'incidents' && <IncidentsPage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'incidents' && <IncidentsPage />}
           {activeTab === 'cameras' && <CameraManagementPage onLocateOnMap={(cam) => handleOpenMapWithTarget(cam)} />}
-          {activeTab === 'live' && <LivePreviewPage />}
+          {activeTab === 'live' && <LivePreviewPage onLocateOnMap={(cam) => handleOpenMapWithTarget(cam)} />}
           {activeTab === 'ai-pipeline' && <AIPipelinePage />}
           {activeTab === 'intelligence' && <PerimeterIntelligencePage />}
           {activeTab === 'anpr' && <VehicleIntelligencePage />}
           {activeTab === 'face' && <FaceIntelligencePage />}
-          {activeTab === 'edge' && <EdgeInfrastructurePage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'edge' && <SystemHealthCenterPage />}
           {activeTab === 'events' && <SecurityEventsPage />}
-          {activeTab === 'evidence' && <ForensicEvidencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'evidence' && (isSuperAdmin ? <ForensicEvidencePage /> : <CheckpostDispatchesPage />)}
           {activeTab === 'sensor-fusion' && <SensorFusionPage />}
-          {activeTab === 'thermal-fusion' && <ThermalFusionPage onBackToDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'ptz-control' && <PTZControlPage onBackToDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'drone-operations' && <DroneOperationsPage onBackToDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'gis-intelligence' && <GISIntelligencePage onBackToDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'thermal-fusion' && <ThermalFusionPage />}
+          {activeTab === 'ptz-control' && <PTZControlPage />}
+          {activeTab === 'drone-operations' && <DroneOperationsPage />}
+          {activeTab === 'gis-intelligence' && <GISIntelligencePage />}
         </main>
       </div>
 
@@ -223,14 +223,19 @@ const MainLayout: React.FC = () => {
         }}
       />
 
-      {/* Floating AI Virtual Assistant Action Button */}
+      {/* Floating Tactical AI Copilot Launcher (Shifted & Positioned on Right) */}
       <button
         onClick={() => setAssistantOpen(true)}
-        className="fixed bottom-6 right-6 z-40 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white px-4 py-2.5 rounded-full shadow-2xl shadow-cyan-500/40 flex items-center gap-2 border border-cyan-400/40 group transition-all transform hover:scale-105"
-        title="Open AI Virtual Assistant Copilot"
+        className="fixed bottom-7 right-7 z-40 bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-sky-500 text-white px-4 py-2.5 rounded-full shadow-2xl shadow-cyan-500/40 flex items-center gap-2.5 border border-cyan-400/40 group transition-all transform hover:scale-105 cursor-pointer ring-2 ring-cyan-500/20"
+        title="Open Tactical AI Copilot (Right Panel)"
       >
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        </span>
         <Bot className="w-4 h-4 text-cyan-200 group-hover:rotate-12 transition-transform" />
         <span className="text-xs font-bold font-mono tracking-wide">AI Copilot</span>
+        <span className="hidden sm:inline-block text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-700/50">TACTICAL</span>
       </button>
 
       {/* Global AI Virtual Assistant Modal */}

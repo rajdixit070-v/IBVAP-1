@@ -121,7 +121,10 @@ def update_camera_ai_config(
     db.commit()
     db.refresh(config)
 
-    # Apply thresholds dynamically to detector
+    # Apply thresholds and worker settings dynamically to specific camera worker
+    ai_pipeline_manager.update_camera_config(camera_id, config)
+
+    # Also update global detector thresholds
     thresholds = {
         "person": config.conf_person,
         "vehicle": config.conf_vehicle,

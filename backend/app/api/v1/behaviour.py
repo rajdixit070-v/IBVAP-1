@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 import json
 from datetime import datetime
 from typing import List, Optional
@@ -30,6 +31,187 @@ from app.services.behaviour.explainable_risk_engine import explainable_risk_engi
 
 router = APIRouter()
 
+def seed_initial_behaviour_events_if_empty(db: Session):
+    count = db.query(BehaviourEvent).count()
+    if count > 0:
+        return
+    now = datetime.utcnow()
+    sample_events = [
+        # 1. Fence Probing
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0101",
+            camera_id="BOP-WAGAH-CAM-01",
+            object_type="person",
+            event_type="POTENTIAL_PERIMETER_PROBING_PATTERN",
+            risk_score=88,
+            decayed_risk_score=88,
+            risk_level="CRITICAL",
+            confidence=0.94,
+            zone_name="Zero-Line Outer Boundary Wire",
+            factors_json=json.dumps([
+                {"factor": "FENCE_PROBING_LOITER", "weight": 35, "description": "Target lingered within 3m of border wire for 42 seconds"},
+                {"factor": "REPEATED_APPROACH", "weight": 30, "description": "3 successive approaches and retreat cycles towards fence"},
+                {"factor": "BLINDSPOT_PROBING", "weight": 23, "description": "Target positioning along camera field-of-view edge"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"dwell_time_sec": 42.5, "velocity_ms": 1.1, "approaches": 3}),
+            status="DETECTED",
+            created_at=now
+        ),
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0102",
+            camera_id="BOP-WAGAH-CAM-01",
+            object_type="person",
+            event_type="REPEATED_APPROACH",
+            risk_score=76,
+            decayed_risk_score=76,
+            risk_level="HIGH",
+            confidence=0.91,
+            zone_name="Buffer Zone East Flank",
+            factors_json=json.dumps([
+                {"factor": "REPEATED_APPROACH", "weight": 35, "description": "Subject moved back and forth along buffer boundary wire"},
+                {"factor": "IRREGULAR_PATH", "weight": 25, "description": "Non-linear reconnaissance movement pattern"},
+                {"factor": "LOW_SPEED_CREEP", "weight": 16, "description": "Slow deliberate pacing near sensor tripwire"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"dwell_time_sec": 28.0, "velocity_ms": 0.8, "approaches": 2}),
+            status="DETECTED",
+            created_at=now
+        ),
+        # 2. Gate Barrier Dwell
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0201",
+            camera_id="BOP-WAGAH-GATE-01",
+            object_type="vehicle",
+            event_type="VEHICLE_DWELL_ANOMALY",
+            risk_score=84,
+            decayed_risk_score=84,
+            risk_level="HIGH",
+            confidence=0.96,
+            zone_name="Checkpost Gate Approach Road",
+            factors_json=json.dumps([
+                {"factor": "EXTENDED_GATE_DWELL", "weight": 40, "description": "Vehicle idling in front of checkpost boom barrier for 85s"},
+                {"factor": "UNVERIFIED_COMMERCIAL_VEHICLE", "weight": 25, "description": "Plate not found in local authorized fleet registry"},
+                {"factor": "ENGINE_RUNNING_STATIONARY", "weight": 19, "description": "Idling at restricted entry throat"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"dwell_time_sec": 85.0, "vehicle_type": "truck", "velocity_ms": 0.0}),
+            status="DETECTED",
+            created_at=now
+        ),
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0202",
+            camera_id="BOP-WAGAH-GATE-01",
+            object_type="package",
+            event_type="POTENTIAL_ABANDONED_OBJECT",
+            risk_score=92,
+            decayed_risk_score=92,
+            risk_level="CRITICAL",
+            confidence=0.93,
+            zone_name="Pedestrian Sentry Booth Pathway",
+            factors_json=json.dumps([
+                {"factor": "UNATTENDED_OBJECT_DWELL", "weight": 45, "description": "Unattended container stationary on pedestrian walkway >120s"},
+                {"factor": "OWNER_DEPARTED", "weight": 30, "description": "Carrier walked away leaving object in restricted choke point"},
+                {"factor": "HIGH_SECURITY_ZONE", "weight": 17, "description": "Located within 10 meters of sentry control station"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"dwell_time_sec": 124.0, "object_type": "backpack"}),
+            status="DETECTED",
+            created_at=now
+        ),
+        # 3. Speed Burst & Sprint Infiltration
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0301",
+            camera_id="BOP-WAGAH-CAM-02",
+            object_type="person",
+            event_type="SUDDEN_SPEED_CHANGE",
+            risk_score=95,
+            decayed_risk_score=95,
+            risk_level="CRITICAL",
+            confidence=0.97,
+            zone_name="Zero-Line Restricted Zone",
+            factors_json=json.dumps([
+                {"factor": "SPRINT_ACCELERATION_BURST", "weight": 45, "description": "Subject accelerated from 1.2 m/s to 5.4 m/s towards boundary fence"},
+                {"factor": "BOUNDARY_VECTOR", "weight": 35, "description": "Trajectory directly oriented towards international border wire"},
+                {"factor": "RESTRICTED_SECTOR", "weight": 15, "description": "Breached outer security perimeter at speed"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"peak_speed_ms": 5.4, "initial_speed_ms": 1.2, "trajectory_angle": 185}),
+            status="DETECTED",
+            created_at=now
+        ),
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0302",
+            camera_id="BOP-WAGAH-CAM-02",
+            object_type="person",
+            event_type="RAPID_DIRECTION_CHANGE",
+            risk_score=79,
+            decayed_risk_score=79,
+            risk_level="HIGH",
+            confidence=0.89,
+            zone_name="Perimeter Observation Sector 3",
+            factors_json=json.dumps([
+                {"factor": "EVASIVE_ZIGZAG", "weight": 35, "description": "Subject executed 4 sharp heading changes within 12 seconds"},
+                {"factor": "COVER_UTILIZATION", "weight": 25, "description": "Movement weaving between terrain foliage and ditch"},
+                {"factor": "SURVEILLANCE_EVASION", "weight": 19, "description": "Attempting to evade primary sentry tower optical cone"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"direction_changes": 4, "avg_speed_ms": 3.2}),
+            status="DETECTED",
+            created_at=now
+        ),
+        # 4. Night No-Go Curfew
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0401",
+            camera_id="BOP-WAGAH-CAM-01",
+            object_type="person",
+            event_type="AFTER_HOURS_ACTIVITY",
+            risk_score=98,
+            decayed_risk_score=98,
+            risk_level="CRITICAL",
+            confidence=0.98,
+            zone_name="Zero-Line Outer Perimeter",
+            factors_json=json.dumps([
+                {"factor": "NOCTURNAL_CURFEW_VIOLATION", "weight": 50, "description": "Movement detected at 02:45 hrs during mandatory zero-line night curfew (2200-0500)"},
+                {"factor": "LOW_VISIBILITY_PROBING", "weight": 30, "description": "Thermal camera contrast confirms human crawling near wire"},
+                {"factor": "HIGH_CONFIDENCE_THERMAL_LOCK", "weight": 18, "description": "Body heat signature locked in complete ambient darkness"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"detection_time": "02:45:18", "curfew_window": "22:00-05:00", "sensor": "THERMAL_IR"}),
+            status="DETECTED",
+            created_at=now
+        ),
+        BehaviourEvent(
+            event_id=f"BHV-{now.strftime('%Y%m%d')}-0402",
+            camera_id="BOP-WAGAH-CAM-03",
+            object_type="person",
+            event_type="BASELINE_ACTIVITY_ANOMALY",
+            risk_score=81,
+            decayed_risk_score=81,
+            risk_level="HIGH",
+            confidence=0.92,
+            zone_name="Sentry Outpost South Perimeter",
+            factors_json=json.dumps([
+                {"factor": "STATISTICAL_DENSITY_SPIKE", "weight": 40, "description": "Activity density 4.5x above standard nocturnal baseline"},
+                {"factor": "UNSCHEDULED_SECTOR_MOVEMENT", "weight": 25, "description": "No authorized patrol scheduled in sector at this hour"},
+                {"factor": "PERIMETER_PROXIMITY", "weight": 16, "description": "Subject positioned 8m from post rear boundary"}
+            ]),
+            counter_factors_json=json.dumps([]),
+            details_json=json.dumps({"baseline_multiplier": 4.5, "hour": 3}),
+            status="DETECTED",
+            created_at=now
+        )
+    ]
+    for ev in sample_events:
+        db.add(ev)
+    db.commit()
+
+class SimulateThreatRequest(BaseModel):
+    category: Optional[str] = "probing"
+    camera_id: Optional[str] = None
+    zone_name: Optional[str] = None
+
+
 # --- Behaviour Events Feed ---
 
 @router.get("/events", response_model=List[BehaviourEventResponse])
@@ -47,11 +229,16 @@ def list_behaviour_events(
     """
     Search and list behaviour anomalies and risk events with backend pagination.
     """
+    seed_initial_behaviour_events_if_empty(db)
     query = db.query(BehaviourEvent)
     if risk_level:
         query = query.filter(BehaviourEvent.risk_level == risk_level)
     if event_type:
-        query = query.filter(BehaviourEvent.event_type == event_type)
+        if "," in event_type:
+            types = [t.strip() for t in event_type.split(",") if t.strip()]
+            query = query.filter(BehaviourEvent.event_type.in_(types))
+        else:
+            query = query.filter(BehaviourEvent.event_type == event_type)
     if camera_id:
         query = query.filter(BehaviourEvent.camera_id == camera_id)
     if global_track_id:
@@ -106,6 +293,8 @@ def get_behaviour_event(
     Get full behaviour anomaly record with explainable factors and counter-signals.
     """
     r = db.query(BehaviourEvent).filter(BehaviourEvent.event_id == event_id).first()
+    if not r and event_id.isdigit():
+        r = db.query(BehaviourEvent).filter(BehaviourEvent.id == int(event_id)).first()
     if not r:
         raise HTTPException(status_code=404, detail="Behaviour event not found.")
 
@@ -297,6 +486,7 @@ def get_behaviour_analytics_summary(
     """
     Calculates operational metrics including false positive rate percentage.
     """
+    seed_initial_behaviour_events_if_empty(db)
     total_events = db.query(BehaviourEvent).count()
     elevated = db.query(BehaviourEvent).filter(BehaviourEvent.risk_score >= 41).count()
     repeated_app = db.query(BehaviourEvent).filter(
@@ -324,6 +514,126 @@ def get_behaviour_analytics_summary(
     )
 
 # --- Deletion and Maintenance Endpoints ---
+
+
+@router.post("/events/simulate", response_model=BehaviourEventResponse, status_code=201)
+def simulate_behaviour_threat(
+    req: SimulateThreatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Tactical ground simulation: triggers a realistic behaviour threat anomaly on-demand.
+    """
+    import uuid
+    cat = (req.category or "probing").lower()
+    now = datetime.utcnow()
+    event_uid = f"BHV-SIM-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:5].upper()}"
+    cam = req.camera_id or "BOP-WAGAH-CAM-01"
+    
+    if cat == "dwell":
+        ev_type = "VEHICLE_DWELL_ANOMALY"
+        obj_type = "vehicle"
+        score = 86
+        level = "HIGH"
+        zone = req.zone_name or "Checkpost Gate Boom Barrier"
+        factors = [
+            {"factor": "STATIONARY_GATE_DWELL", "weight": 45, "description": "Vehicle stationary at barrier approach > 75 seconds"},
+            {"factor": "BLOCKED_ENTRY_CHOKE", "weight": 25, "description": "Obstructing primary checkpost vehicle throughput channel"},
+            {"factor": "UNKNOWN_REGISTRATION", "weight": 16, "description": "Vehicle number plate not matching pre-approved convoy whitelist"}
+        ]
+        details = {"dwell_sec": 75.0, "vehicle_type": "truck", "velocity_ms": 0.0}
+    elif cat == "kinetics":
+        ev_type = "SUDDEN_SPEED_CHANGE"
+        obj_type = "person"
+        score = 94
+        level = "CRITICAL"
+        zone = req.zone_name or "Zero-Line Boundary Sector 2"
+        factors = [
+            {"factor": "SPRINT_ACCELERATION_BURST", "weight": 50, "description": "Target accelerated from 1.0 m/s to 5.2 m/s towards perimeter wire"},
+            {"factor": "DIRECT_BOUNDARY_VECTOR", "weight": 30, "description": "Heading directed immediately at international border fence"},
+            {"factor": "RESTRICTED_BUFFER_BREACH", "weight": 14, "description": "Crossed outer acoustic sensor tripwire"}
+        ]
+        details = {"speed_ms": 5.2, "initial_speed_ms": 1.0, "heading": 182}
+    elif cat == "curfew":
+        ev_type = "AFTER_HOURS_ACTIVITY"
+        obj_type = "person"
+        score = 98
+        level = "CRITICAL"
+        zone = req.zone_name or "Zero-Line Nocturnal Window"
+        factors = [
+            {"factor": "NOCTURNAL_CURFEW_BREACH", "weight": 55, "description": "Subject moving at night (22:00-05:00) in zero-line restricted zone"},
+            {"factor": "THERMAL_CONFIRMATION", "weight": 25, "description": "Thermal IR sensor confirms human body heat signature"},
+            {"factor": "UNAUTHORIZED_NO_GO_TERRAIN", "weight": 18, "description": "Physical ground-plane intrusion beyond boundary perimeter"}
+        ]
+        details = {"hour": now.hour, "curfew_rule": "22:00-05:00", "sensor": "THERMAL_OPTICAL"}
+    else: # probing
+        ev_type = "POTENTIAL_PERIMETER_PROBING_PATTERN"
+        obj_type = "person"
+        score = 90
+        level = "CRITICAL"
+        zone = req.zone_name or "Perimeter Fence North Wire"
+        factors = [
+            {"factor": "FENCE_PROBING_LOITER", "weight": 45, "description": "Target loitering within 4 meters of international wire for > 40s"},
+            {"factor": "REPEATED_APPROACH_PATTERN", "weight": 30, "description": "Subject approached and retreated from wire 3 times"},
+            {"factor": "SENSOR_CONE_TESTING", "weight": 15, "description": "Positioned at edge of primary PTZ optical sweep"}
+        ]
+        details = {"dwell_sec": 44.0, "approaches": 3, "velocity_ms": 1.1}
+
+    new_ev = BehaviourEvent(
+        event_id=event_uid,
+        camera_id=cam,
+        object_type=obj_type,
+        event_type=ev_type,
+        risk_score=score,
+        decayed_risk_score=score,
+        risk_level=level,
+        confidence=0.95,
+        zone_name=zone,
+        factors_json=json.dumps(factors),
+        counter_factors_json=json.dumps([]),
+        details_json=json.dumps(details),
+        status="DETECTED",
+        created_at=now
+    )
+    db.add(new_ev)
+    
+    # Also create notification
+    from app.models.notification import Notification
+    notif = Notification(
+        user_id="all",
+        title=f"⚠️ BEHAVIOUR ANOMALY: {ev_type} ({cam})",
+        message=f"Threat detected in {zone}: {factors[0]['description']}",
+        priority="HIGH" if level == "CRITICAL" else "NORMAL",
+        read=False,
+        location_description=cam,
+        created_at=now
+    )
+    db.add(notif)
+    db.commit()
+    db.refresh(new_ev)
+    
+    return BehaviourEventResponse(
+        id=new_ev.id,
+        event_id=new_ev.event_id,
+        global_track_id=new_ev.global_track_id,
+        camera_id=new_ev.camera_id,
+        local_track_id=new_ev.local_track_id,
+        object_type=new_ev.object_type,
+        event_type=new_ev.event_type,
+        risk_score=new_ev.risk_score,
+        decayed_risk_score=new_ev.decayed_risk_score,
+        risk_level=new_ev.risk_level,
+        confidence=new_ev.confidence,
+        zone_id=new_ev.zone_id,
+        zone_name=new_ev.zone_name,
+        factors=factors,
+        counter_factors=[],
+        details=details,
+        status=new_ev.status,
+        created_at=new_ev.created_at,
+        updated_at=new_ev.updated_at
+    )
 
 @router.delete("/rules/{rule_id}")
 def delete_behaviour_rule(
@@ -380,6 +690,8 @@ def delete_behaviour_event(
     Deletes an individual behaviour event record.
     """
     event = db.query(BehaviourEvent).filter(BehaviourEvent.event_id == event_id).first()
+    if not event and event_id.isdigit():
+        event = db.query(BehaviourEvent).filter(BehaviourEvent.id == int(event_id)).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event '{event_id}' not found.")
 

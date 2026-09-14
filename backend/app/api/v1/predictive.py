@@ -236,6 +236,7 @@ def get_security_hotspots(current_user: User = Depends(get_current_user)):
 # --- Predictive Camera Prioritization ---
 
 @router.get("/recommended-attention", response_model=RecommendedAttentionResponse)
+@router.get("/recommendations", response_model=RecommendedAttentionResponse)
 def get_recommended_camera_attention(current_user: User = Depends(get_current_user)):
     """
     Returns prioritized camera recommendations based on active incidents and anomaly trends.

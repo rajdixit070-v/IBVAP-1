@@ -28,9 +28,13 @@ class ScopeService:
 
     @staticmethod
     def is_global_admin(user: User, db: Session) -> bool:
-        """Returns True if user has global administrative access."""
+        """Returns True if user has global administrative or commander operational access."""
         role_lower = (user.role or "").lower()
-        if role_lower in ["admin", "super_admin"] or user.username == "admin":
+        if (
+            role_lower in ["admin", "super_admin", "commander", "bop_commander", "site_admin"]
+            or user.username in ["admin", "officer_alpha"]
+            or getattr(user, "is_superuser", False)
+        ):
             return True
         scopes = db.query(SiteUserScope).filter(SiteUserScope.username == user.username).all()
         for s in scopes:

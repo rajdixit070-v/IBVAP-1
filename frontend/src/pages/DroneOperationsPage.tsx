@@ -8,19 +8,27 @@ import {
   Plane,
   Trash2,
   Plus,
-  ArrowLeft
+  CheckCircle2,
+  FileText
 } from 'lucide-react';
 import { droneService, Drone, DroneMission, DroneHandoffEvent } from '../services/droneService';
 import { RegisterDroneModal } from '../components/drones/RegisterDroneModal';
 import { useCameras } from '../context/CameraContext';
+import { useAuth } from '../context/AuthContext';
+import { alertSoundService } from '../services/alertSoundService';
+import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
 
-interface DroneOperationsPageProps {
-  onBackToDashboard?: () => void;
-}
+interface DroneOperationsPageProps {}
 
-export const DroneOperationsPage: React.FC<DroneOperationsPageProps> = ({ onBackToDashboard }) => {
+export const DroneOperationsPage: React.FC<DroneOperationsPageProps> = () => {
+  const { user } = useAuth();
+  const userBop = user?.scope_id || '';
   const { cameras } = useCameras();
   const [drones, setDrones] = useState<Drone[]>([]);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [dispatchTitle, setDispatchTitle] = useState('');
+  const [dispatchSummary, setDispatchSummary] = useState('');
   const [missions, setMissions] = useState<DroneMission[]>([]);
   const [handoffs, setHandoffs] = useState<DroneHandoffEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +79,39 @@ export const DroneOperationsPage: React.FC<DroneOperationsPageProps> = ({ onBack
     const interval = setInterval(fetchFleetData, 8000);
     return () => clearInterval(interval);
   }, []);
+
+    const handleRecallDroneRTL = () => {
+    if (!selectedDrone) return;
+    alertSoundService.playAlarm('CRITICAL');
+    alertSoundService.speakVoiceAlert(`Return to launch initiated. UAV ${selectedDrone.name} returning to border base.`);
+    setSelectedDrone(prev => prev ? { ...prev, flight_state: 'RTH', status: 'RETURNING' } : null);
+    setActionNotice(`RTL Command Sent: UAV ${selectedDrone.name} returning to outpost home pad.`);
+    setTimeout(() => setActionNotice(null), 5000);
+  };
+
+  const handleHoldHover = () => {
+    if (!selectedDrone) return;
+    alertSoundService.speakVoiceAlert(`UAV holding stationary orbit position.`);
+    setSelectedDrone(prev => prev ? { ...prev, flight_state: 'HOVER', speed_mps: 0 } : null);
+    setActionNotice(`Hover Command Sent: UAV ${selectedDrone.name} holding position.`);
+    setTimeout(() => setActionNotice(null), 4000);
+  };
+
+  const handleApplyMissionTemplate = (profile: string, objective: string) => {
+    setMissionType(profile);
+    setMissionObjective(objective);
+    alertSoundService.speakVoiceAlert(`Tactical UAV profile configured: ${profile}.`);
+  };
+
+  const handleOpenDroneDispatch = (mission?: DroneMission) => {
+    const droneName = selectedDrone?.name || 'Garuda-1 Heavy Recon UAV';
+    const missionName = mission?.objective || missionObjective || 'Airborne Border Reconnaissance Patrol';
+    setDispatchTitle(`🛸 AERIAL UAV SITREP: ${droneName} (${userBop || 'Outpost Sector'})`);
+    setDispatchSummary(
+      `Tactical UAV surveillance flight report from ${userBop || 'Checkpost Outpost'}. Drone: ${droneName} (Battery: ${selectedDrone?.battery_pct || 90}%, Alt: ${selectedDrone?.altitude_m || 45}m). Mission: ${missionName}. Perimeter airspace secure.`
+    );
+    setDispatchModalOpen(true);
+  };
 
   const handleCreateAndDispatchMission = async () => {
     if (!selectedDrone || !missionObjective.trim()) return;
@@ -165,16 +206,6 @@ export const DroneOperationsPage: React.FC<DroneOperationsPageProps> = ({ onBack
         </div>
 
         <div className="flex items-center gap-3">
-          {onBackToDashboard && (
-            <button
-              onClick={onBackToDashboard}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-sm transition cursor-pointer font-mono font-medium"
-              title="Return to Central Dashboard"
-            >
-              <ArrowLeft className="w-4 h-4 text-cyan-400" />
-              <span>Dashboard</span>
-            </button>
-          )}
           <button
             onClick={() => setIsDroneModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg shadow-lg shadow-emerald-900/30 text-sm transition cursor-pointer"
@@ -192,15 +223,50 @@ export const DroneOperationsPage: React.FC<DroneOperationsPageProps> = ({ onBack
           </button>
 
           <button
+            onClick={handleRecallDroneRTL}
+            disabled={!selectedDrone}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold rounded-lg shadow-lg shadow-red-900/30 text-xs transition cursor-pointer"
+            title="Emergency Return-to-Launch (RTL)"
+          >
+            <Square className="w-3.5 h-3.5" />
+            RTL / RECALL UAV
+          </button>
+
+          <button
+            onClick={handleHoldHover}
+            disabled={!selectedDrone}
+            className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold rounded-lg shadow-lg shadow-amber-900/30 text-xs transition cursor-pointer"
+            title="Hold Stationary Hover"
+          >
+            <Plane className="w-3.5 h-3.5" />
+            HOLD HOVER
+          </button>
+
+          <button
             onClick={handleTriggerHandoff}
             disabled={!selectedDrone}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium rounded-lg shadow-lg shadow-purple-900/30 text-sm transition cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium rounded-lg shadow-lg shadow-purple-900/30 text-xs transition cursor-pointer"
           >
-            <Share2 className="w-4 h-4" />
-            Trigger Camera ↔ Drone Handoff
+            <Share2 className="w-3.5 h-3.5" />
+            Camera ↔ Drone Handoff
+          </button>
+
+          <button
+            onClick={() => handleOpenDroneDispatch()}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-bold rounded-lg shadow-lg shadow-blue-900/30 text-xs transition cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Transmit UAV SITREP to HQ
           </button>
         </div>
       </div>
+
+      {actionNotice && (
+        <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono bg-emerald-950/60 p-3 rounded-xl border border-emerald-800/80 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{actionNotice}</span>
+        </div>
+      )}
 
       {/* Fleet Overview Cards */}
       {drones.length === 0 ? (
@@ -334,6 +400,48 @@ export const DroneOperationsPage: React.FC<DroneOperationsPageProps> = ({ onBack
               </div>
             </div>
 
+            {/* Tactical Mission Quick Launch Templates */}
+            <div className="space-y-1.5 pt-1">
+              <div className="text-[11px] font-mono text-slate-400 flex items-center justify-between">
+                <span>QUICK TACTICAL MISSION PRESETS:</span>
+                <span className="text-emerald-400 text-[10px]">1-CLICK TEMPLATE</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleApplyMissionTemplate('PATROL', 'Zero-Line Boundary Wire Low-Altitude Sweeping Patrol (50m Alt)')}
+                  className="px-2.5 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 rounded-lg text-left text-[11px] text-slate-300 transition"
+                >
+                  <strong className="text-white block">Wire Low Sweep</strong>
+                  <span className="text-[10px] text-slate-500">Zero-line perimeter orbit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyMissionTemplate('RECONNAISSANCE', 'Riverbed & Ravine Blind-Spot Airborne Reconnaissance')}
+                  className="px-2.5 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 rounded-lg text-left text-[11px] text-slate-300 transition"
+                >
+                  <strong className="text-white block">Riverbed Recon</strong>
+                  <span className="text-[10px] text-slate-500">Check terrain blind spots</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyMissionTemplate('INTERCEPT', 'Airborne Perimeter Overwatch & Ground Sentry QRF Intercept Support')}
+                  className="px-2.5 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 rounded-lg text-left text-[11px] text-slate-300 transition"
+                >
+                  <strong className="text-white block">QRF Air Escort</strong>
+                  <span className="text-[10px] text-slate-500">Support 2-man sentry squad</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyMissionTemplate('PATROL', 'Nocturnal Lockdown Thermal Scanning Corridor Patrol')}
+                  className="px-2.5 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 rounded-lg text-left text-[11px] text-slate-300 transition"
+                >
+                  <strong className="text-white block">Night Curfew Scan</strong>
+                  <span className="text-[10px] text-slate-500">FLIR thermal overwatch</span>
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="text-xs text-slate-400 font-semibold block mb-1">Tactical Objective & Waypoint Directives</label>
               <input
@@ -462,6 +570,19 @@ export const DroneOperationsPage: React.FC<DroneOperationsPageProps> = ({ onBack
         isOpen={isDroneModalOpen}
         onClose={() => setIsDroneModalOpen(false)}
         onSuccess={fetchFleetData}
+      />
+
+      {/* Dispatch UAV SITREP to Delhi Central HQ Admin */}
+      <DispatchSitrepModal
+        isOpen={dispatchModalOpen}
+        onClose={() => setDispatchModalOpen(false)}
+        onSuccess={() => {
+          setActionNotice('Aerial Drone SITREP transmitted to Delhi Central HQ Admin!');
+          setTimeout(() => setActionNotice(null), 5000);
+        }}
+        initialTitle={dispatchTitle}
+        initialSummary={dispatchSummary}
+        initialPriority="HIGH"
       />
     </div>
   );

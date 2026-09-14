@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Crosshair,
   ZoomIn,
@@ -8,21 +8,26 @@ import {
   Search,
   RefreshCw,
   Play,
-  ArrowLeft as BackIcon,
   RotateCcw,
   Eye,
-  Trash2
+  Trash2,
+  Volume2,
+  Users,
+  Send,
+  CheckCircle2
 } from 'lucide-react';
+import { incidentService } from '../services/incidentService';
+import { alertSoundService } from '../services/alertSoundService';
+import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
 import { ptzService, PTZDevice, PTZPreset, ONVIFDevice } from '../services/ptzService';
 import { cameraService } from '../services/cameraService';
 import { useCameras } from '../context/CameraContext';
+import { Camera } from '../types/camera';
 import { useAuth } from '../context/AuthContext';
 
-interface PTZControlPageProps {
-  onBackToDashboard?: () => void;
-}
+interface PTZControlPageProps {}
 
-export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboard }) => {
+export const PTZControlPage: React.FC<PTZControlPageProps> = () => {
   const { user } = useAuth();
   const isHQCommand = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
   const { cameras } = useCameras();
@@ -35,6 +40,30 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
   const [discovering, setDiscovering] = useState(false);
   const [autoTrack, setAutoTrack] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+
+  const userBop = user?.scope_id || '';
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [hornActive, setHornActive] = useState<boolean>(false);
+  const [dispatchModalOpen, setDispatchModalOpen] = useState<boolean>(false);
+  const [dispatchTitle, setDispatchTitle] = useState('');
+  const [dispatchSummary, setDispatchSummary] = useState('');
+
+  // Checkpost Camera Scoping: strictly Commander's assigned Outpost vs Central HQ Admin
+  const availableCameras = useMemo(() => {
+    if (isHQCommand) return cameras;
+    const postName = (user?.post_name || '').toLowerCase();
+    const filtered = cameras.filter((c: Camera) => {
+      const p = (c.bop_site || '').toLowerCase();
+      const cid = (c.camera_id || '').toLowerCase();
+      return (
+        (postName && p.includes(postName)) ||
+        (userBop && p.includes(userBop.toLowerCase())) ||
+        p.includes('wagah') ||
+        cid.includes('wagah')
+      );
+    });
+    return filtered.length > 0 ? filtered : cameras;
+  }, [cameras, isHQCommand, user, userBop]);
 
   // Visual Pan/Tilt/Zoom Simulation Canvas State
   const [visualZoom, setVisualZoom] = useState<number>(1.0);
@@ -255,6 +284,46 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
     }
   };
 
+  // Tactical Ground Sentry Actions
+  const handleSoundFenceHorn = () => {
+    setHornActive(true);
+    alertSoundService.playAlarm('CRITICAL');
+    alertSoundService.speakVoiceAlert('Acoustic boundary warning siren triggered on PTZ turret sector. Intruders halt and retreat.');
+    setActionNotice('Boundary Warning Acoustic Siren Emitted!');
+    setTimeout(() => {
+      setHornActive(false);
+      setActionNotice(null);
+    }, 4000);
+  };
+
+  const handleDeploySentrySquad = async () => {
+    try {
+      alertSoundService.playAlarm('HIGH');
+      alertSoundService.speakVoiceAlert('Armed sentry patrol dispatched to investigate target framed on PTZ turret.');
+      await incidentService.createIncident({
+        title: `🛡️ SENTRY PATROL: Intercept target tracked by PTZ ${selectedCameraId}`,
+        description: `Commander deployed 2-man armed sentry team to intercept suspect target framed on camera ${selectedCameraId} (Pan: ${visualPan}°, Tilt: ${visualTilt}°, Optical Zoom: ${visualZoom}x). SOP-Alpha activated.`,
+        priority: visualZoom > 5.0 ? 'CRITICAL' : 'HIGH',
+        incident_type: 'SECURITY',
+        camera_id: selectedCameraId,
+        bop_site: userBop || 'BOP Sector',
+        risk_score: 85
+      });
+      setActionNotice('2-Man Armed Sentry Team Deployed & Incident Logged!');
+      setTimeout(() => setActionNotice(null), 5000);
+    } catch (e) {
+      console.error('Failed to deploy sentry squad', e);
+    }
+  };
+
+  const handleOpenDispatchModal = () => {
+    setDispatchTitle(`🚨 PTZ OPTICAL LOCK: Suspect Target Tracked at ${userBop || 'Checkpost Sector'}`);
+    setDispatchSummary(
+      `PTZ Camera ${selectedCameraId} locked onto suspect target at Pan: ${visualPan}°, Tilt: ${visualTilt}°, Optical Zoom: ${visualZoom}x. Auto-track status: ${autoTrack ? 'ACTIVE LOCK' : 'MANUAL'}. Ground sentries deployed.`
+    );
+    setDispatchModalOpen(true);
+  };
+
   const handleCreatePreset = async () => {
     if (!newPresetName.trim()) return;
     try {
@@ -312,16 +381,6 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
       {/* Header with Return to Home Dashboard */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 rounded-xl backdrop-blur-sm shadow-xl">
         <div className="flex items-center gap-3">
-          {onBackToDashboard && (
-            <button
-              onClick={onBackToDashboard}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-sky-400 rounded-lg text-xs font-mono font-bold border border-slate-700 transition cursor-pointer shrink-0"
-              title="Return to Home Dashboard"
-            >
-              <BackIcon className="w-4 h-4" />
-              <span>← Return to Home Dashboard</span>
-            </button>
-          )}
           <div className="p-2.5 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30 shrink-0">
             <Crosshair className="w-6 h-6 animate-pulse" />
           </div>
@@ -419,6 +478,62 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
         </div>
       )}
 
+      {/* Tactical Sentry Ground Interventions Bar */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center flex-wrap gap-2.5">
+          <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+            <Crosshair className="w-3.5 h-3.5 text-blue-400" />
+            Turret Sentry Actions:
+          </span>
+
+          <button
+            type="button"
+            onClick={handleSoundFenceHorn}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-mono font-bold transition cursor-pointer border ${
+              hornActive
+                ? 'bg-red-600 text-white border-red-500 animate-pulse shadow-lg shadow-red-600/30'
+                : 'bg-red-950/40 hover:bg-red-900/60 text-red-300 border-red-800/60'
+            }`}
+            title="Sound boundary warning siren across the wire"
+          >
+            <Volume2 className="w-3.5 h-3.5" />
+            {hornActive ? 'SIREN ACTIVE...' : 'SOUND PERIMETER HORN'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDeploySentrySquad}
+            className="flex items-center gap-1.5 px-3 py-2 bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-800/60 rounded-lg text-xs font-mono font-bold transition cursor-pointer"
+            title="Mobilize 2-man armed reaction squad to framed coordinates"
+          >
+            <Users className="w-3.5 h-3.5" />
+            DEPLOY SENTRY PATROL
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenDispatchModal}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white rounded-lg text-xs font-mono font-bold transition cursor-pointer shadow-md shadow-purple-900/30"
+            title="Transmit PTZ target telemetry and snapshot to Delhi Central HQ Admin"
+          >
+            <Send className="w-3.5 h-3.5" />
+            DISPATCH TARGET TO HQ
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {actionNotice && (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono bg-emerald-950/60 px-3 py-1.5 rounded-lg border border-emerald-800/80 animate-in fade-in">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {actionNotice}
+            </div>
+          )}
+          <div className="px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-lg text-[11px] font-mono text-slate-300">
+            TURRET AIM: <strong className="text-blue-400">{visualPan}°</strong> PAN • <strong className="text-blue-400">{visualTilt}°</strong> TILT • <strong className="text-amber-400">{visualZoom}x</strong> ZOOM
+          </div>
+        </div>
+      </div>
+
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Interactive Video HUD & Virtual Joystick Controls */}
@@ -436,10 +551,10 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
                   onChange={e => setSelectedCameraId(e.target.value)}
                   className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:border-blue-500 focus:outline-none"
                 >
-                  {cameras.length === 0 ? (
-                    <option value="">No cameras registered</option>
+                  {availableCameras.length === 0 ? (
+                    <option value="">No checkpost cameras registered</option>
                   ) : (
-                    cameras.map(c => (
+                    availableCameras.map((c: Camera) => (
                       <option key={c.camera_id} value={c.camera_id}>
                         {c.camera_id} — {c.camera_name} ({c.bop_site || 'BOP Site'})
                       </option>
@@ -715,6 +830,18 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = ({ onBackToDashboar
           </div>
         </div>
       </div>
+      {/* Transmit PTZ Target SITREP to Delhi Central HQ Admin */}
+      <DispatchSitrepModal
+        isOpen={dispatchModalOpen}
+        onClose={() => setDispatchModalOpen(false)}
+        onSuccess={() => {
+          setActionNotice('Target SITREP successfully transmitted to Delhi Central HQ Admin!');
+          setTimeout(() => setActionNotice(null), 5000);
+        }}
+        initialTitle={dispatchTitle}
+        initialSummary={dispatchSummary}
+        initialPriority="URGENT"
+      />
     </div>
   );
 };

@@ -61,6 +61,7 @@ def get_zone(
         raise HTTPException(status_code=404, detail="Security zone not found.")
     return serialize_zone(zone)
 
+@router.post("", response_model=SecurityZoneResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=SecurityZoneResponse, status_code=status.HTTP_201_CREATED)
 def create_zone(
     zone_in: SecurityZoneCreate,

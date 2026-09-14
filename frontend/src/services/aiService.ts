@@ -1,4 +1,5 @@
 import api from './api';
+import { authService } from './authService';
 import {
   CameraAIStatus,
   CameraAIConfig,
@@ -81,7 +82,7 @@ export class AIFeedWebSocket {
 
   private connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const token = localStorage.getItem('ibvap_token');
+    const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/ai-feed/${this.cameraId}${tokenParam}`;
 

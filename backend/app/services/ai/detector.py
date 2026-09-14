@@ -138,6 +138,10 @@ class YOLOObjectDetector:
             else:
                 try:
                     import torch
+                    try:
+                        torch.set_num_threads(2)
+                    except Exception:
+                        pass
                     from ultralytics import YOLO
 
                     # Determine device
@@ -190,10 +194,12 @@ class YOLOObjectDetector:
         self,
         frame: np.ndarray,
         camera_id: str,
-        input_size: int = 640
+        input_size: int = 640,
+        thresholds: Optional[Dict[str, float]] = None
     ) -> List[Dict[str, Any]]:
         """
         Executes inference on a BGR image frame.
+        Supports per-camera threshold overrides and tactical simulation mode.
         Returns list of detections: [{class_name, category, confidence, bbox: {x, y, width, height}, timestamp, camera_id}]
         """
         if frame is None or frame.size == 0:
@@ -203,16 +209,36 @@ class YOLOObjectDetector:
         timestamp = datetime.utcnow()
         detections = []
 
+        # Active thresholds for this detection run
+        active_thresholds = dict(self.thresholds)
+        if thresholds:
+            active_thresholds.update(thresholds)
+
+        # 0. High-efficiency synthetic target handling for simulated/edge demo cameras
+        try:
+            from app.services.stream_manager import stream_manager
+            streamer = stream_manager.get_streamer(camera_id)
+            if streamer and getattr(streamer, "is_synthetic", False):
+                sim_targets = streamer.get_synthetic_targets()
+                for t in sim_targets:
+                    cat = t.get("category", "other")
+                    min_conf = active_thresholds.get(cat, active_thresholds.get("other", 0.40))
+                    if t.get("confidence", 0.0) >= min_conf:
+                        detections.append(dict(t))
+                return detections
+        except Exception as sim_err:
+            logger.debug(f"Synthetic target check bypass: {sim_err}")
+
         if self.is_loaded and self.model is not None:
             try:
                 # Run YOLO inference with thread safety
                 with self._inference_lock:
                     results = self.model(
                         frame,
-                        imgsz=input_size,
+                        imgsz=min(input_size, 640),
                         device=0 if self.device_used == "CUDA" else "cpu",
                         verbose=False,
-                        conf=0.25 # Base threshold, filtered individually below
+                        conf=0.20 # Base threshold, filtered individually below
                     )
 
                 if results and len(results) > 0:
@@ -226,7 +252,7 @@ class YOLOObjectDetector:
                         category = CATEGORY_MAPPINGS.get(class_name, "other")
 
                         # Apply category-specific confidence threshold
-                        min_conf = self.thresholds.get(category, self.thresholds.get("other", 0.40))
+                        min_conf = active_thresholds.get(category, active_thresholds.get("other", 0.40))
                         if conf < min_conf:
                             continue
 
@@ -271,7 +297,7 @@ class YOLOObjectDetector:
                         imgsz=input_size,
                         device=0 if self.device_used == "CUDA" else "cpu",
                         verbose=False,
-                        conf=self.thresholds.get("drone", 0.30)
+                        conf=active_thresholds.get("drone", 0.30)
                     )
                 if drone_results and len(drone_results) > 0:
                     d_boxes = drone_results[0].boxes
@@ -279,7 +305,7 @@ class YOLOObjectDetector:
                         cls_id = int(d_boxes.cls[i].item())
                         class_name = self.drone_model.names.get(cls_id, "drone").lower()
                         conf = float(d_boxes.conf[i].item())
-                        min_conf = self.thresholds.get("drone", 0.30)
+                        min_conf = active_thresholds.get("drone", 0.30)
                         if conf < min_conf:
                             continue
                         xyxy = d_boxes.xyxy[i].cpu().numpy()
@@ -308,13 +334,13 @@ class YOLOObjectDetector:
         # 3. Fallback: If no detections and YOLO is not loaded or returned empty, use OpenCV HOG and motion detector
 
         if not detections:
-            fallback_dets = self._opencv_fallback_detect(frame, camera_id)
+            fallback_dets = self._opencv_fallback_detect(frame, camera_id, active_thresholds)
             if fallback_dets:
                 detections.extend(fallback_dets)
 
         return detections
 
-    def _opencv_fallback_detect(self, frame: np.ndarray, camera_id: str) -> List[Dict[str, Any]]:
+    def _opencv_fallback_detect(self, frame: np.ndarray, camera_id: str, active_thresholds: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         """
         High-reliability built-in OpenCV pedestrian & motion detector.
         Runs purely on CPU using OpenCV HOG + SVM. Zero external model weight dependencies.
@@ -339,6 +365,7 @@ class YOLOObjectDetector:
             dets = []
             now = datetime.utcnow()
             inv_scale = 1.0 / scale if scale < 1.0 else 1.0
+            min_person_conf = (active_thresholds or {}).get("person", self.thresholds.get("person", 0.40))
 
             for (rx, ry, rw, rh), weight in zip(rects, weights):
                 conf = float(weight) if isinstance(weight, (float, int)) else float(weight[0])
@@ -357,6 +384,8 @@ class YOLOObjectDetector:
                 oh = max(10.0, min(float(orig_h - oy), oh))
 
                 normalized_conf = round(min(0.95, max(0.55, 0.50 + conf * 0.25)), 3)
+                if normalized_conf < min_person_conf:
+                    continue
                 dets.append({
                     "class_name": "person",
                     "category": "person",

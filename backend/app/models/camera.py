@@ -22,6 +22,7 @@ class Camera(Base):
     
     # Connection details
     rtsp_url = Column(String(500), nullable=False)
+    sub_stream_url = Column(String(500), nullable=True) # Low-bandwidth SD secondary stream
     username = Column(String(100), nullable=True)
     encrypted_password = Column(Text, nullable=True) # AES-256 encrypted
     stream_type = Column(String(50), default="main")  # main, sub, thermal, ptz

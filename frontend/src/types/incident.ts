@@ -64,10 +64,13 @@ export interface Alert {
   title: string;
   priority: IncidentPriority;
   risk_score: number;
-  status: 'NEW' | 'ACKNOWLEDGED' | 'DISMISSED' | 'ESCALATED';
+  status: 'NEW' | 'ACKNOWLEDGED' | 'DISMISSED' | 'ESCALATED' | 'RESOLVED';
   assigned_to?: string;
   acknowledged_at?: string;
   acknowledged_by?: string;
+  resolved_at?: string;
+  resolved_by?: string;
+  resolution_notes?: string;
   escalation_deadline?: string;
   is_escalated: boolean;
   created_at: string;

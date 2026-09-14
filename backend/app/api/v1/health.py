@@ -19,6 +19,7 @@ from app.models.health_models import (
 )
 from app.schemas.health_schemas import (
     SystemHealthSummaryResponse,
+    ServerHardwareTelemetry,
     CameraHealthItem,
     EdgeNodeHealthItem,
     ServiceDependencyItem,
@@ -42,6 +43,12 @@ from app.models.user import User
 logger = logging.getLogger("ibvap.api.health")
 
 router = APIRouter()
+
+
+@router.get("/server", response_model=ServerHardwareTelemetry)
+def get_server_hardware_telemetry(current_user: User = Depends(get_current_user)):
+    """Returns 100% real host machine CPU, RAM, disk, database file size, and process metrics."""
+    return system_health_service.get_server_hardware_telemetry()
 
 @router.get("/system", response_model=SystemHealthSummaryResponse)
 def get_system_health_summary(current_user: User = Depends(get_current_user)):

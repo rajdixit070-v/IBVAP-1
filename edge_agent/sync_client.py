@@ -185,3 +185,35 @@ class EdgeSyncClient:
                         logger.debug(f"Uploaded evidence snapshot for event {r['event_id']}")
             except Exception as e:
                 logger.debug(f"Failed to sync evidence photo {evd_path}: {e}")
+
+    def push_live_frame(
+        self,
+        camera_id: str,
+        frame_jpeg: bytes,
+        resolution: Optional[str] = None,
+        fps: Optional[float] = None
+    ) -> bool:
+        """
+        Outbound Reverse Push: Streams a compressed video frame from border to Central HQ.
+        Bypasses border NAT/firewalls with zero inbound port forwarding.
+        """
+        url = f"{self.config.central_url.rstrip('/')}/api/v1/edge/nodes/{self.config.node_id}/push-frame/{camera_id}"
+        headers = {
+            "Content-Type": "image/jpeg",
+            "User-Agent": f"IBVAP-EdgeStreamer/{self.config.node_id}"
+        }
+        if self.config.api_key:
+            headers["X-Edge-API-Key"] = self.config.api_key
+
+        params = {}
+        if resolution:
+            params["resolution"] = resolution
+        if fps is not None:
+            params["fps"] = str(fps)
+
+        try:
+            resp = self.session.post(url, data=frame_jpeg, headers=headers, params=params, timeout=2.0)
+            return resp.status_code == 200
+        except Exception as e:
+            logger.debug(f"Frame push failure for {camera_id}: {e}")
+            return False

@@ -15,9 +15,27 @@ class CameraBase(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     rtsp_url: str = Field(..., description="Full RTSP Stream URL")
+    sub_stream_url: Optional[str] = Field(None, description="Optional secondary low-bandwidth SD stream URL")
     username: Optional[str] = None
     stream_type: Optional[str] = "main"
     enabled: bool = True
+
+    @field_validator('sub_stream_url')
+    def validate_sub_stream_url(cls, v):
+        if not v:
+            return None
+        v_clean = v.strip()
+        if not v_clean:
+            return None
+        if v_clean.isdigit():
+            return f"webcam://{v_clean}"
+        valid_prefixes = (
+            "rtsp://", "http://", "https://", "synthetic://", "test://",
+            "webcam://", "device://", "rtmp://", "rtmps://", "udp://"
+        )
+        if not any(v_clean.startswith(prefix) for prefix in valid_prefixes):
+            raise ValueError("Invalid sub_stream_url format.")
+        return v_clean
 
     @field_validator('rtsp_url')
     def validate_rtsp_url(cls, v):
@@ -50,6 +68,7 @@ class CameraUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     rtsp_url: Optional[str] = None
+    sub_stream_url: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
     stream_type: Optional[str] = None
@@ -69,6 +88,7 @@ class CameraResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     rtsp_url: str  # Masked version
+    sub_stream_url: Optional[str] = None
     username: Optional[str] = None
     has_password: bool = False
     stream_type: str

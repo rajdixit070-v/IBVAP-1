@@ -10,6 +10,8 @@ class Token(BaseModel):
     scope_type: Optional[str] = "GLOBAL"
     scope_id: Optional[str] = "*"
     scope_role: Optional[str] = "SUPER_ADMIN"
+    post_name: Optional[str] = None
+    sector: Optional[str] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -29,6 +31,8 @@ class UserResponse(BaseModel):
     scope_type: Optional[str] = "GLOBAL"
     scope_id: Optional[str] = "*"
     scope_role: Optional[str] = "SUPER_ADMIN"
+    post_name: Optional[str] = None
+    sector: Optional[str] = None
 
 
     class Config:

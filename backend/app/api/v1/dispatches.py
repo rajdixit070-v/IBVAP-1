@@ -69,12 +69,13 @@ def list_dispatches(
             ev_ids = []
         
         evidence_records = db.query(Evidence).filter(Evidence.evidence_id.in_(ev_ids)).all() if ev_ids else []
-        d_dict["evidence_items"] = evidence_records
+        d_dict["evidence_items"] = [{c.name: getattr(ev, c.name) for c in ev.__table__.columns} for ev in evidence_records]
         result.append(d_dict)
         
     return result
 
 @router.post("", response_model=BOPDispatchResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=BOPDispatchResponse, status_code=status.HTTP_201_CREATED)
 def create_daily_sitrep_dispatch(
     dispatch_in: BOPDispatchCreate,
     db: Session = Depends(get_db),
@@ -121,7 +122,12 @@ def create_daily_sitrep_dispatch(
     db.refresh(new_disp)
     
     d_dict = {c.name: getattr(new_disp, c.name) for c in new_disp.__table__.columns}
-    d_dict["evidence_items"] = []
+    ev_ids = dispatch_in.evidence_ids or []
+    if ev_ids:
+        evidence_records = db.query(Evidence).filter(Evidence.evidence_id.in_(ev_ids)).all()
+        d_dict["evidence_items"] = [{c.name: getattr(ev, c.name) for c in ev.__table__.columns} for ev in evidence_records]
+    else:
+        d_dict["evidence_items"] = []
     return d_dict
 
 @router.post("/quick-send-evidence", response_model=BOPDispatchResponse, status_code=status.HTTP_201_CREATED)
@@ -177,7 +183,30 @@ def quick_send_evidence_to_hq(
     db.refresh(new_disp)
     
     d_dict = {c.name: getattr(new_disp, c.name) for c in new_disp.__table__.columns}
-    d_dict["evidence_items"] = [evd]
+    d_dict["evidence_items"] = [{c.name: getattr(evd, c.name) for c in evd.__table__.columns}]
+    return d_dict
+
+@router.get("/{dispatch_id}", response_model=BOPDispatchResponse)
+def get_single_dispatch(
+    dispatch_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve single dispatch details including linked evidence items.
+    """
+    disp = db.query(BOPDispatch).filter(BOPDispatch.dispatch_id == dispatch_id).first()
+    if not disp:
+        raise HTTPException(status_code=404, detail=f"Dispatch '{dispatch_id}' not found.")
+        
+    d_dict = {c.name: getattr(disp, c.name) for c in disp.__table__.columns}
+    ev_ids = []
+    try:
+        ev_ids = json.loads(disp.evidence_ids) if disp.evidence_ids else []
+    except Exception:
+        ev_ids = []
+    ev_records = db.query(Evidence).filter(Evidence.evidence_id.in_(ev_ids)).all() if ev_ids else []
+    d_dict["evidence_items"] = [{c.name: getattr(ev, c.name) for c in ev.__table__.columns} for ev in ev_records]
     return d_dict
 
 @router.post("/{dispatch_id}/acknowledge", response_model=BOPDispatchResponse)
@@ -219,5 +248,6 @@ def acknowledge_dispatch(
         ev_ids = json.loads(disp.evidence_ids) if disp.evidence_ids else []
     except Exception:
         ev_ids = []
-    d_dict["evidence_items"] = db.query(Evidence).filter(Evidence.evidence_id.in_(ev_ids)).all() if ev_ids else []
+    ev_records = db.query(Evidence).filter(Evidence.evidence_id.in_(ev_ids)).all() if ev_ids else []
+    d_dict["evidence_items"] = [{c.name: getattr(ev, c.name) for c in ev.__table__.columns} for ev in ev_records]
     return d_dict

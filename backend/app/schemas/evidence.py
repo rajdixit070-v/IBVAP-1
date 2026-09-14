@@ -7,11 +7,11 @@ class EvidenceBase(BaseModel):
     source_event_id: Optional[str] = None
     incident_id: Optional[str] = None
     camera_id: str
-    evidence_type: str
+    evidence_type: str = "SNAPSHOT"
     file_path: str
-    checksum_sha256: str
-    mime_type: str
-    file_size_bytes: int
+    checksum_sha256: Optional[str] = None
+    mime_type: Optional[str] = "image/jpeg"
+    file_size_bytes: Optional[int] = 0
 
 class EvidenceCreate(EvidenceBase):
     pass

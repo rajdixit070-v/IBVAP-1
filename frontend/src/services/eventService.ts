@@ -1,4 +1,5 @@
 import api from './api';
+import { authService } from './authService';
 import { SecurityEvent, SecurityEventsSummary, SystemRiskConfig } from '../types/event';
 
 export const eventService = {
@@ -66,7 +67,7 @@ export class SecurityEventsWebSocket {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const token = localStorage.getItem('ibvap_token');
+    const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const url = `${protocol}//${host}/api/v1/ws/security-events${tokenParam}`;
 

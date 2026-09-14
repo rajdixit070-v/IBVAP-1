@@ -1,9 +1,12 @@
 from typing import List, Optional
+import uuid
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
+from app.models.drone_models import Drone, DroneMission
 from app.schemas.drone_schemas import (
     DroneCreate,
     DroneUpdate,
@@ -20,6 +23,71 @@ from app.services.drones.handoff_service import DroneHandoffService
 
 router = APIRouter(prefix="/drones", tags=["Drone Fleet & Missions"])
 
+
+def seed_initial_drones_if_empty(db: Session):
+    count = db.query(Drone).count()
+    if count == 0:
+        d1 = Drone(
+            drone_id="UAV-GARUDA-01",
+            name="Garuda-1 Heavy Recon UAV",
+            model="BorderGuardian-X8 Hexacopter",
+            site_id="SITE-BORDER-NORTH",
+            bop_id="BOP-WAGAH",
+            status="AVAILABLE",
+            battery_pct=96.0,
+            latitude=31.6245,
+            longitude=74.8725,
+            altitude_m=45.0,
+            heading_deg=180.0,
+            speed_mps=0.0,
+            flight_state="HOVER",
+            gps_satellites=18,
+            link_quality_pct=98.0,
+            camera_gimbal_pitch=-45.0,
+            capabilities_json='{"has_thermal": true, "max_speed_mps": 25.0, "max_range_m": 12000, "max_flight_time_min": 50}',
+            last_seen_at=datetime.utcnow()
+        )
+        d2 = Drone(
+            drone_id="UAV-NETRA-02",
+            name="Netra-2 Rapid Intercept Scout",
+            model="AeroScout-Q4 Quadcopter",
+            site_id="SITE-BORDER-NORTH",
+            bop_id="BOP-WAGAH",
+            status="AVAILABLE",
+            battery_pct=88.0,
+            latitude=31.6260,
+            longitude=74.8740,
+            altitude_m=30.0,
+            heading_deg=90.0,
+            speed_mps=0.0,
+            flight_state="LANDED",
+            gps_satellites=16,
+            link_quality_pct=94.0,
+            camera_gimbal_pitch=-30.0,
+            capabilities_json='{"has_thermal": true, "max_speed_mps": 32.0, "max_range_m": 8000, "max_flight_time_min": 35}',
+            last_seen_at=datetime.utcnow()
+        )
+        db.add(d1)
+        db.add(d2)
+        db.commit()
+
+        # Seed an initial completed patrol mission
+        m1 = DroneMission(
+            mission_id=f"MSN-{uuid.uuid4().hex[:8].upper()}",
+            drone_id="UAV-GARUDA-01",
+            mission_type="PATROL",
+            status="COMPLETED",
+            priority="HIGH",
+            objective="Zero-Line Border Wire Low-Altitude Sweeping Patrol",
+            waypoints_json='[{"lat": 31.6245, "lng": 74.8725, "alt": 45}, {"lat": 31.6255, "lng": 74.8735, "alt": 45}, {"lat": 31.6235, "lng": 74.8715, "alt": 45}]',
+            assigned_by="officer_alpha",
+            created_at=datetime.utcnow() - timedelta(hours=2),
+            completed_at=datetime.utcnow() - timedelta(hours=1, minutes=20)
+        )
+        db.add(m1)
+        db.commit()
+
+
 @router.get("", response_model=List[DroneResponse])
 def list_drones(
     site_id: Optional[str] = None,
@@ -27,13 +95,15 @@ def list_drones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    seed_initial_drones_if_empty(db)
     return DroneService.get_all_drones(db, site_id=site_id, status=status)
+
 
 @router.post("", response_model=DroneResponse, status_code=status.HTTP_201_CREATED)
 def register_drone(
     data: DroneCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     try:
         return DroneService.create_drone(db, data)

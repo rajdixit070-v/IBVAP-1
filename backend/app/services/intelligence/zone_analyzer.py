@@ -93,15 +93,16 @@ class CameraZoneStateTracker:
                     
                     obj_cat = track.category.lower()
                     event_type = (
-                        "PERSON_DETECTED" if obj_cat in ["person", "human"]
+                        "UNAUTHORIZED_INTRUSION" if obj_cat in ["person", "human"]
                         else "VEHICLE_DETECTED" if obj_cat in ["vehicle", "car", "truck", "motorcycle", "bus"]
-                        else "ANIMAL_INTRUSION" if obj_cat in ["animal", "dog", "horse", "cow", "cat"]
                         else "DRONE_DETECTED" if obj_cat in ["drone", "uav", "aircraft"]
+                        else "ANIMAL_INTRUSION" if obj_cat in ["animal", "dog", "horse", "cow", "cat"]
                         else "SUSPICIOUS_OBJECT_DETECTED"
                     )
 
+                    # 1. Capture genuine forensic evidence snapshot with HUD overlay and cryptographic SHA-256 hash
                     evd = None
-                    if frame is not None and frame.size > 0:
+                    if frame is not None:
                         try:
                             from app.services.evidence.evidence_manager import evidence_manager
                             evd = evidence_manager.capture_and_save_frame(
@@ -110,26 +111,30 @@ class CameraZoneStateTracker:
                                 track=track,
                                 event_type=event_type
                             )
-                        except Exception as fe_err:
-                            logger.warning(f"FOV evidence capture error on {self.camera_id}: {fe_err}")
+                        except Exception as ev_err:
+                            logger.error(f"Evidence capture error on {self.camera_id}: {ev_err}")
 
-                    security_event_manager.dispatch_security_event(
-                        camera_id=self.camera_id,
-                        track_id=track.track_id,
-                        object_type=track.object_type,
-                        event_type=event_type,
-                        zone_id=None,
-                        zone_name="Camera Field of View",
-                        zone_type="MONITORED",
-                        is_night=is_night,
-                        confidence=track.confidence,
-                        bbox=track.bbox,
-                        direction=track.direction,
-                        speed=track.speed,
-                        timeline_message=f"Live Detection: {track.object_type.capitalize()} #{track.track_id} confirmed in camera field of view (Confidence: {int(track.confidence * 100)}%)",
-                        evidence_id=evd.evidence_id if evd else None,
-                        evidence_path=evd.file_path if evd else None
-                    )
+                    # 2. Dispatch security event through the pipeline (triggers Alert Engine, WebSocket, and Push)
+                    try:
+                        security_event_manager.dispatch_security_event(
+                            camera_id=self.camera_id,
+                            track_id=track.track_id,
+                            object_type=track.object_type,
+                            event_type=event_type,
+                            zone_id=None,
+                            zone_name="Perimeter Surveillance Sector",
+                            zone_type="RESTRICTED",
+                            is_night=is_night,
+                            confidence=track.confidence,
+                            bbox=track.bbox,
+                            direction=track.direction,
+                            speed=track.speed,
+                            timeline_message=f"Target {track.object_type.upper()} #{track.track_id} detected in surveillance sector ({self.camera_id})",
+                            evidence_id=evd.evidence_id if evd else None,
+                            evidence_path=evd.file_path if evd else None
+                        )
+                    except Exception as dev_err:
+                        logger.error(f"Security event dispatch error on {self.camera_id}: {dev_err}")
 
                     # Feed observation to Multimodal Tactical AI Engine
                     try:

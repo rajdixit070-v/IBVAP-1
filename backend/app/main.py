@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, engine, SessionLocal
@@ -128,6 +129,187 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ibvap.main")
 
+def ensure_default_border_cameras(db: Session):
+    """Guarantees authentic frontier checkpost surveillance cameras exist in database."""
+    if db.query(Camera).count() >= 4:
+        return
+    core_cameras = [
+        {
+            "camera_id": "CAM-WAGAH-01",
+            "camera_name": "Wagah Border Sentry Primary",
+            "description": "High-definition PTZ sentry camera covering Wagah Joint Checkpost & Zero Line.",
+            "bop_site": "Attari-Wagah Joint Check Post",
+            "bop_id": "BOP-WAGAH",
+            "site_id": "SITE-BORDER-NORTH",
+            "sector": "Punjab Frontier",
+            "location": "Zero Line Gate North",
+            "latitude": 31.6048,
+            "longitude": 74.5731,
+            "edge_node_id": "EDGE-BOP-001",
+            "rtsp_url": "synthetic://cam-wagah-01/main",
+            "stream_type": "main",
+            "resolution": "1920x1080",
+            "fps": 25.0,
+            "expected_fps": 25.0,
+            "priority": "CRITICAL",
+            "enabled": True,
+            "status": "HEALTHY"
+        },
+        {
+            "camera_id": "CAM-WAGAH-02",
+            "camera_name": "Wagah Perimeter Fence Thermal",
+            "description": "Long-range thermal perimeter sentry camera with automated tripwire detection.",
+            "bop_site": "Attari-Wagah Joint Check Post",
+            "bop_id": "BOP-WAGAH",
+            "site_id": "SITE-BORDER-NORTH",
+            "sector": "Punjab Frontier",
+            "location": "North Fencing Tower",
+            "latitude": 31.6052,
+            "longitude": 74.5740,
+            "edge_node_id": "EDGE-BOP-001",
+            "rtsp_url": "synthetic://cam-wagah-02/main",
+            "stream_type": "thermal",
+            "resolution": "1920x1080",
+            "fps": 25.0,
+            "expected_fps": 25.0,
+            "priority": "HIGH",
+            "enabled": True,
+            "status": "HEALTHY"
+        },
+        {
+            "camera_id": "CAM-HUSSAINI-01",
+            "camera_name": "Hussainiwala Joint Checkpost Optical",
+            "description": "Continuous optical border surveillance camera at Hussainiwala Checkpost.",
+            "bop_site": "Hussainiwala Joint Checkpost",
+            "bop_id": "BOP-HUSSAINIWALA",
+            "site_id": "SITE-BORDER-NORTH",
+            "sector": "Punjab Frontier",
+            "location": "Sutlej River Overlook",
+            "latitude": 30.9328,
+            "longitude": 74.6052,
+            "edge_node_id": "EDGE-BOP-001",
+            "rtsp_url": "synthetic://cam-hussaini-01/main",
+            "stream_type": "main",
+            "resolution": "1920x1080",
+            "fps": 25.0,
+            "expected_fps": 25.0,
+            "priority": "HIGH",
+            "enabled": True,
+            "status": "HEALTHY"
+        },
+        {
+            "camera_id": "CAM-SADQI-01",
+            "camera_name": "Sadqi Fazilka Outpost PTZ",
+            "description": "Zero-line optical camera monitoring Fazilka corridor at Sadqi Checkpost.",
+            "bop_site": "Sadqi Border Checkpost (Fazilka)",
+            "bop_id": "BOP-SADQI",
+            "site_id": "SITE-BORDER-NORTH",
+            "sector": "Punjab Frontier",
+            "location": "Checkpost Main Gate",
+            "latitude": 30.3842,
+            "longitude": 73.9786,
+            "edge_node_id": "EDGE-BOP-001",
+            "rtsp_url": "synthetic://cam-sadqi-01/main",
+            "stream_type": "main",
+            "resolution": "1920x1080",
+            "fps": 25.0,
+            "expected_fps": 25.0,
+            "priority": "NORMAL",
+            "enabled": True,
+            "status": "HEALTHY"
+        },
+        {
+            "camera_id": "CAM-LONGEWALA-01",
+            "camera_name": "Longewala Desert Perimeter Cam",
+            "description": "Thar desert border perimeter camera covering Longewala sector.",
+            "bop_site": "Longewala Border Post",
+            "bop_id": "BOP-LONGEWALA",
+            "site_id": "SITE-BORDER-NORTH",
+            "sector": "Rajasthan Frontier",
+            "location": "Post Bastion 2",
+            "latitude": 27.5222,
+            "longitude": 70.1556,
+            "edge_node_id": "EDGE-BOP-001",
+            "rtsp_url": "synthetic://cam-longewala-01/main",
+            "stream_type": "main",
+            "resolution": "1920x1080",
+            "fps": 25.0,
+            "expected_fps": 25.0,
+            "priority": "CRITICAL",
+            "enabled": True,
+            "status": "HEALTHY"
+        },
+        {
+            "camera_id": "CAM-MUNABAO-01",
+            "camera_name": "Munabao International Rail Corridor",
+            "description": "Corridor surveillance camera at Munabao border checkpost.",
+            "bop_site": "Munabao Border Checkpost",
+            "bop_id": "BOP-MUNABAO",
+            "site_id": "SITE-BORDER-NORTH",
+            "sector": "Rajasthan Frontier",
+            "location": "Rail Crossing Platform",
+            "latitude": 25.7167,
+            "longitude": 70.2833,
+            "edge_node_id": "EDGE-BOP-001",
+            "rtsp_url": "synthetic://cam-munabao-01/main",
+            "stream_type": "main",
+            "resolution": "1920x1080",
+            "fps": 25.0,
+            "expected_fps": 25.0,
+            "priority": "HIGH",
+            "enabled": True,
+            "status": "HEALTHY"
+        },
+        {
+            "camera_id": "CAM-LOCAL",
+            "camera_name": "HQ Tactical Ops Local Webcam",
+            "description": "Live local command post hardware webcam video feed.",
+            "bop_site": "Attari-Wagah Joint Check Post",
+            "bop_id": "BOP-WAGAH",
+            "site_id": "SITE-BORDER-NORTH",
+            "sector": "Punjab Frontier",
+            "location": "Tactical Operations Center",
+            "latitude": 31.6048,
+            "longitude": 74.5731,
+            "edge_node_id": "EDGE-BOP-001",
+            "rtsp_url": "webcam://0",
+            "stream_type": "main",
+            "resolution": "1280x720",
+            "fps": 25.0,
+            "expected_fps": 25.0,
+            "priority": "NORMAL",
+            "enabled": True,
+            "status": "HEALTHY"
+        }
+    ]
+    for c_dict in core_cameras:
+        if not db.query(Camera).filter(Camera.camera_id == c_dict["camera_id"]).first():
+            db.add(Camera(
+                camera_id=c_dict["camera_id"],
+                camera_name=c_dict["camera_name"],
+                description=c_dict["description"],
+                bop_site=c_dict["bop_site"],
+                bop_id=c_dict.get("bop_id"),
+                site_id=c_dict.get("site_id", "SITE-BORDER-NORTH"),
+                sector=c_dict["sector"],
+                location=c_dict.get("location"),
+                latitude=c_dict.get("latitude"),
+                longitude=c_dict.get("longitude"),
+                edge_node_id=c_dict.get("edge_node_id", "EDGE-BOP-001"),
+                rtsp_url=c_dict["rtsp_url"],
+                stream_type=c_dict["stream_type"],
+                resolution=c_dict["resolution"],
+                fps=c_dict["fps"],
+                expected_fps=c_dict["expected_fps"],
+                priority=c_dict["priority"],
+                enabled=c_dict["enabled"],
+                status=c_dict["status"],
+                username="admin",
+                encrypted_password=encrypt_credential("SecureCamPass2026")
+            ))
+    db.commit()
+    logger.info("Ensured default frontier checkpost cameras in database.")
+
 def init_db_defaults(seed_demo: Optional[bool] = None):
     """
     Initializes tables, default admin, and playbooks.
@@ -172,6 +354,8 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                     conn.execute(text("ALTER TABLE cameras ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
                 if "bop_id" not in cols:
                     conn.execute(text("ALTER TABLE cameras ADD COLUMN bop_id VARCHAR(50)"))
+                if "sub_stream_url" not in cols:
+                    conn.execute(text("ALTER TABLE cameras ADD COLUMN sub_stream_url VARCHAR(500)"))
 
             # Edge Nodes Phase 12 auto-migrations
             cursor = conn.execute(text("PRAGMA table_info(edge_nodes)"))
@@ -393,6 +577,7 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
         if seed_demo:
             from app.services.demo.demo_seeder import seed_demo_data
             seed_demo_data(db)
+            ensure_default_border_cameras(db)
 
         # Initialize AI configs, start RTSP/synthetic streamers, and auto-register active cameras
         from app.core.security import decrypt_credential

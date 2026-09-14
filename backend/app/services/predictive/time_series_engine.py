@@ -67,8 +67,8 @@ class TimeSeriesEngine:
                     obs_count = obs_query.count()
                     actual = evt_count + obs_count
 
-                    base = max(1.0, float(actual))
-                    std = max(1.0, base * 0.2)
+                    base = float(actual)
+                    std = base * 0.2 if base > 0 else 0.0
                     lower = max(0.0, base - 1.96 * std)
                     upper = base + 1.96 * std
 
@@ -103,15 +103,19 @@ class TimeSeriesEngine:
                     })
 
             # Calculate Trend via Linear Regression
-            slope = self._calculate_slope(values)
-            if slope > 0.4:
-                trend = "INCREASING"
-            elif slope < -0.4:
-                trend = "DECREASING"
-            elif self._calculate_variance(values) > 15.0:
-                trend = "VOLATILE"
+            if not values or sum(values) == 0:
+                trend = "INACTIVE"
+                slope = 0.0
             else:
-                trend = "STABLE"
+                slope = self._calculate_slope(values)
+                if slope > 0.4:
+                    trend = "INCREASING"
+                elif slope < -0.4:
+                    trend = "DECREASING"
+                elif self._calculate_variance(values) > 15.0:
+                    trend = "VOLATILE"
+                else:
+                    trend = "STABLE"
 
             return points, trend, round(slope, 2)
         finally:

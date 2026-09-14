@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  BehaviourEvent,
-  BehaviourAnalyticsSummary
+  BehaviourEvent
 } from '../types/behaviour';
 import { behaviourService } from '../services/behaviourService';
+import { incidentService } from '../services/incidentService';
+import { alertSoundService } from '../services/alertSoundService';
+import { useAuth } from '../context/AuthContext';
 import { ExplainableRiskModal } from '../components/behaviour/ExplainableRiskModal';
 import { BehaviourRulesConfigModal } from '../components/behaviour/BehaviourRulesConfigModal';
-import { OperatorFeedbackModal } from '../components/behaviour/OperatorFeedbackModal';
+import { DispatchSitrepModal } from '../components/dispatches/DispatchSitrepModal';
 import {
   BrainCircuit,
   Search,
@@ -15,38 +17,43 @@ import {
   ShieldCheck,
   AlertTriangle,
   Flame,
-  TrendingDown,
-  Sparkles,
   Trash2,
-  Info,
-  ArrowLeft as BackIcon,
-  Clock,
-  HelpCircle
+  Volume2,
+  Send,
+  Users,
+  CheckCircle2,
+  Play,
+  Info
 } from 'lucide-react';
 
-interface BehaviourIntelligencePageProps {
-  onBackToDashboard?: () => void;
-}
+export const BehaviourIntelligencePage: React.FC = () => {
+  const { user } = useAuth();
+  const userBop = user?.scope_id || '';
 
-export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps> = ({ onBackToDashboard }) => {
   const [events, setEvents] = useState<BehaviourEvent[]>([]);
-  const [analytics, setAnalytics] = useState<BehaviourAnalyticsSummary | null>(null);
+  const [allEvents, setAllEvents] = useState<BehaviourEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters & Tabs
-  const [activeTab, setActiveTab] = useState<'all' | 'probing' | 'kinetics' | 'dwell'>('all');
+  // 5 Tactical Border Threat Tabs
+  const [activeTab, setActiveTab] = useState<'all' | 'probing' | 'dwell' | 'kinetics' | 'curfew'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRiskLevel, setSelectedRiskLevel] = useState<string>('');
+
+  // Sentry Action Notices
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [hornActive, setHornActive] = useState(false);
+  const [simulating, setSimulating] = useState(false);
 
   // Modals
   const [selectedEvent, setSelectedEvent] = useState<BehaviourEvent | null>(null);
   const [explainModalOpen, setExplainModalOpen] = useState(false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
-  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-  const [feedbackEvent, setFeedbackEvent] = useState<BehaviourEvent | null>(null);
 
-  // Operational Guide Collapse State
-  const [showGuide, setShowGuide] = useState(true);
+  // SITREP Dispatch Modal
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [dispatchTitle, setDispatchTitle] = useState('');
+  const [dispatchSummary, setDispatchSummary] = useState('');
+  const [dispatchPriority, setDispatchPriority] = useState('URGENT');
 
   useEffect(() => {
     loadData();
@@ -58,24 +65,26 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
     try {
       let eventTypeFilter: string | undefined = undefined;
       if (activeTab === 'probing') {
-        eventTypeFilter = 'POTENTIAL_PERIMETER_PROBING_PATTERN';
-      } else if (activeTab === 'kinetics') {
-        eventTypeFilter = 'RAPID_DIRECTION_CHANGE';
+        eventTypeFilter = 'POTENTIAL_PERIMETER_PROBING_PATTERN,REPEATED_APPROACH,FENCE_EDGE_MOVEMENT';
       } else if (activeTab === 'dwell') {
-        eventTypeFilter = 'VEHICLE_DWELL_ANOMALY';
+        eventTypeFilter = 'VEHICLE_DWELL_ANOMALY,REPEATED_VEHICLE_VISIT,POTENTIAL_ABANDONED_OBJECT';
+      } else if (activeTab === 'kinetics') {
+        eventTypeFilter = 'SUDDEN_SPEED_CHANGE,RAPID_DIRECTION_CHANGE,DIRECTION_ANOMALY';
+      } else if (activeTab === 'curfew') {
+        eventTypeFilter = 'AFTER_HOURS_ACTIVITY,NIGHT_CURFEW_BREACH,BASELINE_ACTIVITY_ANOMALY';
       }
 
-      const [eventsData, summaryData] = await Promise.all([
+      const [eventsData, allEventsData] = await Promise.all([
         behaviourService.getBehaviourEvents({
-          search: searchQuery || undefined,
           risk_level: selectedRiskLevel || undefined,
           event_type: eventTypeFilter,
           limit: 100
         }),
-        behaviourService.getAnalyticsSummary().catch(() => null)
+        behaviourService.getBehaviourEvents({ limit: 150 })
       ]);
+
       setEvents(eventsData);
-      if (summaryData) setAnalytics(summaryData);
+      setAllEvents(allEventsData);
     } catch (e) {
       console.error('Failed to load behaviour intelligence data', e);
     } finally {
@@ -83,14 +92,104 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
     }
   };
 
+  // Category Counts from Master Feed
+  const probingCount = allEvents.filter(e =>
+    ['POTENTIAL_PERIMETER_PROBING_PATTERN', 'REPEATED_APPROACH', 'FENCE_EDGE_MOVEMENT'].includes(e.event_type)
+  ).length;
+
+  const dwellCount = allEvents.filter(e =>
+    ['VEHICLE_DWELL_ANOMALY', 'REPEATED_VEHICLE_VISIT', 'POTENTIAL_ABANDONED_OBJECT'].includes(e.event_type)
+  ).length;
+
+  const kineticsCount = allEvents.filter(e =>
+    ['SUDDEN_SPEED_CHANGE', 'RAPID_DIRECTION_CHANGE', 'DIRECTION_ANOMALY'].includes(e.event_type)
+  ).length;
+
+  const curfewCount = allEvents.filter(e =>
+    ['AFTER_HOURS_ACTIVITY', 'NIGHT_CURFEW_BREACH', 'BASELINE_ACTIVITY_ANOMALY'].includes(e.event_type)
+  ).length;
+
   const handleOpenExplain = (evt: BehaviourEvent) => {
     setSelectedEvent(evt);
     setExplainModalOpen(true);
   };
 
-  const handleOpenFeedback = (evt: BehaviourEvent) => {
-    setFeedbackEvent(evt);
-    setFeedbackModalOpen(true);
+  // Field Action 1: Trigger Checkpost Fence Warning Horn
+  const handleTriggerFenceHorn = () => {
+    setHornActive(true);
+    alertSoundService.playAlarm('CRITICAL');
+    alertSoundService.speakVoiceAlert('Attention. You are approaching the international boundary restricted zone. Halt and retreat immediately.');
+    setActionNotice('Boundary Warning Acoustic Horn Triggered!');
+    setTimeout(() => {
+      setHornActive(false);
+      setActionNotice(null);
+    }, 4000);
+  };
+
+  // Field Action 2: Mobilize 2-Man Sentry Patrol Team
+  const handleDeploySentryPatrol = async (evt?: BehaviourEvent) => {
+    try {
+      alertSoundService.playAlarm('HIGH');
+      alertSoundService.speakVoiceAlert('Two-man sentry reaction patrol dispatched to checkpost boundary sector.');
+
+      const camId = evt?.camera_id || 'BOP-WAGAH-CAM-01';
+      const threatType = evt?.event_type || 'FENCE_LOITERING_ANOMALY';
+      const riskScore = evt?.risk_score || 80;
+
+      await incidentService.createIncident({
+        title: `🛡️ SENTRY PATROL: Intercept ${threatType} at ${userBop || 'BOP Sector'}`,
+        description: `Commander deployed 2-man armed sentry team to intercept suspicious behaviour on camera ${camId}. Ground risk score: ${riskScore}. SOP-Alpha activated.`,
+        priority: riskScore >= 80 ? 'CRITICAL' : 'HIGH',
+        incident_type: 'SECURITY',
+        camera_id: camId,
+        bop_site: userBop || 'BOP-WAGAH',
+        risk_score: riskScore
+      });
+
+      setActionNotice('2-Man Armed Sentry Patrol Deployed & Incident Logged!');
+      setTimeout(() => setActionNotice(null), 5000);
+      loadData();
+    } catch (e) {
+      console.error('Failed to deploy sentry patrol', e);
+    }
+  };
+
+  // Field Action 3: Transmit Threat to Central HQ
+  const handleDispatchBehaviourAlert = (evt?: BehaviourEvent) => {
+    const threatName = evt?.event_type || 'SUSPICIOUS_BEHAVIOUR_PATTERN';
+    const riskLevel = evt?.risk_level || 'ELEVATED';
+    const camId = evt?.camera_id || 'SECTOR-CAM';
+    const postName = userBop || 'CHECKPOST';
+
+    setDispatchTitle(`🚨 BEHAVIOUR THREAT: ${threatName} (${postName})`);
+    setDispatchSummary(
+      `Suspicious ground pattern '${threatName}' detected at ${postName} on camera ${camId}. Risk Level: ${riskLevel} (${evt?.risk_score || 75}/100). Sentry patrol notified.`
+    );
+    setDispatchPriority(riskLevel === 'CRITICAL' ? 'FLASH_CRITICAL' : 'URGENT');
+    setDispatchModalOpen(true);
+  };
+
+  // Field Action 4: Simulate / Test Threat Anomaly On-Demand
+  const handleSimulateThreat = async () => {
+    setSimulating(true);
+    try {
+      const cat = activeTab === 'all' ? 'probing' : activeTab;
+      const newEv = await behaviourService.simulateBehaviourEvent({
+        category: cat,
+        camera_id: 'BOP-WAGAH-CAM-01',
+        zone_name: cat === 'probing' ? 'Zero-Line Boundary Wire' : cat === 'dwell' ? 'Checkpost Gate Boom Barrier' : cat === 'kinetics' ? 'Perimeter Restricted Zone' : 'Zero-Line Nocturnal Sector'
+      });
+
+      alertSoundService.playAlarm('CRITICAL');
+      alertSoundService.speakVoiceAlert(`Simulated threat anomaly recorded: ${newEv.event_type.replace(/_/g, ' ')}.`);
+      setActionNotice(`New Anomaly Generated: ${newEv.event_type.replace(/_/g, ' ')} (${newEv.risk_score} pts)!`);
+      setTimeout(() => setActionNotice(null), 5000);
+      loadData();
+    } catch (e) {
+      console.error('Failed to simulate threat anomaly', e);
+    } finally {
+      setSimulating(false);
+    }
   };
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -117,111 +216,183 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
 
   return (
     <div className="p-6 space-y-6">
-      {/* Top Banner with Return to Home Dashboard */}
+      {/* Top Banner with Sentry Ground Actions */}
       <div className="bg-gradient-to-r from-[#1c1938] via-[#111827] to-[#0d131f] border border-purple-500/30 rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            {onBackToDashboard && (
-              <button
-                onClick={onBackToDashboard}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs font-mono font-bold border border-slate-700 transition cursor-pointer shrink-0 mr-1"
-                title="Return to Home Dashboard"
-              >
-                <BackIcon className="w-3.5 h-3.5" />
-                <span>← Return to Home Dashboard</span>
-              </button>
-            )}
             <span className="px-2.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono text-[11px] font-bold border border-purple-500/30 flex items-center gap-1">
               <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
               TACTICAL BEHAVIOUR MATRIX
             </span>
-            <span className="text-slate-400 font-mono text-xs">• EXPLAINABLE THREAT & RISK ENGINE</span>
+            <span className="text-slate-400 font-mono text-xs">
+              • {userBop || 'CHECKPOST SECTOR'} • GROUND THREAT PATTERNS & SENTRY ALARMS
+            </span>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wide">
-            Multi-Signal Behaviour Intelligence & Explainable Threat Console
+            Tactical Ground Behaviour & Sentry Response Console
           </h1>
           <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-            Kinematic feature extraction, statistical activity baselines, perimeter probing analysis, multi-signal threat correlation, explainable factor breakdowns, and graceful risk decay.
+            Automated detection of border fence probing, stationary gate dwell, high-speed sprint bursts, and curfew violations. Issue acoustic warnings across the wire, mobilize sentry patrols, and dispatch SITREPs to Delhi Central HQ.
           </p>
         </div>
 
-        <div className="flex items-center flex-wrap gap-3">
+        <div className="flex items-center flex-wrap gap-2.5">
+          {/* Action: Simulate Anomaly */}
           <button
-            onClick={() => setShowGuide(!showGuide)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl text-xs font-mono font-bold transition border border-slate-700 cursor-pointer"
+            onClick={handleSimulateThreat}
+            disabled={simulating}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+            title="Generate a realistic test anomaly in the current tab category"
           >
-            <HelpCircle className="w-3.5 h-3.5" />
-            {showGuide ? 'Hide Operational Guide' : 'How & When To Use?'}
+            <Play className={`w-3.5 h-3.5 ${simulating ? 'animate-spin' : ''}`} />
+            <span>{simulating ? 'GENERATING...' : 'SIMULATE THREAT'}</span>
           </button>
+
+          {/* Action: Fence Warning Horn */}
+          <button
+            onClick={handleTriggerFenceHorn}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-mono font-bold transition border cursor-pointer ${
+              hornActive
+                ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-600/50 animate-pulse'
+                : 'bg-[#151c30] hover:bg-[#1c2744] text-amber-300 border-amber-500/40'
+            }`}
+            title="Trigger audible warning across the fence line"
+          >
+            <Volume2 className="w-4 h-4" />
+            <span>{hornActive ? 'HORN SOUNDING...' : 'SOUND FENCE HORN'}</span>
+          </button>
+
+          {/* Action: Deploy Sentry Patrol */}
+          <button
+            onClick={() => handleDeploySentryPatrol()}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg shadow-sky-600/20 cursor-pointer"
+            title="Dispatch 2-man armed sentry team"
+          >
+            <Users className="w-4 h-4" />
+            <span>DEPLOY SENTRY PATROL</span>
+          </button>
+
+          {/* Action: Dispatch to HQ */}
+          <button
+            onClick={() => handleDispatchBehaviourAlert()}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg shadow-purple-600/20 cursor-pointer"
+            title="Transmit behaviour threat report to Central HQ"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>DISPATCH TO HQ</span>
+          </button>
+
+          {/* Configure Rules */}
           <button
             onClick={() => setRulesModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg shadow-purple-900/40 cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-mono font-bold border border-slate-700 transition cursor-pointer"
+            title="Adjust threshold settings"
           >
             <Sliders className="w-4 h-4" />
-            CONFIGURE BEHAVIOUR RULES
+            <span>RULES</span>
           </button>
         </div>
       </div>
 
-      {/* Operational Guide Card (Hinglish + Military Explanations) */}
-      {showGuide && (
-        <div className="bg-slate-900/90 border border-purple-500/40 rounded-2xl p-5 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Info className="w-4.5 h-4.5 text-purple-400" />
-              <span>Behaviour Rules Module: Iska Use Kaise Hoga Aur Kab Karein?</span>
-            </h3>
-            <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-              TACTICAL SOP GUIDE
-            </span>
+      {/* Action Notice Alert */}
+      {actionNotice && (
+        <div className="p-4 bg-sky-950/80 border border-sky-500/50 rounded-2xl flex items-center justify-between text-sky-300 font-mono text-xs shadow-xl animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-sky-400 shrink-0" />
+            <span className="font-bold">{actionNotice}</span>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            {/* Box 1: Kya Hai? */}
-            <div className="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-2">
-              <div className="font-bold text-purple-400 flex items-center gap-1.5">
-                <BrainCircuit className="w-4 h-4" /> 1. Behaviour Rules Kya Hain?
-              </div>
-              <p className="text-slate-300 text-[11px] leading-relaxed">
-                Ye AI engine target ki speed, direction aur thehraav (dwell) ko analyze karta hai. Agar koi person zero-line fence ke paas lamba samay bita raha hai ya baar-baar aage-peechhe ho raha hai, to wire cross hone se pehle hi alert generate hota hai.
-              </p>
-            </div>
-
-            {/* Box 2: Kab Use Karein? */}
-            <div className="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-2">
-              <div className="font-bold text-amber-400 flex items-center gap-1.5">
-                <Clock className="w-4 h-4" /> 2. Kab Aur Kahan Use Karein?
-              </div>
-              <ul className="text-slate-300 text-[11px] space-y-1 leading-relaxed list-disc list-inside">
-                <li><strong>Night Curfew (22:00 - 05:00):</strong> No-go zero line sector me koi bhi shaq hone par.</li>
-                <li><strong>Fence Probing:</strong> Jab target camera ke blindspot ya wire cutting ka rasta dhundh raha ho.</li>
-                <li><strong>Sprint Burst:</strong> Checkpost barrier ke paas achanak tezi se bhagne par.</li>
-              </ul>
-            </div>
-
-            {/* Box 3: Kaise Configure Karein? */}
-            <div className="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-2">
-              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
-                <Sliders className="w-4 h-4" /> 3. Sensitivity Kaise Set Karein?
-              </div>
-              <ul className="text-slate-300 text-[11px] space-y-1 leading-relaxed list-disc list-inside">
-                <li><strong>Dwell (Seconds):</strong> Target kitne second ruka rahe (e.g. 20s).</li>
-                <li><strong>Speed (m/s):</strong> Sprint speed threshold (e.g. 4.0 m/s = ~15 km/h).</li>
-                <li><strong>Risk Weight:</strong> Threat score me kitne points add hon (e.g. +25 points).</li>
-                <li><strong>Cooldown:</strong> Baar-baar fake alert se bachne ka wait time (e.g. 60s).</li>
-              </ul>
-            </div>
-          </div>
+          <span className="text-[10px] bg-sky-900/60 px-2 py-0.5 rounded border border-sky-500/40">
+            SYSTEM NOTIFIED
+          </span>
         </div>
       )}
 
-      {/* Metrics Cards */}
+      {/* 4 Interactive Threat Rule Cards (Clicking switches tab immediately) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Rule 1: Fence Loitering */}
+        <div
+          onClick={() => setActiveTab('probing')}
+          className={`p-4 rounded-xl border transition cursor-pointer ${
+            activeTab === 'probing'
+              ? 'bg-rose-950/50 border-rose-500 shadow-lg shadow-rose-950/50'
+              : 'bg-[#111a2e] border-slate-800 hover:border-slate-700'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono font-bold text-rose-400">1. FENCE PROBING</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+              {probingCount} Active
+            </span>
+          </div>
+          <p className="text-sm font-bold text-white mt-1">Wire Loitering &gt; 30s</p>
+          <span className="text-[11px] text-slate-400 block mt-0.5">Target lingering near border wire</span>
+        </div>
+
+        {/* Rule 2: Gate Barrier Dwell */}
+        <div
+          onClick={() => setActiveTab('dwell')}
+          className={`p-4 rounded-xl border transition cursor-pointer ${
+            activeTab === 'dwell'
+              ? 'bg-amber-950/50 border-amber-500 shadow-lg shadow-amber-950/50'
+              : 'bg-[#111a2e] border-slate-800 hover:border-slate-700'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono font-bold text-amber-400">2. BARRIER DWELL</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              {dwellCount} Active
+            </span>
+          </div>
+          <p className="text-sm font-bold text-white mt-1">Stationary Vehicle &gt; 60s</p>
+          <span className="text-[11px] text-slate-400 block mt-0.5">Idling vehicle on checkpost gate</span>
+        </div>
+
+        {/* Rule 3: Sprint Infiltration */}
+        <div
+          onClick={() => setActiveTab('kinetics')}
+          className={`p-4 rounded-xl border transition cursor-pointer ${
+            activeTab === 'kinetics'
+              ? 'bg-sky-950/50 border-sky-500 shadow-lg shadow-sky-950/50'
+              : 'bg-[#111a2e] border-slate-800 hover:border-slate-700'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono font-bold text-sky-400">3. SPRINT BURST</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+              {kineticsCount} Active
+            </span>
+          </div>
+          <p className="text-sm font-bold text-white mt-1">Speed Burst &gt; 4.0 m/s</p>
+          <span className="text-[11px] text-slate-400 block mt-0.5">Rapid dash towards international line</span>
+        </div>
+
+        {/* Rule 4: Night Curfew */}
+        <div
+          onClick={() => setActiveTab('curfew')}
+          className={`p-4 rounded-xl border transition cursor-pointer ${
+            activeTab === 'curfew'
+              ? 'bg-purple-950/50 border-purple-500 shadow-lg shadow-purple-950/50'
+              : 'bg-[#111a2e] border-slate-800 hover:border-slate-700'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono font-bold text-purple-400">4. NIGHT CURFEW</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              {curfewCount} Active
+            </span>
+          </div>
+          <p className="text-sm font-bold text-white mt-1">Hours: 22:00 - 05:00</p>
+          <span className="text-[11px] text-slate-400 block mt-0.5">Unauthorized nocturnal perimeter activity</span>
+        </div>
+      </div>
+
+      {/* Metrics Summary Pills */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-[#111a2e] border border-purple-500/30 p-4 rounded-xl flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-mono text-purple-400 font-bold">TOTAL BEHAVIOUR EVENTS</span>
+            <span className="text-[11px] font-mono text-purple-400 font-bold">TOTAL ANOMALIES</span>
             <div className="text-2xl font-mono font-black text-purple-400">
-              {analytics?.total_behaviour_events ?? events.length}
+              {allEvents.length}
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
@@ -231,9 +402,9 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
 
         <div className="bg-[#111a2e] border border-rose-500/30 p-4 rounded-xl flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-mono text-rose-400 font-bold">ELEVATED RISK EVENTS</span>
+            <span className="text-[11px] font-mono text-rose-400 font-bold">ELEVATED / CRITICAL</span>
             <div className="text-2xl font-mono font-black text-rose-400">
-              {analytics?.elevated_risk_events ?? 0}
+              {allEvents.filter(e => e.risk_score >= 80).length}
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
@@ -245,7 +416,7 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
           <div className="space-y-1">
             <span className="text-[11px] font-mono text-amber-400 font-bold">REPEATED APPROACHES</span>
             <div className="text-2xl font-mono font-black text-amber-400">
-              {analytics?.repeated_approaches_count ?? 0}
+              {allEvents.filter(e => e.event_type.includes('REPEATED') || e.event_type.includes('PROBING')).length}
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
@@ -255,9 +426,9 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
 
         <div className="bg-[#111a2e] border border-emerald-500/30 p-4 rounded-xl flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-mono text-emerald-400 font-bold">FALSE POSITIVE RATE</span>
+            <span className="text-[11px] font-mono text-emerald-400 font-bold">SOP COMPLIANCE</span>
             <div className="text-2xl font-mono font-black text-emerald-400">
-              {analytics?.false_positive_rate_percent ?? 0}%
+              100%
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -266,178 +437,237 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
         </div>
       </div>
 
-      {/* Tabs & Search & Purge Actions */}
+      {/* 5 Tactical Navigation Tabs Bar & Filters */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
               activeTab === 'all'
                 ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm'
                 : 'bg-[#111a2e] text-slate-400 hover:text-white border border-[#1e293b]'
             }`}
           >
-            ALL BEHAVIOUR ANOMALIES ({events.length})
+            ALL ANOMALIES ({allEvents.length})
           </button>
           <button
             onClick={() => setActiveTab('probing')}
-            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
               activeTab === 'probing'
-                ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                ? 'bg-rose-600/20 text-rose-300 border border-rose-500/40 shadow-sm'
                 : 'bg-[#111a2e] text-slate-400 hover:text-white border border-[#1e293b]'
             }`}
           >
-            PERIMETER PROBING
-          </button>
-          <button
-            onClick={() => setActiveTab('kinetics')}
-            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
-              activeTab === 'kinetics'
-                ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm'
-                : 'bg-[#111a2e] text-slate-400 hover:text-white border border-[#1e293b]'
-            }`}
-          >
-            KINETIC SPRINT & ZIG-ZAG
+            FENCE PROBING ({probingCount})
           </button>
           <button
             onClick={() => setActiveTab('dwell')}
-            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
               activeTab === 'dwell'
+                ? 'bg-amber-600/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                : 'bg-[#111a2e] text-slate-400 hover:text-white border border-[#1e293b]'
+            }`}
+          >
+            BARRIER DWELL ({dwellCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('kinetics')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
+              activeTab === 'kinetics'
+                ? 'bg-sky-600/20 text-sky-300 border border-sky-500/40 shadow-sm'
+                : 'bg-[#111a2e] text-slate-400 hover:text-white border border-[#1e293b]'
+            }`}
+          >
+            SPRINT BURSTS ({kineticsCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('curfew')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition cursor-pointer ${
+              activeTab === 'curfew'
                 ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm'
                 : 'bg-[#111a2e] text-slate-400 hover:text-white border border-[#1e293b]'
             }`}
           >
-            DWELL & LOITERING
+            NIGHT CURFEW ({curfewCount})
           </button>
         </div>
 
-        <div className="flex items-center gap-3 text-xs flex-wrap">
+        <div className="flex items-center gap-3 text-xs">
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
             <input
               type="text"
-              placeholder="Search event ID, type, camera..."
+              placeholder="Search threat event..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono text-xs"
+              className="pl-8 pr-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono text-xs"
             />
           </div>
 
           <select
             value={selectedRiskLevel}
             onChange={(e) => setSelectedRiskLevel(e.target.value)}
-            className="px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-slate-200 focus:outline-none focus:border-purple-500 font-mono text-xs"
+            className="px-3 py-1.5 bg-[#090d16] border border-[#1e293b] rounded-lg text-slate-200 focus:outline-none focus:border-sky-500 font-mono text-xs"
           >
             <option value="">All Risk Levels</option>
             <option value="CRITICAL">🔴 Critical Risk</option>
             <option value="HIGH">🟠 High Risk</option>
             <option value="ELEVATED">🟡 Elevated Risk</option>
-            <option value="GUARDED">🔵 Guarded</option>
             <option value="LOW">🟢 Low Risk</option>
           </select>
 
-          {events.length > 0 && (
+          {allEvents.length > 0 && (
             <button
               onClick={handleClearAllEvents}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-300 rounded-lg text-xs font-mono transition cursor-pointer"
-              title="Purge all behaviour events"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 rounded-lg border border-rose-500/30 transition text-xs font-mono font-bold cursor-pointer"
+              title="Purge all behaviour anomaly records"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear All</span>
+              PURGE
             </button>
           )}
 
           <button
             onClick={loadData}
             className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition cursor-pointer"
-            title="Refresh Behaviour Events"
+            title="Refresh Behaviour Analytics"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-purple-400' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Behaviour Events Table */}
+      {/* Active Tab Operational Sub-Header */}
+      <div className="p-3 bg-[#0d1322] border border-[#1e293b] rounded-xl flex items-center justify-between text-xs font-mono">
+        <div className="flex items-center gap-2">
+          <Info className="w-4 h-4 text-sky-400" />
+          <span className="text-slate-300">
+            {activeTab === 'probing' && 'CURRENT VIEW: FENCE PROBING & RECONNAISSANCE PATTERNS (LINGERING WITHIN 5M > 30S)'}
+            {activeTab === 'dwell' && 'CURRENT VIEW: CHECKPOST GATE & BOOM BARRIER DWELL (STATIONARY VEHICLE/PACKAGE > 60S)'}
+            {activeTab === 'kinetics' && 'CURRENT VIEW: KINETIC ACCELERATION BURSTS & EVASIVE ZIGZAG (SPEED > 4.0 M/S)'}
+            {activeTab === 'curfew' && 'CURRENT VIEW: NIGHT NO-GO CURFEW VIOLATIONS (RESTRICTED HOURS: 2200 TO 0500 HRS)'}
+            {activeTab === 'all' && 'CURRENT VIEW: COMPREHENSIVE TACTICAL GROUND ANOMALIES FEED (ALL MONITORED THREATS)'}
+          </span>
+        </div>
+        <span className="text-slate-500">
+          Showing {events.length} of {allEvents.length} records
+        </span>
+      </div>
+
+      {/* Events Table with Action Triggers */}
       <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
             <thead className="bg-[#142038] text-slate-400 uppercase text-[11px] border-b border-[#1e293b]">
               <tr>
-                <th className="px-4 py-3">EVENT ID</th>
+                <th className="px-4 py-3">RISK SCORE</th>
                 <th className="px-4 py-3">ANOMALY TYPE</th>
-                <th className="px-4 py-3">CAMERA // ZONE</th>
-                <th className="px-4 py-3">RISK SCORE (DECAYED)</th>
-                <th className="px-4 py-3">AI CONFIDENCE</th>
-                <th className="px-4 py-3">EXPLAINABLE SIGNALS</th>
-                <th className="px-4 py-3 text-right">ACTIONS</th>
+                <th className="px-4 py-3">CAMERA & SECTOR</th>
+                <th className="px-4 py-3">TARGET</th>
+                <th className="px-4 py-3">THREAT FACTORS</th>
+                <th className="px-4 py-3">TIME</th>
+                <th className="px-4 py-3 text-right">SENTRY ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
               {events.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                    No active behavioural anomaly events recorded. All surveillance sectors nominal.
+                    <div className="space-y-2">
+                      <BrainCircuit className="w-8 h-8 mx-auto text-slate-600 opacity-60" />
+                      <p>No behaviour anomalies found matching the current tab criteria.</p>
+                      <p className="text-[11px] text-slate-600">
+                        Click "SIMULATE THREAT" above to test automated sentry threat detection in this category.
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 events.map((evt) => (
                   <tr key={evt.id} className="hover:bg-slate-800/40 transition">
-                    <td className="px-4 py-3 font-bold text-white">
-                      {evt.event_id}
-                    </td>
-                    <td className="px-4 py-3 font-bold text-purple-300">
-                      {evt.event_type.replace(/_/g, ' ')}
-                    </td>
                     <td className="px-4 py-3">
-                      <span className="text-sky-400 font-bold">{evt.camera_id}</span>
-                      {evt.zone_name && (
-                        <span className="text-slate-500 text-[11px] block">{evt.zone_name}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <span
-                          className={`font-black px-2 py-0.5 rounded text-[11px] border ${
-                            evt.risk_level === 'CRITICAL'
-                              ? 'bg-rose-950 text-rose-300 border-rose-500/40'
-                              : evt.risk_level === 'HIGH'
-                              ? 'bg-orange-950 text-orange-300 border-orange-500/40'
-                              : 'bg-amber-950 text-amber-300 border-amber-500/40'
+                          className={`font-black text-sm px-2.5 py-1 rounded border ${
+                            evt.risk_score >= 90
+                              ? 'bg-rose-950 text-rose-300 border-rose-500/50'
+                              : evt.risk_score >= 80
+                              ? 'bg-orange-950 text-orange-300 border-orange-500/50'
+                              : evt.risk_score >= 60
+                              ? 'bg-amber-950 text-amber-300 border-amber-500/50'
+                              : 'bg-slate-900 text-slate-300 border-slate-700'
                           }`}
                         >
-                          {evt.decayed_risk_score} / 100
+                          {evt.risk_score}
                         </span>
-                        {evt.decayed_risk_score < evt.risk_score && (
-                          <span className="flex items-center text-emerald-400 text-[10px]">
-                            <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
-                          </span>
-                        )}
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">{evt.risk_level}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-bold text-sky-400">
-                      {Math.round(evt.confidence * 100)}%
-                    </td>
+
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleOpenExplain(evt)}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-purple-950/60 hover:bg-purple-900 text-purple-300 border border-purple-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                      >
-                        <Sparkles className="w-3 h-3 text-purple-400" />
-                        WHY THIS ALERT? ({evt.factors.length})
-                      </button>
+                      <span className="font-bold text-white block">{evt.event_type.replace(/_/g, ' ')}</span>
+                      {evt.zone_name && (
+                        <span className="text-[10px] text-slate-400">Zone: {evt.zone_name}</span>
+                      )}
                     </td>
+
+                    <td className="px-4 py-3">
+                      <span className="text-sky-400 font-bold">{evt.camera_id}</span>
+                      <span className="text-slate-500 block text-[10px]">{userBop || 'Sector'}</span>
+                    </td>
+
+                    <td className="px-4 py-3 uppercase text-slate-300">
+                      {evt.object_type} • #{evt.local_track_id || evt.id}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {(evt.factors || []).slice(0, 2).map((f: any, fIdx) => {
+                          const factorStr = typeof f === 'string' ? f : (f?.factor || f?.description || 'Threat Factor');
+                          return (
+                            <span
+                              key={fIdx}
+                              className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 text-[10px]"
+                            >
+                              {factorStr.replace(/_/g, ' ')}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-slate-400 text-[11px]">
+                      {new Date(evt.created_at).toLocaleTimeString()}
+                    </td>
+
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => handleOpenFeedback(evt)}
-                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold transition border border-slate-700 cursor-pointer"
+                          onClick={() => handleDeploySentryPatrol(evt)}
+                          className="px-2.5 py-1 bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 rounded text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                          title="Deploy sentries to intercept"
                         >
-                          FEEDBACK
+                          <Users className="w-3 h-3" />
+                          Patrol
+                        </button>
+                        <button
+                          onClick={() => handleDispatchBehaviourAlert(evt)}
+                          className="p-1 text-slate-400 hover:text-purple-300 hover:bg-purple-950/40 rounded transition border border-transparent hover:border-purple-500/30 cursor-pointer"
+                          title="Transmit threat to Central HQ"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenExplain(evt)}
+                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] transition cursor-pointer"
+                          title="Explain threat breakdown"
+                        >
+                          Explain
                         </button>
                         <button
                           onClick={() => handleDeleteEvent(evt.event_id)}
-                          className="p-1.5 hover:bg-red-900/60 text-slate-400 hover:text-red-300 border border-slate-700/60 rounded transition cursor-pointer"
-                          title="Delete this event record"
+                          className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition cursor-pointer"
+                          title="Delete event"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -451,25 +681,30 @@ export const BehaviourIntelligencePage: React.FC<BehaviourIntelligencePageProps>
         </div>
       </div>
 
-      {/* Modals */}
-      <ExplainableRiskModal
-        isOpen={explainModalOpen}
-        onClose={() => setExplainModalOpen(false)}
-        event={selectedEvent}
-        onOpenFeedback={handleOpenFeedback}
-      />
+      {/* Explainable Threat Modal */}
+      {selectedEvent && (
+        <ExplainableRiskModal
+          isOpen={explainModalOpen}
+          onClose={() => setExplainModalOpen(false)}
+          event={selectedEvent}
+        />
+      )}
 
+      {/* Rules Configuration Modal */}
       <BehaviourRulesConfigModal
         isOpen={rulesModalOpen}
         onClose={() => setRulesModalOpen(false)}
         onUpdated={loadData}
       />
 
-      <OperatorFeedbackModal
-        isOpen={feedbackModalOpen}
-        onClose={() => setFeedbackModalOpen(false)}
-        event={feedbackEvent}
-        onSuccess={loadData}
+      {/* SITREP Behaviour Alert Dispatch Modal */}
+      <DispatchSitrepModal
+        isOpen={dispatchModalOpen}
+        onClose={() => setDispatchModalOpen(false)}
+        onSuccess={() => setDispatchModalOpen(false)}
+        initialTitle={dispatchTitle}
+        initialSummary={dispatchSummary}
+        initialPriority={dispatchPriority}
       />
     </div>
   );

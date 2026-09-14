@@ -2,8 +2,10 @@ import time
 import logging
 import asyncio
 import threading
+from datetime import datetime
 from typing import Dict, Optional, List, Callable
 import numpy as np
+import cv2
 
 from app.services.rtsp_streamer import RTSPStreamer
 
@@ -191,13 +193,56 @@ class StreamManager:
         _, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
         return jpeg.tobytes()
 
-    async def generate_mjpeg_stream(self, camera_id: str, fps_limit: float = 25.0):
+    def ingest_edge_frame(
+        self,
+        camera_id: str,
+        frame_bytes: bytes,
+        resolution: Optional[str] = None,
+        fps: Optional[float] = None
+    ) -> bool:
+        """
+        Receives an outbound reverse push video frame from a remote border edge node.
+        Updates the camera's live buffer in memory so Central Command (Delhi HQ) can view it instantly.
+        """
+        streamer = self.get_streamer(camera_id)
+        if not streamer:
+            streamer = self.start_camera(
+                camera_id=camera_id,
+                camera_name=f"Edge Node Camera {camera_id}",
+                bop_site="Remote Border Outpost",
+                rtsp_url=f"edge://{camera_id}"
+            )
+
+        now = time.time()
+        with streamer._lock:
+            streamer._latest_jpeg = frame_bytes
+            streamer._latest_frame_time = now
+            streamer._frame_count += 1
+            if resolution:
+                streamer.resolution = resolution
+            if fps is not None:
+                streamer.fps = fps
+            streamer.status = "HEALTHY"
+            streamer.last_seen_at = datetime.utcnow()
+            streamer.reconnect_attempts = 0
+            streamer.last_error_message = None
+
+        return True
+
+    async def generate_mjpeg_stream(
+        self,
+        camera_id: str,
+        fps_limit: float = 25.0,
+        stream_profile: str = "main"
+    ):
         """
         Asynchronous generator emitting multipart MJPEG frame chunks.
         Used for native browser <img> or <video> live preview.
-        When camera is offline, emits clean status placeholder.
+        When stream_profile is 'sub', downsamples frames to low-bandwidth 640x360
+        with lightweight JPEG compression to save 75% bandwidth over slow border links.
         """
-        frame_interval = 1.0 / max(1.0, fps_limit)
+        effective_fps = min(fps_limit, 15.0) if stream_profile == "sub" else fps_limit
+        frame_interval = 1.0 / max(1.0, effective_fps)
         self.ensure_camera_running(camera_id)
         
         while True:
@@ -216,7 +261,22 @@ class StreamManager:
                 await asyncio.sleep(0.08)
                 continue
 
-            jpeg_bytes = streamer.get_latest_jpeg()
+            jpeg_bytes = None
+            if stream_profile == "sub":
+                # Low-bandwidth optimized frame
+                raw_frame = streamer.get_latest_frame()
+                if raw_frame is not None:
+                    h, w = raw_frame.shape[:2]
+                    target_w = 640
+                    target_h = int(h * (target_w / max(1, w)))
+                    small_frame = cv2.resize(raw_frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                    _, encoded = cv2.imencode('.jpg', small_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 55])
+                    jpeg_bytes = encoded.tobytes()
+                else:
+                    jpeg_bytes = streamer.get_latest_jpeg()
+            else:
+                jpeg_bytes = streamer.get_latest_jpeg()
+
             if jpeg_bytes:
                 yield (
                     b"--frame\r\n"
@@ -238,16 +298,26 @@ class StreamManager:
 
 
     def shutdown_all(self):
-        """Gracefully shuts down all camera streamers on application exit."""
+        """Gracefully shuts down all camera streamers on application exit or reset."""
         with self._lock:
             streamers = list(self._streamers.values())
             self._streamers.clear()
         
-        logger.info(f"Shutting down {len(streamers)} active camera streamers...")
+        logger.info(f"Shutting down {len(streamers)} active camera streamers in parallel...")
+        # Signal all streamers to stop simultaneously
+        for streamer in streamers:
+            streamer._running = False
+            streamer.on_status_change = None  # Suppress false offline alert cascades during teardown
+
+        # Quick non-blocking join
         for streamer in streamers:
             try:
-                streamer.stop()
+                if streamer._thread and streamer._thread.is_alive():
+                    streamer._thread.join(timeout=0.2)
+                with streamer._lock:
+                    streamer._latest_raw_frame = None
+                    streamer._latest_jpeg = None
             except Exception as e:
-                logger.error(f"Error stopping streamer {streamer.camera_id}: {e}")
+                logger.debug(f"Notice stopping streamer {streamer.camera_id}: {e}")
 
 stream_manager = StreamManager()

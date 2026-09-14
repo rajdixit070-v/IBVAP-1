@@ -111,9 +111,13 @@ class ForecastingEngine:
         projected_activity = max(0.0, smoothed + (features["trend_slope"] * (forecast_horizon_minutes / 15.0)))
         
         # Uncertainty band based on historical variance
-        std_err = math.sqrt(max(1.0, features["variance"]))
-        range_min = max(0.0, round(projected_activity - 1.64 * std_err, 1))
-        range_max = round(projected_activity + 1.64 * std_err, 1)
+        if features["variance"] == 0.0 and projected_activity == 0.0:
+            range_min = 0.0
+            range_max = 0.0
+        else:
+            std_err = math.sqrt(max(1.0, features["variance"]))
+            range_min = max(0.0, round(projected_activity - 1.64 * std_err, 1))
+            range_max = round(projected_activity + 1.64 * std_err, 1)
 
         # Step 4: Multi-Signal Risk Projection & Driver Attribution
         reasons = []
@@ -121,14 +125,14 @@ class ForecastingEngine:
         forecast_risk = current_risk_score
 
         # Activity deviation above baseline
-        dev_ratio = projected_activity / max(1.0, baseline_expected)
-        if dev_ratio >= 2.0:
+        dev_ratio = projected_activity / max(1.0, baseline_expected) if baseline_expected > 0 else (1.0 if projected_activity == 0 else 2.0)
+        if dev_ratio >= 2.0 and projected_activity > 0:
             forecast_risk += 22
             reasons.append({
                 "driver": "SUSTAINED_ACTIVITY_SPIKE",
                 "description": f"Forecast activity ({projected_activity:.1f}) is {dev_ratio:.1f}x higher than typical baseline."
             })
-        elif dev_ratio >= 1.4:
+        elif dev_ratio >= 1.4 and projected_activity > 0:
             forecast_risk += 12
             reasons.append({
                 "driver": "ELEVATED_ACTIVITY_TREND",
@@ -156,7 +160,7 @@ class ForecastingEngine:
                 "description": "Recent sightings match flagged surveillance watchlist."
             })
 
-        if is_night:
+        if is_night and projected_activity > 0:
             forecast_risk += 10
             reasons.append({
                 "driver": "AFTER_HOURS_WINDOW",
@@ -170,13 +174,19 @@ class ForecastingEngine:
                 "description": "High edge telemetry data quality and active camera streams."
             })
         if dev_ratio < 1.3 and not has_behaviour_probing:
-            forecast_risk = max(15, forecast_risk - 15)
-            counter_signals.append({
-                "signal": "STABLE_PERIMETER_DYNAMICS",
-                "description": "No perimeter boundary breaches or rapid direction reversals observed."
-            })
+            forecast_risk = max(0, forecast_risk - 15)
+            if projected_activity > 0:
+                counter_signals.append({
+                    "signal": "STABLE_PERIMETER_DYNAMICS",
+                    "description": "No perimeter boundary breaches or rapid direction reversals observed."
+                })
+            else:
+                counter_signals.append({
+                    "signal": "CLEAR_SECTOR",
+                    "description": "Perimeter sector is quiescent with zero anomalies detected."
+                })
 
-        forecast_risk = max(10, min(100, forecast_risk))
+        forecast_risk = max(0, min(100, forecast_risk))
 
         # Classify Forecast Level
         if forecast_risk >= 75:

@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_admin, require_border_provisioner
 from app.models.user import User
-from app.models.federation_models import BOP, Site
+from app.models.federation_models import BOP, Site, Region
 from app.models.camera import Camera
 from app.models.incident import Incident
 from app.models.alert import Alert
@@ -47,37 +47,49 @@ def list_bops(
 def create_bop(
     payload: BOPCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_border_provisioner)
 ):
     """Creates a new Border Outpost (BOP) under a Site (Admin only)."""
-    # Verify site exists
+    # Verify site exists, or auto-create if new sector
     site = db.query(Site).filter(Site.site_id == payload.site_id).first()
     if not site:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Parent Site '{payload.site_id}' does not exist."
+        region = db.query(Region).first()
+        region_id = region.region_id if region else "REG-INDIA-BORDER"
+        clean_site_id = payload.site_id.strip().upper()
+        site_name = clean_site_id.replace("SITE-", "").title() + " Frontier Sector"
+        site = Site(
+            site_id=clean_site_id,
+            region_id=region_id,
+            name=site_name,
+            code=clean_site_id.replace("SITE-", "")[:10].upper(),
+            status="ACTIVE"
         )
+        db.add(site)
+        db.commit()
 
+    bop_id = (payload.bop_id.strip() if payload.bop_id else f"BOP-{payload.code.strip().upper()}").replace(" ", "-")
     existing = db.query(BOP).filter(
-        (BOP.bop_id == payload.bop_id) | (BOP.name == payload.name)
+        (BOP.bop_id == bop_id) | (BOP.name == payload.name)
     ).first()
     if existing:
+        if existing.bop_id == bop_id:
+            return existing
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"BOP with ID '{payload.bop_id}' or Name '{payload.name}' already exists."
+            detail=f"Checkpost with Name '{payload.name}' already exists (ID: {existing.bop_id})."
         )
 
     bop = BOP(
-        bop_id=payload.bop_id.strip(),
+        bop_id=bop_id,
         site_id=payload.site_id.strip(),
         name=payload.name.strip(),
         code=payload.code.strip().upper(),
-        description=payload.description,
-        location=payload.location,
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        status=payload.status,
-        operational_priority=payload.operational_priority
+        description=payload.description or f"Forward Border Outpost: {payload.name.strip()}",
+        location=payload.location or payload.name.strip(),
+        latitude=payload.latitude if payload.latitude is not None else 31.6048,
+        longitude=payload.longitude if payload.longitude is not None else 74.5731,
+        status=payload.status or "ACTIVE",
+        operational_priority=payload.operational_priority or "NORMAL"
     )
     db.add(bop)
     db.commit()
@@ -111,9 +123,9 @@ def update_bop(
     bop_id: str,
     payload: BOPUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_border_provisioner)
 ):
-    """Updates BOP metadata (Admin only)."""
+    """Updates BOP metadata (Border Officers & Commanders)."""
     bop = db.query(BOP).filter((BOP.bop_id == bop_id) | (BOP.name == bop_id)).first()
     if not bop:
         raise HTTPException(status_code=404, detail=f"BOP '{bop_id}' not found.")
@@ -152,7 +164,7 @@ def update_bop(
 def delete_bop(
     bop_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_border_provisioner)
 ):
     """Permanently deletes a BOP (Admin only)."""
     bop = db.query(BOP).filter((BOP.bop_id == bop_id) | (BOP.name == bop_id)).first()
@@ -278,7 +290,13 @@ def get_bop_cameras(
             "current_event": active_inc.title if active_inc else "NORMAL_SURVEILLANCE",
             "current_incident_id": active_inc.incident_id if active_inc else None,
             "risk_score": active_inc.risk_score if active_inc else 15,
-            "last_seen_at": c.last_seen_at.isoformat() if c.last_seen_at else None
+            "last_seen_at": c.last_seen_at.isoformat() if c.last_seen_at else None,
+            "rtsp_url": c.rtsp_url or f"http://localhost:8000/api/v1/cameras/{c.camera_id}/live",
+            "stream_type": c.stream_type or "main",
+            "latitude": c.latitude,
+            "longitude": c.longitude,
+            "sector": c.sector,
+            "bop_site": c.bop_site
         })
     return wall
 
