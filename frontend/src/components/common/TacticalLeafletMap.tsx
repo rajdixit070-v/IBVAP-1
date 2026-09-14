@@ -140,6 +140,7 @@ interface TacticalLeafletMapProps {
   height?: string;
   selectedCameraId?: string;
   targetCoords?: [number, number] | null;
+  initialLayer?: TileLayerType;
   onCameraSelect?: (camera: Camera) => void;
   onBopSelect?: (bop: any) => void;
   onInspectCamera?: (camera: Camera) => void;
@@ -161,6 +162,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   height = '500px',
   selectedCameraId,
   targetCoords = null,
+  initialLayer = 'satellite',
   onCameraSelect,
   onBopSelect,
   onInspectCamera,
@@ -172,7 +174,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   const labelsLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
 
-  const [activeLayer, setActiveLayer] = useState<TileLayerType>('dark');
+  const [activeLayer, setActiveLayer] = useState<TileLayerType>(initialLayer || 'satellite');
   const [currentZoomLevel, setCurrentZoomLevel] = useState<number>(zoom);
   const [cursorCoords, setCursorCoords] = useState<[number, number] | null>(null);
 
@@ -196,38 +198,83 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
 
   const tileUrls: Record<TileLayerType, { 
     base: string; 
+    fallback?: string;
     labels?: string; 
     attribution: string;
     maxNativeZoom: number;
     maxZoom: number;
-    subdomains?: string[];
+    subdomains?: string[] | string;
+    fallbackSubdomains?: string[] | string;
   }> = {
+    satellite: {
+      base: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+      subdomains: ['0', '1', '2', '3'],
+      fallback: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attribution: '&copy; Google Satellite & Hybrid Tactical Imagery',
+      maxNativeZoom: 21,
+      maxZoom: 22
+    },
+    topo: {
+      base: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+      subdomains: ['0', '1', '2', '3'],
+      fallback: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+      attribution: '&copy; Google Topographic Terrain & Elevation Relief',
+      maxNativeZoom: 20,
+      maxZoom: 22
+    },
+    streets: {
+      base: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+      subdomains: ['0', '1', '2', '3'],
+      fallback: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; Google Road Network & Tactical GIS',
+      maxNativeZoom: 20,
+      maxZoom: 22
+    },
     dark: {
       base: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; Esri &mdash; Dark Tactical Canvas',
+      fallback: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; Esri &mdash; Tactical Dark Canvas',
       maxNativeZoom: 16,
-      maxZoom: 21
-    },
-    satellite: {
-      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; Esri World Imagery',
-      maxNativeZoom: 19,
-      maxZoom: 21
-    },
-    streets: {
-      base: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '&copy; OpenStreetMap contributors',
-      maxNativeZoom: 19,
-      maxZoom: 21
-    },
-    topo: {
-      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; Esri World Topo Map',
-      maxNativeZoom: 19,
-      maxZoom: 21
+      maxZoom: 22
     }
+  };
+
+  const createTileLayerInstance = (layerType: TileLayerType): L.TileLayer => {
+    const cfg = tileUrls[layerType];
+    const tile = L.tileLayer(cfg.base, {
+      minZoom: 3,
+      maxZoom: 22,
+      maxNativeZoom: cfg.maxNativeZoom,
+      subdomains: cfg.subdomains || 'abc',
+      attribution: cfg.attribution,
+      crossOrigin: true,
+      keepBuffer: 8,
+      updateWhenZooming: true,
+      updateWhenIdle: false
+    });
+
+    if (cfg.fallback) {
+      tile.on('tileerror', (e: any) => {
+        const img = e.tile as HTMLImageElement | undefined;
+        if (img && !img.dataset.hasRetriedFallback && cfg.fallback) {
+          img.dataset.hasRetriedFallback = '1';
+          const coords = e.coords;
+          if (coords) {
+            const subs = cfg.fallbackSubdomains || ['a', 'b', 'c'];
+            const sub = Array.isArray(subs) ? subs[Math.abs((coords.x + coords.y) % subs.length)] : subs;
+            img.src = cfg.fallback
+              .replace('{s}', String(sub))
+              .replace('{z}', String(coords.z))
+              .replace('{x}', String(coords.x))
+              .replace('{y}', String(coords.y))
+              .replace('{r}', '');
+          }
+        }
+      });
+    }
+
+    return tile;
   };
 
   // Initialize Leaflet Map
@@ -254,21 +301,17 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
     });
 
     const cfg = tileUrls[activeLayer];
-    const initialTile = L.tileLayer(cfg.base, {
-      minZoom: 3,
-      maxZoom: cfg.maxZoom,
-      maxNativeZoom: cfg.maxNativeZoom,
-      subdomains: cfg.subdomains || 'abc',
-      attribution: cfg.attribution
-    }).addTo(map);
-
+    const initialTile = createTileLayerInstance(activeLayer);
+    initialTile.addTo(map);
     tileLayerRef.current = initialTile;
 
     if (cfg.labels) {
       const labelsTile = L.tileLayer(cfg.labels, {
         minZoom: 3,
-        maxZoom: cfg.maxZoom,
-        maxNativeZoom: cfg.maxNativeZoom
+        maxZoom: 22,
+        maxNativeZoom: cfg.maxNativeZoom,
+        subdomains: cfg.subdomains || 'abc',
+        crossOrigin: true
       }).addTo(map);
       labelsLayerRef.current = labelsTile;
     }
@@ -328,6 +371,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
 
     if (tileLayerRef.current) {
       mapInstanceRef.current.removeLayer(tileLayerRef.current);
+      tileLayerRef.current = null;
     }
     if (labelsLayerRef.current) {
       mapInstanceRef.current.removeLayer(labelsLayerRef.current);
@@ -335,21 +379,18 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
     }
 
     const cfg = tileUrls[layerType];
-    const newTile = L.tileLayer(cfg.base, {
-      minZoom: 3,
-      maxZoom: cfg.maxZoom,
-      maxNativeZoom: cfg.maxNativeZoom,
-      subdomains: cfg.subdomains || 'abc',
-      attribution: cfg.attribution
-    }).addTo(mapInstanceRef.current);
+    const newTile = createTileLayerInstance(layerType);
+    newTile.addTo(mapInstanceRef.current);
     newTile.bringToBack();
     tileLayerRef.current = newTile;
 
     if (cfg.labels) {
       const newLabels = L.tileLayer(cfg.labels, {
         minZoom: 3,
-        maxZoom: cfg.maxZoom,
-        maxNativeZoom: cfg.maxNativeZoom
+        maxZoom: 22,
+        maxNativeZoom: cfg.maxNativeZoom,
+        subdomains: cfg.subdomains || 'abc',
+        crossOrigin: true
       }).addTo(mapInstanceRef.current);
       labelsLayerRef.current = newLabels;
     }
@@ -1087,8 +1128,19 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
     );
   }, [onLocationFound]);
 
-  const handleZoomIn = () => mapInstanceRef.current?.zoomIn();
-  const handleZoomOut = () => mapInstanceRef.current?.zoomOut();
+  const handleZoomIn = () => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.zoomIn(0.5);
+  };
+  const handleZoomOut = () => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.zoomOut(0.5);
+  };
+  const handleSetExactZoom = (targetZoom: number) => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.setZoom(targetZoom);
+    setCurrentZoomLevel(targetZoom);
+  };
   const handleFitAll = () => {
     if (mapInstanceRef.current && lastValidCoordsRef.current.length > 1) {
       mapInstanceRef.current.fitBounds(lastValidCoordsRef.current, { padding: [40, 40], maxZoom: 16 });
@@ -1133,8 +1185,19 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
               activeLayer === 'topo' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
             }`}
+            title="Topography & Elevation Relief"
           >
             Topo
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTileLayer('streets')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
+              activeLayer === 'streets' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+            }`}
+            title="Roads & Border Infrastructure"
+          >
+            Streets
           </button>
         </div>
 
@@ -1206,46 +1269,93 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         </div>
       )}
 
-      {/* Top Right Zoom Controls & Telemetry */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
-        <button
-          type="button"
-          onClick={handleLiveLocate}
-          disabled={isLocating}
-          title="Detect Live GPS Location & Pin Post"
-          className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/40 cursor-pointer shadow-md"
-        >
-          <Locate className={`w-3.5 h-3.5 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">{isLocating ? 'Locating...' : 'My Post'}</span>
-        </button>
+      {/* Top Right Zoom Controls, Slider & Tactical Presets */}
+      <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-1.5">
+        {/* Main Control Bar */}
+        <div className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-1.5 rounded-xl shadow-2xl">
+          <button
+            type="button"
+            onClick={handleLiveLocate}
+            disabled={isLocating}
+            title="Detect Live GPS Location & Pin Post"
+            className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/40 cursor-pointer shadow-md"
+          >
+            <Locate className={`w-3.5 h-3.5 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isLocating ? 'Locating...' : 'My Post'}</span>
+          </button>
 
-        <span className="px-2 py-0.5 text-[10px] font-mono font-bold text-cyan-400 bg-slate-950/80 border border-slate-800 rounded-lg">
-          ZOOM {currentZoomLevel.toFixed(1)}x
-        </span>
-        <button
-          type="button"
-          onClick={handleZoomIn}
-          title="Zoom In (+)"
-          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-        >
-          <ZoomIn className="w-4 h-4 text-sky-400" />
-        </button>
-        <button
-          type="button"
-          onClick={handleZoomOut}
-          title="Zoom Out (-)"
-          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-        >
-          <ZoomOut className="w-4 h-4 text-sky-400" />
-        </button>
-        <button
-          type="button"
-          onClick={handleFitAll}
-          title="Fit All Perimeter Nodes"
-          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-        >
-          <Maximize2 className="w-4 h-4 text-indigo-400" />
-        </button>
+          {/* Quick Zoom Buttons */}
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            title="Zoom In (+)"
+            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
+          >
+            <ZoomIn className="w-4 h-4 text-sky-400" />
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            title="Zoom Out (-)"
+            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
+          >
+            <ZoomOut className="w-4 h-4 text-sky-400" />
+          </button>
+
+          {/* Interactive Zoom Slider */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-slate-950/80 border border-slate-800 rounded-lg">
+            <span className="text-[10px] font-mono text-slate-400">🔍</span>
+            <input
+              type="range"
+              min="5"
+              max="22"
+              step="0.5"
+              value={currentZoomLevel}
+              onChange={(e) => handleSetExactZoom(parseFloat(e.target.value))}
+              className="w-20 h-1.5 accent-cyan-400 bg-slate-800 rounded-lg cursor-pointer"
+              title={`Drag to zoom: ${currentZoomLevel.toFixed(1)}x`}
+            />
+          </div>
+
+          <span className="px-2 py-0.5 text-[11px] font-mono font-bold text-cyan-400 bg-slate-950/90 border border-slate-800 rounded-lg shadow-inner min-w-[55px] text-center">
+            {currentZoomLevel.toFixed(1)}x
+          </span>
+
+          <button
+            type="button"
+            onClick={handleFitAll}
+            title="Fit All Perimeter Nodes"
+            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
+          >
+            <Maximize2 className="w-4 h-4 text-indigo-400" />
+          </button>
+        </div>
+
+        {/* Tactical Quick-Zoom Presets */}
+        <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md border border-slate-800/90 px-2 py-1 rounded-lg shadow-xl">
+          <span className="text-[9px] font-mono text-slate-400 font-bold pr-1">ZOOM:</span>
+          {[
+            { label: 'Sector (11x)', level: 11 },
+            { label: 'Post (14x)', level: 14 },
+            { label: 'Fence (17x)', level: 17 },
+            { label: 'Close-Up (19x)', level: 19 },
+            { label: 'Ultra (21.5x)', level: 21.5 }
+          ].map((preset) => (
+            <button
+              key={preset.level}
+              type="button"
+              onClick={() => handleSetExactZoom(preset.level)}
+              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition cursor-pointer ${
+                Math.abs(currentZoomLevel - preset.level) < 0.8
+                  ? 'bg-cyan-600 text-white shadow'
+                  : 'bg-slate-900 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 border border-slate-800'
+              }`}
+              title={`Jump to ${preset.label}`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bottom Right Floating Telemetry Strip */}
