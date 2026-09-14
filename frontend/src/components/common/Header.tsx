@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Clock } from 'lucide-react';
+import { Radio, RefreshCw, User as UserIcon, Bell, MapPin, LogOut, Bot, Menu, Volume2, VolumeX, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCameras } from '../../context/CameraContext';
 import { NotificationDrawer } from './NotificationDrawer';
@@ -92,8 +92,8 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-2.5 cursor-pointer group select-none"
             title="Return to Central Dashboard"
           >
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-sm shadow-cyan-500/20 shrink-0 group-hover:border-cyan-400 transition-colors">
-              <Shield className="w-4.5 h-4.5 text-cyan-400 group-hover:scale-105 transition-transform" />
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center p-1 shadow-sm shadow-cyan-500/20 shrink-0 group-hover:border-cyan-400 transition-colors">
+              <img src="/logo.png" alt="IBVAP Logo" className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
             </div>
             <div className="flex flex-col justify-center leading-none">
               <div className="flex items-center gap-2">

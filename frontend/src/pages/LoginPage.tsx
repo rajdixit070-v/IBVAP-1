@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Shield, 
   Lock, 
   User, 
   ArrowRight, 
@@ -207,8 +206,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
 
           {/* National Insignia Emblem & Title */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500/20 via-emerald-500/10 to-slate-900 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-950/30">
-              <Shield className="w-8 h-8 text-amber-400 drop-shadow" />
+            <div className="w-14 h-14 rounded-2xl bg-slate-900/80 border border-cyan-500/40 flex items-center justify-center p-2 shadow-xl shadow-cyan-950/40">
+              <img src="/logo.png" alt="IBVAP Logo" className="w-full h-full object-contain drop-shadow" />
             </div>
             <div className="text-center sm:text-left">
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-widest font-mono uppercase">
