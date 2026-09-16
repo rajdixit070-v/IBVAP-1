@@ -68,6 +68,8 @@ storage/evidence/
 storage/clips/
 storage/snapshots/
 storage/cache/
+backend/storage
+backend/storage/**
 !storage/
 !storage/.gitkeep
 

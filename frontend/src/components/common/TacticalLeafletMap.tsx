@@ -765,18 +765,51 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
       });
     }
 
-    // 4. Group cameras by parent BOP
+    // 4. Group cameras by parent BOP with robust resilient matching
     const bopLocationMap = new Map<string, { lat: number; lng: number; bop: any }>();
     bops.forEach(b => {
       if (b.latitude && b.longitude) {
-        bopLocationMap.set(b.bop_id.toLowerCase(), { lat: b.latitude, lng: b.longitude, bop: b });
-        bopLocationMap.set(b.name.toLowerCase(), { lat: b.latitude, lng: b.longitude, bop: b });
+        if (b.bop_id) bopLocationMap.set(String(b.bop_id).toLowerCase(), { lat: b.latitude, lng: b.longitude, bop: b });
+        if (b.id) bopLocationMap.set(String(b.id).toLowerCase(), { lat: b.latitude, lng: b.longitude, bop: b });
+        if (b.name) bopLocationMap.set(String(b.name).toLowerCase(), { lat: b.latitude, lng: b.longitude, bop: b });
+        if (b.code) bopLocationMap.set(String(b.code).toLowerCase(), { lat: b.latitude, lng: b.longitude, bop: b });
       }
     });
 
+    const findBopForCamera = (cam: Camera) => {
+      const bopKey = (cam.bop_site || (cam as any).bop_id || '').toLowerCase().trim();
+      if (bopKey && bopLocationMap.has(bopKey)) {
+        return bopLocationMap.get(bopKey);
+      }
+      if (bopKey) {
+        for (const [k, v] of bopLocationMap.entries()) {
+          if (bopKey.includes(k) || k.includes(bopKey)) {
+            return v;
+          }
+        }
+      }
+      // If only 1 BOP is passed (Commander Scope Mode), automatically associate camera with this assigned BOP
+      if (bops.length === 1 && bops[0].latitude && bops[0].longitude) {
+        return { lat: bops[0].latitude, lng: bops[0].longitude, bop: bops[0] };
+      }
+      // Proximity check: if camera has lat/lng close to any BOP
+      if (cam.latitude && cam.longitude) {
+        for (const b of bops) {
+          if (b.latitude && b.longitude) {
+            const dist = Math.hypot(cam.latitude - b.latitude, cam.longitude - b.longitude);
+            if (dist < 0.08) {
+              return { lat: b.latitude, lng: b.longitude, bop: b };
+            }
+          }
+        }
+      }
+      return undefined;
+    };
+
     const bopCameraBuckets = new Map<string, Camera[]>();
     cameras.forEach(cam => {
-      const bopKey = (cam.bop_site || (cam as any).bop_id || '').toLowerCase();
+      const bopInfo = findBopForCamera(cam);
+      const bopKey = bopInfo ? String(bopInfo.bop.bop_id || bopInfo.bop.id || bopInfo.bop.name).toLowerCase() : (cam.bop_site || '').toLowerCase();
       const bucket = bopCameraBuckets.get(bopKey) || [];
       bucket.push(cam);
       bopCameraBuckets.set(bopKey, bucket);
@@ -790,9 +823,24 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         const bLng = bop.longitude;
         validCoords.push([bLat, bLng]);
 
-        const bopThreats = bopAlertsMap.get(bop.name.toLowerCase()) || bopAlertsMap.get(bop.bop_id.toLowerCase()) || [];
+        const bopThreats = bopAlertsMap.get(String(bop.name || '').toLowerCase()) || bopAlertsMap.get(String(bop.bop_id || '').toLowerCase()) || [];
         const hasThreat = bopThreats.length > 0;
-        const connectedCams = bopCameraBuckets.get(bop.bop_id.toLowerCase()) || bopCameraBuckets.get(bop.name.toLowerCase()) || [];
+        const bopKeys = [
+          String(bop.bop_id || '').toLowerCase(),
+          String(bop.id || '').toLowerCase(),
+          String(bop.name || '').toLowerCase(),
+          String(bop.code || '').toLowerCase()
+        ].filter(Boolean);
+
+        const connectedCams = cameras.filter(cam => {
+          const camBop = String(cam.bop_site || (cam as any).bop_id || '').toLowerCase();
+          if (bopKeys.some(k => camBop.includes(k) || k.includes(camBop))) return true;
+          if (bops.length === 1) return true;
+          if (cam.latitude && cam.longitude && bLat && bLng) {
+            return Math.abs(cam.latitude - bLat) < 0.05 && Math.abs(cam.longitude - bLng) < 0.05;
+          }
+          return false;
+        });
 
         if (hasThreat && showThreatsLayer) {
           const radarRing = L.circle([bLat, bLng], {
@@ -875,11 +923,11 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
       const bopCameraOffsetIndex = new Map<string, number>();
 
       cameras.forEach((cam) => {
-        const bopKey = (cam.bop_site || (cam as any).bop_id || '').toLowerCase();
-        const parentBopInfo = bopLocationMap.get(bopKey);
+        const parentBopInfo = findBopForCamera(cam);
+        const bopKey = parentBopInfo ? String(parentBopInfo.bop.bop_id || parentBopInfo.bop.id || parentBopInfo.bop.name).toLowerCase() : String(cam.bop_site || '').toLowerCase();
 
-        let finalLat = cam.latitude;
-        let finalLng = cam.longitude;
+        let finalLat: number = cam.latitude ?? center[0];
+        let finalLng: number = cam.longitude ?? center[1];
 
         if (parentBopInfo) {
           const siblings = bopCameraBuckets.get(bopKey) || [cam];
@@ -905,9 +953,6 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             }
           );
           leaderLine.addTo(group);
-        } else if (!finalLat || !finalLng) {
-          finalLat = center[0];
-          finalLng = center[1];
         }
 
         validCoords.push([finalLat, finalLng]);
@@ -1344,7 +1389,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
 
   const handlePan = (direction: 'up' | 'down' | 'left' | 'right') => {
     if (!mapInstanceRef.current) return;
-    const panStep = 180;
+    const panStep = 240;
     let dx = 0;
     let dy = 0;
     switch (direction) {
@@ -1361,7 +1406,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         dx = panStep;
         break;
     }
-    mapInstanceRef.current.panBy([dx, dy], { animate: true, duration: 0.25 });
+    mapInstanceRef.current.panBy([dx, dy], { animate: true, duration: 0.2 });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1583,38 +1628,42 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
           </button>
 
           {/* Directional Pan Buttons (Left, Up, Down, Right) */}
-          <div className="flex items-center gap-0.5 bg-slate-950/80 p-0.5 rounded-lg border border-slate-800">
+          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-lg border border-slate-700/80 shadow-md">
             <button
               type="button"
               onClick={() => handlePan('left')}
-              title="Pan Left (West ⬅️)"
-              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              title="Pan West ⬅️ (Left)"
+              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden md:inline">Left</span>
             </button>
             <button
               type="button"
               onClick={() => handlePan('up')}
-              title="Pan Up (North ⬆️)"
-              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              title="Pan North ⬆️ (Up)"
+              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
             >
               <ArrowUp className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden md:inline">Up</span>
             </button>
             <button
               type="button"
               onClick={() => handlePan('down')}
-              title="Pan Down (South ⬇️)"
-              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              title="Pan South ⬇️ (Down)"
+              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
             >
               <ArrowDown className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden md:inline">Down</span>
             </button>
             <button
               type="button"
               onClick={() => handlePan('right')}
-              title="Pan Right (East ➡️)"
-              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              title="Pan East ➡️ (Right)"
+              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
             >
               <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden md:inline">Right</span>
             </button>
           </div>
 
@@ -1692,21 +1741,21 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         </div>
       </div>
 
-      {/* Tactical D-Pad Pan Navigation Pad */}
-      <div className="absolute bottom-3 left-3 z-10 hidden sm:flex flex-col items-center p-1.5 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl">
-        <div className="text-[8px] font-mono text-cyan-400 font-bold mb-1 flex items-center gap-1">
-          <Compass className="w-2.5 h-2.5 text-cyan-400" />
-          <span>NAV PAD</span>
+      {/* Tactical D-Pad Pan Navigation Pad - Always Visible On-Screen */}
+      <div className="absolute bottom-3 left-3 z-10 flex flex-col items-center p-2 bg-slate-950/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl shadow-2xl">
+        <div className="text-[9px] font-mono text-cyan-400 font-bold mb-1.5 flex items-center gap-1.5 tracking-wider uppercase">
+          <Compass className="w-3 h-3 text-cyan-400 animate-spin" style={{ animationDuration: '10s' }} />
+          <span>MAP PAN</span>
         </div>
-        <div className="grid grid-cols-3 gap-1 w-18 h-18 items-center justify-items-center">
+        <div className="grid grid-cols-3 gap-1.5 w-24 h-24 items-center justify-items-center">
           <div />
           <button
             type="button"
             onClick={() => handlePan('up')}
             title="Pan North ⬆️ (Up)"
-            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-900 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-slate-700 hover:border-cyan-400 transition shadow-lg cursor-pointer active:scale-90"
           >
-            <ArrowUp className="w-3 h-3" />
+            <ArrowUp className="w-4 h-4" />
           </button>
           <div />
 
@@ -1714,15 +1763,15 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             type="button"
             onClick={() => handlePan('left')}
             title="Pan West ⬅️ (Left)"
-            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-900 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-slate-700 hover:border-cyan-400 transition shadow-lg cursor-pointer active:scale-90"
           >
-            <ArrowLeft className="w-3 h-3" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
           <button
             type="button"
             onClick={handleRecenter}
             title="Recenter Map (Center 🎯)"
-            className="w-5 h-5 flex items-center justify-center rounded bg-cyan-950 hover:bg-cyan-700 text-cyan-300 hover:text-white border border-cyan-500/50 transition shadow cursor-pointer active:scale-95 text-[9px] font-mono font-bold"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-cyan-950 hover:bg-cyan-700 text-cyan-300 hover:text-white border border-cyan-400 transition shadow-lg cursor-pointer active:scale-90 text-[11px] font-mono font-bold"
           >
             ●
           </button>
@@ -1730,9 +1779,9 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             type="button"
             onClick={() => handlePan('right')}
             title="Pan East ➡️ (Right)"
-            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-900 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-slate-700 hover:border-cyan-400 transition shadow-lg cursor-pointer active:scale-90"
           >
-            <ArrowRight className="w-3 h-3" />
+            <ArrowRight className="w-4 h-4" />
           </button>
 
           <div />
@@ -1740,9 +1789,9 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             type="button"
             onClick={() => handlePan('down')}
             title="Pan South ⬇️ (Down)"
-            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-900 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-slate-700 hover:border-cyan-400 transition shadow-lg cursor-pointer active:scale-90"
           >
-            <ArrowDown className="w-3 h-3" />
+            <ArrowDown className="w-4 h-4" />
           </button>
           <div />
         </div>

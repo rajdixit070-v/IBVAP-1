@@ -18,7 +18,7 @@ import {
   Send,
   CheckCircle2,
   Locate,
-  Navigation
+  Shield
 } from 'lucide-react';
 
 import {
@@ -63,6 +63,22 @@ export const PROMINENT_BOPS = [
   { id: 'BOP-CREEK', name: 'Sir Creek', sector: 'Gujarat', lat: 23.6500, lng: 68.3500, sectorName: 'Gujarat Frontier' },
   { id: 'BOP-GALWAN', name: 'Galwan Post', sector: 'Ladakh', lat: 34.7800, lng: 78.2500, sectorName: 'Ladakh Frontier' },
   { id: 'BOP-PANGONG', name: 'Pangong Post', sector: 'Ladakh', lat: 33.7500, lng: 78.6500, sectorName: 'Ladakh Frontier' }
+];
+
+export const FRONTIER_LIST = [
+  { id: 'ALL', name: '🇮🇳 All Frontiers (National HQ)', shortLabel: 'All Frontiers', icon: '🇮🇳', defaultBopId: 'BOP-WAGAH', defaultLat: 28.6139, defaultLng: 77.2090, zoom: 6 },
+  { id: 'Punjab Frontier', name: '🇵🇧 Punjab Frontier (Indo-Pak Border)', shortLabel: 'Punjab', icon: '🚩', defaultBopId: 'BOP-WAGAH', defaultLat: 31.6048, defaultLng: 74.5731, zoom: 15 },
+  { id: 'Rajasthan Frontier', name: '🏜️ Rajasthan Frontier (Thar Desert)', shortLabel: 'Rajasthan', icon: '🏜️', defaultBopId: 'BOP-TANOT', defaultLat: 27.8000, defaultLng: 70.3500, zoom: 14 },
+  { id: 'Jammu Frontier', name: '🏔️ Jammu Frontier (RS Pura / Samba)', shortLabel: 'Jammu', icon: '🏔️', defaultBopId: 'BOP-SUCHET', defaultLat: 32.6100, defaultLng: 74.7500, zoom: 14 },
+  { id: 'Gujarat Frontier', name: '🌊 Gujarat Frontier (Rann / Sir Creek)', shortLabel: 'Gujarat', icon: '🌊', defaultBopId: 'BOP-CREEK', defaultLat: 23.6500, defaultLng: 68.3500, zoom: 14 },
+  { id: 'Kashmir Frontier', name: '❄️ Kashmir Frontier (High Altitude LoC)', shortLabel: 'Kashmir', icon: '❄️', defaultBopId: 'BOP-URI', defaultLat: 34.0850, defaultLng: 74.0300, zoom: 14 },
+  { id: 'Ladakh Frontier', name: '🏔️ Ladakh Frontier (LAC / Galwan)', shortLabel: 'Ladakh', icon: '🏔️', defaultBopId: 'BOP-GALWAN', defaultLat: 34.7800, defaultLng: 78.2500, zoom: 13 },
+  { id: 'South Bengal Frontier', name: '🌲 South Bengal Frontier (Petrapole / Sundarbans)', shortLabel: 'South Bengal', icon: '🌲', defaultBopId: 'BOP-PETRAPOLE', defaultLat: 23.0425, defaultLng: 88.8745, zoom: 14 },
+  { id: 'North Bengal Frontier', name: '🌿 North Bengal Frontier (Siliguri Corridor)', shortLabel: 'North Bengal', icon: '🌿', defaultBopId: 'BOP-FULBARI', defaultLat: 26.6500, defaultLng: 88.4200, zoom: 14 },
+  { id: 'Tripura Frontier', name: '🌾 Tripura Frontier (Agartala)', shortLabel: 'Tripura', icon: '🌾', defaultBopId: 'BOP-AGARTALA', defaultLat: 23.8315, defaultLng: 91.2868, zoom: 14 },
+  { id: 'Meghalaya Frontier', name: '⛰️ Meghalaya Frontier (Dawki / Garo)', shortLabel: 'Meghalaya', icon: '⛰️', defaultBopId: 'BOP-DAWKI', defaultLat: 25.1873, defaultLng: 92.0197, zoom: 14 },
+  { id: 'Mizoram & Cachar Frontier', name: '🎋 Mizoram & Cachar Frontier', shortLabel: 'Mizoram', icon: '🎋', defaultBopId: 'BOP-ZOKHAWTHAR', defaultLat: 23.3600, defaultLng: 93.3300, zoom: 14 },
+  { id: 'Assam Frontier', name: '🌳 Assam Frontier (Dhubri Riverine)', shortLabel: 'Assam', icon: '🌳', defaultBopId: 'BOP-DHUBRI', defaultLat: 25.9800, defaultLng: 89.9200, zoom: 14 }
 ];
 
 const SECTOR_PRESETS: Record<string, { name: string; lat: number; lng: number; sectorName: string; description: string }> = {
@@ -122,30 +138,27 @@ interface GISIntelligencePageProps {}
 
 export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
-  const userBop = user?.scope_id || '';
+  const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.role === 'superadmin' || user?.scope_type === 'GLOBAL';
+  const commanderScopeId = user?.scope_id || 'BOP-WAGAH';
   const commanderPostName = user?.post_name || 'Attari-Wagah Joint Check Post';
+  const commanderSector = user?.sector || 'Punjab Frontier';
   const { cameras } = useCameras();
   const [bops, setBops] = useState<any[]>([]);
 
-  const scopedCameras = useMemo(() => {
-    if (isSuperAdmin) return cameras;
-    const filtered = cameras.filter(c => {
-      const p = (c.bop_site || '').toLowerCase();
-      const target = commanderPostName.toLowerCase();
-      return p.includes(target) || p.includes('wagah') || (c.camera_id || '').toLowerCase().includes('wagah');
-    });
-    return filtered.length > 0 ? filtered : cameras;
-  }, [cameras, isSuperAdmin, commanderPostName]);
+  // Admin Frontier & BOP selector state
+  const [selectedFrontier, setSelectedFrontier] = useState<string>('Punjab Frontier');
+  const [selectedBopId, setSelectedBopId] = useState<string>('BOP-WAGAH');
 
   const allAvailableBops = useMemo(() => {
     const map = new Map<string, any>();
     COMPREHENSIVE_CHECKPOSTS.forEach(cp => {
       map.set(cp.id.toLowerCase(), {
         bop_id: cp.id,
+        id: cp.id,
         name: cp.name,
         code: cp.code,
         location: cp.sector,
+        sector: cp.sector,
         state: cp.state,
         latitude: cp.latitude || 31.6048,
         longitude: cp.longitude || 74.5731,
@@ -161,9 +174,94 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
     return Array.from(map.values());
   }, [bops]);
 
+  // Identify Commander's assigned BOP
+  const matchedCommanderBop = useMemo(() => {
+    const cleanScope = String(commanderScopeId).toLowerCase().trim();
+    const cleanPost = String(commanderPostName).toLowerCase().trim();
+    return (
+      allAvailableBops.find(b => 
+        (b.bop_id && String(b.bop_id).toLowerCase() === cleanScope) ||
+        (b.code && String(b.code).toLowerCase() === cleanScope) ||
+        (b.id && String(b.id).toLowerCase() === cleanScope) ||
+        (b.name && (String(b.name).toLowerCase().includes(cleanPost) || cleanPost.includes(String(b.name).toLowerCase()))) ||
+        (b.name && String(b.name).toLowerCase().includes('wagah'))
+      ) || allAvailableBops[0]
+    );
+  }, [allAvailableBops, commanderScopeId, commanderPostName]);
+
+  // Scoped BOPs:
+  // Admin sees all available BOPs.
+  // Commander ONLY SEES THEIR SINGLE ASSIGNED BOP!
   const scopedBops = useMemo(() => {
-    return allAvailableBops;
-  }, [allAvailableBops]);
+    if (isSuperAdmin) return allAvailableBops;
+    return matchedCommanderBop ? [matchedCommanderBop] : [];
+  }, [isSuperAdmin, allAvailableBops, matchedCommanderBop]);
+
+  // Scoped Cameras:
+  // Admin sees all cameras.
+  // Commander ONLY SEES CAMERAS ADDED FOR / ASSOCIATED WITH THEIR ASSIGNED BOP!
+  const scopedCameras = useMemo(() => {
+    if (isSuperAdmin) return cameras;
+    const targetBopId = String(matchedCommanderBop?.bop_id || matchedCommanderBop?.id || '').toLowerCase();
+    const targetBopName = String(matchedCommanderBop?.name || commanderPostName || '').toLowerCase();
+    const targetBopCode = String(matchedCommanderBop?.code || '').toLowerCase();
+
+    return cameras.filter(c => {
+      const camBop = String(c.bop_site || (c as any).bop_id || '').toLowerCase().trim();
+      const camId = String(c.camera_id || '').toLowerCase().trim();
+
+      // Direct name or BOP ID/code match
+      if (camBop && (
+        camBop.includes(targetBopName) || targetBopName.includes(camBop) ||
+        (targetBopId && (camBop.includes(targetBopId) || targetBopId.includes(camBop))) ||
+        (targetBopCode && (camBop.includes(targetBopCode) || targetBopCode.includes(camBop)))
+      )) {
+        return true;
+      }
+
+      // Camera ID contains BOP code (e.g. CAM-WAGAH-01)
+      if (targetBopCode && camId.includes(targetBopCode)) {
+        return true;
+      }
+
+      // Proximity match: within 15 km
+      if (c.latitude && c.longitude && matchedCommanderBop?.latitude && matchedCommanderBop?.longitude) {
+        const dLat = Math.abs(c.latitude - matchedCommanderBop.latitude);
+        const dLng = Math.abs(c.longitude - matchedCommanderBop.longitude);
+        if (dLat < 0.15 && dLng < 0.15) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  }, [cameras, isSuperAdmin, matchedCommanderBop, commanderPostName]);
+
+  // Filter BOPs by Frontier for Admin selection
+  const frontierBops = useMemo(() => {
+    if (selectedFrontier === 'ALL') return allAvailableBops;
+    const cleanFrontier = selectedFrontier.toLowerCase();
+    return allAvailableBops.filter(b => {
+      const bopSector = String(b.location || b.sector || '').toLowerCase();
+      const bopState = String(b.state || '').toLowerCase();
+      const bopName = String(b.name || '').toLowerCase();
+      return (
+        bopSector.includes(cleanFrontier) ||
+        cleanFrontier.includes(bopSector) ||
+        (cleanFrontier.includes('punjab') && (bopSector.includes('punjab') || bopState.includes('punjab'))) ||
+        (cleanFrontier.includes('rajasthan') && (bopSector.includes('rajasthan') || bopState.includes('rajasthan'))) ||
+        (cleanFrontier.includes('jammu') && (bopSector.includes('jammu') || bopState.includes('jammu'))) ||
+        (cleanFrontier.includes('gujarat') && (bopSector.includes('gujarat') || bopState.includes('gujarat'))) ||
+        (cleanFrontier.includes('kashmir') && (bopSector.includes('kashmir') || bopName.includes('uri') || bopName.includes('kupwara'))) ||
+        (cleanFrontier.includes('ladakh') && (bopSector.includes('ladakh') || bopName.includes('galwan') || bopName.includes('pangong'))) ||
+        (cleanFrontier.includes('bengal') && (bopSector.includes('bengal') || bopState.includes('bengal'))) ||
+        (cleanFrontier.includes('tripura') && (bopSector.includes('tripura') || bopState.includes('tripura'))) ||
+        (cleanFrontier.includes('meghalaya') && (bopSector.includes('meghalaya') || bopState.includes('meghalaya'))) ||
+        (cleanFrontier.includes('mizoram') && (bopSector.includes('mizoram') || bopState.includes('mizoram'))) ||
+        (cleanFrontier.includes('assam') && (bopSector.includes('assam') || bopState.includes('assam')))
+      );
+    });
+  }, [allAvailableBops, selectedFrontier]);
   const [layers, setLayers] = useState<GISLayer[]>([]);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
@@ -225,49 +323,83 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
     }
   };
 
-  const handleSelectPreset = async (presetKey: string) => {
-    setActivePreset(presetKey);
-    const p = SECTOR_PRESETS[presetKey];
-    if (p) {
-      setRawLat(p.lat.toFixed(4));
-      setRawLng(p.lng.toFixed(4));
-      setCurrentCenter([p.lat, p.lng]);
-      setTargetCoords([p.lat, p.lng]);
-      setCurrentZoom(15);
-      fetchGISData(p.sectorName);
-      queryTerrainLocation(p.lat, p.lng);
-      setActionNotice(`Sector switched: ${p.name} • Zero-line border fence & cameras in view`);
+  const handleAdminSelectFrontier = (frontierIdOrName: string) => {
+    setSelectedFrontier(frontierIdOrName);
+    const targetFrontier = FRONTIER_LIST.find(f => f.id === frontierIdOrName || f.name === frontierIdOrName) || FRONTIER_LIST[0];
+
+    if (targetFrontier.id === 'ALL') {
+      setCurrentCenter([targetFrontier.defaultLat, targetFrontier.defaultLng]);
+      setTargetCoords([targetFrontier.defaultLat, targetFrontier.defaultLng]);
+      setCurrentZoom(targetFrontier.zoom || 6);
+      setRawLat(targetFrontier.defaultLat.toFixed(4));
+      setRawLng(targetFrontier.defaultLng.toFixed(4));
+      setActionNotice('🇮🇳 Viewing All Frontiers (National Grid Overview)');
+      setTimeout(() => setActionNotice(null), 3500);
+      scrollToMap();
+      return;
+    }
+
+    const cleanFrontier = targetFrontier.shortLabel.toLowerCase();
+    const matchBop = allAvailableBops.find(b =>
+      (targetFrontier.defaultBopId && (b.bop_id === targetFrontier.defaultBopId || b.id === targetFrontier.defaultBopId)) ||
+      (b.sector && b.sector.toLowerCase().includes(cleanFrontier)) ||
+      (b.location && b.location.toLowerCase().includes(cleanFrontier))
+    );
+
+    const lat = matchBop?.latitude || targetFrontier.defaultLat;
+    const lng = matchBop?.longitude || targetFrontier.defaultLng;
+    const zoom = targetFrontier.zoom || 15;
+
+    if (matchBop) {
+      setSelectedBopId(matchBop.bop_id || matchBop.id);
+      setActivePreset(matchBop.bop_id || matchBop.id);
+    }
+    setRawLat(lat.toFixed(4));
+    setRawLng(lng.toFixed(4));
+    setCurrentCenter([lat, lng]);
+    setTargetCoords([lat, lng]);
+    setCurrentZoom(zoom);
+    queryTerrainLocation(lat, lng);
+    setActionNotice(`⚡ Switched Frontier: ${targetFrontier.shortLabel} • Outposts & Sensors Locked`);
+    setTimeout(() => setActionNotice(null), 3500);
+    scrollToMap();
+  };
+
+  const handleAdminSelectBop = (bopId: string) => {
+    setSelectedBopId(bopId);
+    const bop = allAvailableBops.find(b =>
+      String(b.bop_id || b.id).toLowerCase() === String(bopId).toLowerCase()
+    );
+    if (bop && bop.latitude && bop.longitude) {
+      setRawLat(bop.latitude.toFixed(4));
+      setRawLng(bop.longitude.toFixed(4));
+      setActivePreset(bop.bop_id || bop.id);
+      setCurrentCenter([bop.latitude, bop.longitude]);
+      setTargetCoords([bop.latitude, bop.longitude]);
+      setCurrentZoom(16);
+      queryTerrainLocation(bop.latitude, bop.longitude);
+      setActionNotice(`⚡ Outpost View Locked: ${bop.name} (${bop.sector || bop.location}) • Cameras in focus`);
       setTimeout(() => setActionNotice(null), 3500);
       scrollToMap();
     }
   };
 
-  const handleJumpToFrontier = (jump: typeof NATIONAL_FRONTIER_JUMPS[0]) => {
-    setActivePreset(jump.id);
-    setRawLat(jump.lat.toFixed(4));
-    setRawLng(jump.lng.toFixed(4));
-    setCurrentCenter([jump.lat, jump.lng]);
-    setTargetCoords([jump.lat, jump.lng]);
-    setCurrentZoom(jump.zoom || 15);
-    fetchGISData(jump.sectorName);
-    queryTerrainLocation(jump.lat, jump.lng);
-    setActionNotice(`⚡ Jumped to ${jump.label} • Zero-line border fence & defense sensors in view`);
-    setTimeout(() => setActionNotice(null), 3500);
-    scrollToMap();
-  };
-
-  const handleJumpToBOP = (bop: { id: string; name: string; sector: string; lat: number; lng: number; sectorName?: string }) => {
-    setRawLat(bop.lat.toFixed(4));
-    setRawLng(bop.lng.toFixed(4));
-    setActivePreset(bop.id);
-    setCurrentCenter([bop.lat, bop.lng]);
-    setTargetCoords([bop.lat, bop.lng]);
-    setCurrentZoom(16);
-    if (bop.sectorName) fetchGISData(bop.sectorName);
-    queryTerrainLocation(bop.lat, bop.lng);
-    setActionNotice(`⚡ Jumped to BOP: ${bop.name} (${bop.sector}) • Surveillance sensors locked`);
-    setTimeout(() => setActionNotice(null), 3500);
-    scrollToMap();
+  const handleCommanderRecenterPost = () => {
+    if (matchedCommanderBop && matchedCommanderBop.latitude && matchedCommanderBop.longitude) {
+      const lat = matchedCommanderBop.latitude;
+      const lng = matchedCommanderBop.longitude;
+      setRawLat(lat.toFixed(4));
+      setRawLng(lng.toFixed(4));
+      setActivePreset(matchedCommanderBop.bop_id || matchedCommanderBop.id || 'COMMANDER_BOP');
+      setCurrentCenter([lat, lng]);
+      setTargetCoords([lat, lng]);
+      setCurrentZoom(16);
+      queryTerrainLocation(lat, lng);
+      setGpsStatusText(`DUTY POST LOCKED: ${matchedCommanderBop.name.toUpperCase()}`);
+      setActionNotice(`⚡ Centered on Assigned Outpost: ${matchedCommanderBop.name} • Sentry active`);
+      setTimeout(() => setActionNotice(null), 3500);
+      scrollToMap();
+    }
   };
 
   const handleSelectBopFromMap = (bop: any) => {
@@ -433,8 +565,21 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
 
   useEffect(() => {
     fetchGISData();
-    queryTerrainLocation(31.6048, 74.5731);
-  }, []);
+    if (!isSuperAdmin && matchedCommanderBop?.latitude && matchedCommanderBop?.longitude) {
+      const lat = matchedCommanderBop.latitude;
+      const lng = matchedCommanderBop.longitude;
+      setRawLat(lat.toFixed(4));
+      setRawLng(lng.toFixed(4));
+      setCurrentCenter([lat, lng]);
+      setTargetCoords([lat, lng]);
+      setCurrentZoom(16);
+      setActivePreset(matchedCommanderBop.bop_id || matchedCommanderBop.id || 'COMMANDER_BOP');
+      setGpsStatusText(`DUTY POST LOCKED: ${matchedCommanderBop.name.toUpperCase()}`);
+      queryTerrainLocation(lat, lng);
+    } else {
+      queryTerrainLocation(31.6048, 74.5731);
+    }
+  }, [isSuperAdmin, matchedCommanderBop]);
 
   const handleToggleLayer = async (layer: GISLayer) => {
     try {
@@ -498,7 +643,7 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
         priority: spot.risk_level === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
         incident_type: 'SECURITY',
         camera_id: cameras[0]?.camera_id || 'CAM-PUNJAB-WAGAH-01',
-        bop_site: userBop || 'BOP-WAGAH',
+        bop_site: commanderScopeId || 'BOP-WAGAH',
         risk_score: spot.risk_score
       });
       setActionNotice(`Sentry Squad Mobilized & Incident Logged for ${spot.blind_spot_id}!`);
@@ -509,7 +654,7 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
   };
 
   const handleOpenBlindSpotDispatch = (spot: BlindSpot) => {
-    setDispatchTitle(`🚨 TERRAIN BLIND-SPOT GAP: ${spot.blind_spot_id} (${userBop || 'Wagah Checkpost'})`);
+    setDispatchTitle(`🚨 TERRAIN BLIND-SPOT GAP: ${spot.blind_spot_id} (${commanderPostName || 'Wagah Checkpost'})`);
     setDispatchSummary(
       `Critical surveillance gap identified at distance ${spot.proximity_to_border_m}m from zero-line wire. Terrain: ${spot.terrain_factor}. Risk Score: ${spot.risk_score}/100. Ground squad alerted. Requesting supplementary thermal/radar sensor tower from Central Delhi HQ.`
     );
@@ -648,106 +793,187 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
 
             {/* Dedicated Tactical Sentry Navigation & Fixed Live GPS Command Station */}
             <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3 shadow-inner">
-              {/* Row 1: Sector Preset & Solidly Fixed Live GPS Control */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                {/* Sector / BOP Dropdown */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-950/60 border border-emerald-600/40 rounded-lg text-emerald-300 text-xs font-mono font-bold">
-                    <Navigation className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>OUTPOST SECTOR:</span>
+              {isSuperAdmin ? (
+                /* ============================================================ */
+                /* ADMIN COMMAND HUD: Full Frontier & BOP Exploration & Control */
+                /* ============================================================ */
+                <>
+                  {/* Row 1: Admin Frontier & BOP Command Selectors */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Frontier Selector */}
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-950/60 border border-cyan-600/40 rounded-lg text-cyan-300 text-xs font-mono font-bold">
+                        <Compass className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span>FRONTIER:</span>
+                      </div>
+                      <select
+                        value={selectedFrontier}
+                        onChange={(e) => handleAdminSelectFrontier(e.target.value)}
+                        className="bg-slate-900 border border-cyan-500/50 text-cyan-200 rounded-lg px-3 py-1.5 text-xs font-mono font-bold focus:border-cyan-400 focus:outline-none cursor-pointer"
+                      >
+                        {FRONTIER_LIST.map((f) => (
+                          <option key={f.id} value={f.name}>{f.name}</option>
+                        ))}
+                      </select>
+
+                      {/* Target BOP Selector in that Frontier */}
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-950/60 border border-emerald-600/40 rounded-lg text-emerald-300 text-xs font-mono font-bold">
+                        <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>TARGET BOP:</span>
+                      </div>
+                      <select
+                        value={selectedBopId}
+                        onChange={(e) => handleAdminSelectBop(e.target.value)}
+                        className="bg-slate-900 border border-emerald-500/50 text-emerald-200 rounded-lg px-3 py-1.5 text-xs font-mono font-bold focus:border-emerald-400 focus:outline-none cursor-pointer max-w-[240px]"
+                      >
+                        {frontierBops.map((b) => (
+                          <option key={b.bop_id || b.id} value={b.bop_id || b.id}>
+                            {b.name} ({b.sector || b.location || 'Post'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Fixed Live GPS Commander Anchor */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleLiveGPSLocate}
+                        disabled={isLocatingGPS}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-2 transition cursor-pointer shadow-md border ${
+                          isLocatingGPS
+                            ? 'bg-amber-600 text-white border-amber-400 animate-pulse'
+                            : gpsLocked
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400'
+                            : 'bg-sky-600 hover:bg-sky-500 text-white border-sky-400'
+                        }`}
+                        title="Lock Sentry GPS coordinates and center map on your position"
+                      >
+                        <Crosshair className={`w-4 h-4 ${isLocatingGPS ? 'animate-spin' : ''}`} />
+                        <span>{isLocatingGPS ? 'LOCATING...' : 'LIVE GPS'}</span>
+                      </button>
+
+                      <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-[11px] font-mono">
+                        <span className={`w-2 h-2 rounded-full ${isLocatingGPS ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`} />
+                        <span className="text-slate-300 font-bold max-w-[200px] truncate">{gpsStatusText}</span>
+                      </div>
+                    </div>
                   </div>
-                  <select
-                    value={activePreset}
-                    onChange={(e) => handleSelectPreset(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-xs font-mono font-bold focus:border-emerald-500 focus:outline-none cursor-pointer"
-                  >
-                    {Object.entries(SECTOR_PRESETS).map(([k, p]) => (
-                      <option key={k} value={k}>{p.name}</option>
-                    ))}
-                    <option value="CUSTOM">📍 Custom Coordinates Target</option>
-                  </select>
-                </div>
 
-                {/* Fixed Live GPS Commander Anchor */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={handleLiveGPSLocate}
-                    disabled={isLocatingGPS}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-2 transition cursor-pointer shadow-md border ${
-                      isLocatingGPS
-                        ? 'bg-amber-600 text-white border-amber-400 animate-pulse'
-                        : gpsLocked
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400'
-                        : 'bg-sky-600 hover:bg-sky-500 text-white border-sky-400'
-                    }`}
-                    title="Lock Sentry GPS coordinates and center map on your position"
-                  >
-                    <Crosshair className={`w-4 h-4 ${isLocatingGPS ? 'animate-spin' : ''}`} />
-                    <span>{isLocatingGPS ? 'LOCATING...' : 'LIVE GPS'}</span>
-                  </button>
+                  {/* Row 1.5: National Frontier Quick Jump Ribbon */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-2 border-t border-slate-800/80 scrollbar-thin">
+                    <span className="text-[10px] font-mono text-cyan-400 font-bold px-1.5 flex items-center gap-1 shrink-0">
+                      <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                      FRONTIER:
+                    </span>
+                    {FRONTIER_LIST.map((f) => {
+                      const isSelected = selectedFrontier === f.name || selectedFrontier === f.id;
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => handleAdminSelectFrontier(f.name)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition border shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-md shadow-cyan-500/20 font-bold'
+                              : 'bg-slate-900/80 text-slate-300 hover:text-white border-slate-700 hover:border-slate-600'
+                          }`}
+                          title={`Jump map to ${f.name}`}
+                        >
+                          <span>{f.icon}</span>
+                          <span>{f.shortLabel}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                  <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-[11px] font-mono">
-                    <span className={`w-2 h-2 rounded-full ${isLocatingGPS ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`} />
-                    <span className="text-slate-300 font-bold max-w-[200px] truncate">{gpsStatusText}</span>
+                  {/* Row 1.6: Frontier Key BOP Outposts Quick Touch Ribbon */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1.5 border-t border-slate-800/80 scrollbar-thin">
+                    <span className="text-[10px] font-mono text-emerald-400 font-bold px-1.5 flex items-center gap-1 shrink-0">
+                      <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
+                      BOPS ({frontierBops.length}):
+                    </span>
+                    {(frontierBops.length > 0 ? frontierBops.slice(0, 12) : PROMINENT_BOPS).map((bop) => {
+                      const bId = bop.bop_id || bop.id;
+                      const isSelected = selectedBopId === bId || activePreset === bId;
+                      return (
+                        <button
+                          key={bId}
+                          type="button"
+                          onClick={() => handleAdminSelectBop(bId)}
+                          className={`px-2 py-0.5 rounded-lg text-xs font-mono font-semibold transition border shrink-0 cursor-pointer flex items-center gap-1 ${
+                            isSelected
+                              ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500 shadow-md shadow-emerald-500/20 font-bold'
+                              : 'bg-slate-900/80 text-slate-300 hover:text-white border-slate-700 hover:border-slate-600'
+                          }`}
+                          title={`Jump map to ${bop.name} (${bop.sector || bop.location})`}
+                        >
+                          <span className="text-[11px]">🛡️</span>
+                          <span>{bop.name}</span>
+                          <span className="text-[9px] text-slate-400 font-normal">({bop.sector || bop.location})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                /* ============================================================ */
+                /* COMMANDER HUD: Assigned Outpost Isolation & Attached Cameras */
+                /* ============================================================ */
+                <div className="space-y-3">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-emerald-950/30 border border-emerald-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-emerald-600/20 text-emerald-400 rounded-lg border border-emerald-500/30 shrink-0">
+                        <Shield className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono font-bold text-emerald-400 tracking-wider">ASSIGNED COMMAND OUTPOST:</span>
+                          <span className="text-xs px-2.5 py-0.5 rounded bg-emerald-900/70 border border-emerald-500/40 text-emerald-200 font-mono font-bold">
+                            {matchedCommanderBop?.name || commanderPostName}
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
+                          <span>Sector: <strong className="text-slate-200">{matchedCommanderBop?.sector || commanderSector}</strong></span>
+                          <span>GPS: <strong className="text-cyan-300">{matchedCommanderBop?.latitude?.toFixed(4)}°N, {matchedCommanderBop?.longitude?.toFixed(4)}°E</strong></span>
+                          <span>Attached Cameras: <strong className="text-emerald-300">{scopedCameras.length} Active</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleCommanderRecenterPost}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition shadow-md border border-emerald-400 cursor-pointer"
+                        title="Center map directly on your duty outpost and cameras"
+                      >
+                        <Compass className="w-4 h-4 text-white" />
+                        <span>CENTER OUTPOST VIEW</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleLiveGPSLocate}
+                        disabled={isLocatingGPS}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition border border-cyan-500/40 cursor-pointer"
+                        title="Live Sentry GPS Lock"
+                      >
+                        <Crosshair className={`w-3.5 h-3.5 ${isLocatingGPS ? 'animate-spin' : ''}`} />
+                        <span>{isLocatingGPS ? 'LOCATING...' : 'GPS FIX'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-mono px-2 text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>PERIMETER ISOLATION ACTIVE: Displaying only your assigned BOP & its connected surveillance cameras.</span>
+                    </span>
+                    <span className="text-emerald-400 font-bold">{gpsStatusText}</span>
                   </div>
                 </div>
-              </div>
-
-              {/* Row 1.5: National Frontier Quick Jump Ribbon */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-2 border-t border-slate-800/80 scrollbar-thin">
-                <span className="text-[10px] font-mono text-cyan-400 font-bold px-1.5 flex items-center gap-1 shrink-0">
-                  <Compass className="w-3.5 h-3.5 text-cyan-400" />
-                  JUMP SECTOR:
-                </span>
-                {NATIONAL_FRONTIER_JUMPS.map((jump) => {
-                  const isSelected = activePreset === jump.id;
-                  return (
-                    <button
-                      key={jump.id}
-                      type="button"
-                      onClick={() => handleJumpToFrontier(jump)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition border shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-md shadow-cyan-500/20 font-bold'
-                          : 'bg-slate-900/80 text-slate-300 hover:text-white border-slate-700 hover:border-slate-600'
-                      }`}
-                      title={`Jump map to ${jump.label} Zero-Line Sector`}
-                    >
-                      <span>🚩</span>
-                      <span>{jump.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Row 1.6: National Key BOP Outposts Quick Touch Ribbon */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1.5 border-t border-slate-800/80 scrollbar-thin">
-                <span className="text-[10px] font-mono text-emerald-400 font-bold px-1.5 flex items-center gap-1 shrink-0">
-                  <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
-                  JUMP BOP:
-                </span>
-                {PROMINENT_BOPS.map((bop) => {
-                  const isSelected = activePreset === bop.id;
-                  return (
-                    <button
-                      key={bop.id}
-                      type="button"
-                      onClick={() => handleJumpToBOP(bop)}
-                      className={`px-2 py-0.5 rounded-lg text-xs font-mono font-semibold transition border shrink-0 cursor-pointer flex items-center gap-1 ${
-                        isSelected
-                          ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500 shadow-md shadow-emerald-500/20 font-bold'
-                          : 'bg-slate-900/80 text-slate-300 hover:text-white border-slate-700 hover:border-slate-600'
-                      }`}
-                      title={`Jump map to ${bop.name} (${bop.sector}) Zero-Line Post`}
-                    >
-                      <span className="text-[11px]">🛡️</span>
-                      <span>{bop.name}</span>
-                      <span className="text-[9px] text-slate-400 font-normal">({bop.sector})</span>
-                    </button>
-                  );
-                })}
-              </div>
+              )}
 
               {/* Row 2: Manual Coordinate Jump + Recenter Outpost */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-slate-800/80">
@@ -794,12 +1020,12 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
 
                 <button
                   type="button"
-                  onClick={handleRecenterOutpost}
+                  onClick={isSuperAdmin ? handleRecenterOutpost : handleCommanderRecenterPost}
                   className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg text-xs font-mono flex items-center gap-1.5 transition border border-slate-700 cursor-pointer self-start sm:self-auto"
-                  title="Reset Map to Wagah Zero-Line Frontier"
+                  title={isSuperAdmin ? 'Reset Map to Wagah Zero-Line Frontier' : 'Center on Assigned Outpost'}
                 >
                   <Compass className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Recenter Outpost</span>
+                  <span>{isSuperAdmin ? 'Recenter Outpost' : 'Recenter Assigned Post'}</span>
                 </button>
               </div>
 
