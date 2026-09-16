@@ -247,7 +247,7 @@ const MainLayout: React.FC = () => {
   );
 };
 
-import { LoginPage } from './pages/LoginPage';
+import { HomePage3D } from './pages/HomePage3D';
 
 const AuthenticatedApp: React.FC = () => {
   const { user, isAuthenticated, loading } = useAuth();
@@ -264,7 +264,7 @@ const AuthenticatedApp: React.FC = () => {
   }
 
   if (!isAuthenticated || !user) {
-    return <LoginPage onSuccess={() => {}} />;
+    return <HomePage3D onSuccess={() => {}} />;
   }
 
   return (

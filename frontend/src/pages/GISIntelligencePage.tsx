@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Flame,
-  Map,
+  Map as MapIcon,
   Layers,
   Eye,
   EyeOff,
@@ -37,6 +37,33 @@ import { SecurityEvent } from '../types/event';
 import { useCameras } from '../context/CameraContext';
 import { useAuth } from '../context/AuthContext';
 import { TacticalLeafletMap } from '../components/common/TacticalLeafletMap';
+import { COMPREHENSIVE_CHECKPOSTS } from '../constants/checkposts';
+
+export const NATIONAL_FRONTIER_JUMPS = [
+  { id: 'WAGAH', label: 'Punjab / Wagah', lat: 31.6048, lng: 74.5731, zoom: 15, sectorName: 'Sector-North' },
+  { id: 'JAMMU', label: 'Jammu / RS Pura', lat: 32.6100, lng: 74.7500, zoom: 15, sectorName: 'Jammu Frontier' },
+  { id: 'KASHMIR', label: 'Kashmir / LoC', lat: 34.0850, lng: 74.0300, zoom: 15, sectorName: 'Kashmir Frontier' },
+  { id: 'RAJASTHAN', label: 'Rajasthan / Tanot', lat: 27.8000, lng: 70.3500, zoom: 15, sectorName: 'Rajasthan Frontier' },
+  { id: 'GUJARAT', label: 'Gujarat / Sir Creek', lat: 23.6500, lng: 68.3500, zoom: 15, sectorName: 'Gujarat Frontier' },
+  { id: 'LADAKH', label: 'Ladakh / Galwan', lat: 34.7800, lng: 78.2500, zoom: 15, sectorName: 'Ladakh Frontier' }
+];
+
+export const PROMINENT_BOPS = [
+  { id: 'BOP-WAGAH', name: 'Attari-Wagah', sector: 'Punjab', lat: 31.6048, lng: 74.5731, sectorName: 'Sector-North' },
+  { id: 'BOP-HUSSAINIWALA', name: 'Hussainiwala', sector: 'Punjab', lat: 30.9328, lng: 74.6052, sectorName: 'Punjab Frontier' },
+  { id: 'BOP-SADQI', name: 'Sadqi Fazilka', sector: 'Punjab', lat: 30.3842, lng: 73.9786, sectorName: 'Punjab Frontier' },
+  { id: 'BOP-KHEMKARAN', name: 'Khemkaran', sector: 'Punjab', lat: 31.1578, lng: 74.5662, sectorName: 'Punjab Frontier' },
+  { id: 'BOP-DBN', name: 'Dera Baba Nanak', sector: 'Punjab', lat: 32.0360, lng: 75.0298, sectorName: 'Punjab Frontier' },
+  { id: 'BOP-SUCHET', name: 'Suchetgarh', sector: 'Jammu', lat: 32.6100, lng: 74.7500, sectorName: 'Jammu Frontier' },
+  { id: 'BOP-SAMBA', name: 'Samba Post', sector: 'Jammu', lat: 32.5560, lng: 75.1180, sectorName: 'Jammu Frontier' },
+  { id: 'BOP-URI', name: 'Uri LoC Forward', sector: 'Kashmir', lat: 34.0850, lng: 74.0300, sectorName: 'Kashmir Frontier' },
+  { id: 'BOP-TANOT', name: 'Tanot Mata', sector: 'Rajasthan', lat: 27.8000, lng: 70.3500, sectorName: 'Rajasthan Frontier' },
+  { id: 'BOP-LONGEWALA', name: 'Longewala', sector: 'Rajasthan', lat: 27.5255, lng: 70.1558, sectorName: 'Rajasthan Frontier' },
+  { id: 'BOP-MUNABAO', name: 'Munabao', sector: 'Rajasthan', lat: 25.7197, lng: 70.2520, sectorName: 'Rajasthan Frontier' },
+  { id: 'BOP-CREEK', name: 'Sir Creek', sector: 'Gujarat', lat: 23.6500, lng: 68.3500, sectorName: 'Gujarat Frontier' },
+  { id: 'BOP-GALWAN', name: 'Galwan Post', sector: 'Ladakh', lat: 34.7800, lng: 78.2500, sectorName: 'Ladakh Frontier' },
+  { id: 'BOP-PANGONG', name: 'Pangong Post', sector: 'Ladakh', lat: 33.7500, lng: 78.6500, sectorName: 'Ladakh Frontier' }
+];
 
 const SECTOR_PRESETS: Record<string, { name: string; lat: number; lng: number; sectorName: string; description: string }> = {
   BOP_WAGAH: {
@@ -111,11 +138,32 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
     return filtered.length > 0 ? filtered : cameras;
   }, [cameras, isSuperAdmin, commanderPostName]);
 
+  const allAvailableBops = useMemo(() => {
+    const map = new Map<string, any>();
+    COMPREHENSIVE_CHECKPOSTS.forEach(cp => {
+      map.set(cp.id.toLowerCase(), {
+        bop_id: cp.id,
+        name: cp.name,
+        code: cp.code,
+        location: cp.sector,
+        state: cp.state,
+        latitude: cp.latitude || 31.6048,
+        longitude: cp.longitude || 74.5731,
+        status: 'ACTIVE',
+        operational_priority: 'HIGH'
+      });
+    });
+    bops.forEach(b => {
+      if (b.bop_id) {
+        map.set(b.bop_id.toLowerCase(), { ...map.get(b.bop_id.toLowerCase()), ...b });
+      }
+    });
+    return Array.from(map.values());
+  }, [bops]);
+
   const scopedBops = useMemo(() => {
-    if (isSuperAdmin) return bops;
-    const filtered = bops.filter(b => b.bop_id === userBop || (b.name && b.name.toLowerCase().includes('wagah')));
-    return filtered.length > 0 ? filtered : bops.slice(0, 1);
-  }, [bops, isSuperAdmin, userBop]);
+    return allAvailableBops;
+  }, [allAvailableBops]);
   const [layers, setLayers] = useState<GISLayer[]>([]);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
@@ -129,9 +177,11 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
   const [selectedBlindSpot, setSelectedBlindSpot] = useState<BlindSpot | null>(null);
 
   // Interactive Coordinates & Sector Navigation State
+  const mapWrapperRef = useRef<HTMLDivElement | null>(null);
+  const [gisMapDimension, setGisMapDimension] = useState<'2d' | '3d'>('2d');
   const [activePreset, setActivePreset] = useState<string>('BOP_WAGAH');
-  const [inputLat, setInputLat] = useState<number>(31.6048);
-  const [inputLng, setInputLng] = useState<number>(74.5731);
+  const [rawLat, setRawLat] = useState<string>('31.6048');
+  const [rawLng, setRawLng] = useState<string>('74.5731');
   const [currentCenter, setCurrentCenter] = useState<[number, number]>([31.6048, 74.5731]);
   const [targetCoords, setTargetCoords] = useState<[number, number] | null>([31.6048, 74.5731]);
   const [currentZoom, setCurrentZoom] = useState<number>(15);
@@ -142,18 +192,26 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
   const [gpsStatusText, setGpsStatusText] = useState<string>('OUTPOST LOCKED (WAGAH ZERO-LINE)');
   const [gpsLocked, setGpsLocked] = useState<boolean>(true);
 
+  const scrollToMap = useCallback(() => {
+    if (mapWrapperRef.current) {
+      mapWrapperRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
   const fetchGISData = async (sectorName = 'Sector-North') => {
     try {
       setLoading(true);
       const [lList, cov, bList, evts, bopList] = await Promise.all([
         gisService.getLayers(),
-        gisService.calculateSectorCoverage({ sector_name: sectorName }),
+        gisService.calculateSectorCoverage({ sector_name: sectorName }).catch(() =>
+          gisService.calculateSectorCoverage({ sector_name: 'Sector-North' }).catch(() => null)
+        ),
         gisService.getBlindSpots(),
         eventService.getEvents({ limit: 6 }).catch(() => []),
         federationService.listBOPs().catch(() => [])
       ]);
       setLayers(lList);
-      setCoverage(cov);
+      if (cov) setCoverage(cov);
       setBlindSpots(bList);
       setLiveEvents(evts || []);
       setBops(bopList || []);
@@ -171,8 +229,8 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
     setActivePreset(presetKey);
     const p = SECTOR_PRESETS[presetKey];
     if (p) {
-      setInputLat(p.lat);
-      setInputLng(p.lng);
+      setRawLat(p.lat.toFixed(4));
+      setRawLng(p.lng.toFixed(4));
       setCurrentCenter([p.lat, p.lng]);
       setTargetCoords([p.lat, p.lng]);
       setCurrentZoom(15);
@@ -180,19 +238,84 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
       queryTerrainLocation(p.lat, p.lng);
       setActionNotice(`Sector switched: ${p.name} • Zero-line border fence & cameras in view`);
       setTimeout(() => setActionNotice(null), 3500);
+      scrollToMap();
     }
   };
 
+  const handleJumpToFrontier = (jump: typeof NATIONAL_FRONTIER_JUMPS[0]) => {
+    setActivePreset(jump.id);
+    setRawLat(jump.lat.toFixed(4));
+    setRawLng(jump.lng.toFixed(4));
+    setCurrentCenter([jump.lat, jump.lng]);
+    setTargetCoords([jump.lat, jump.lng]);
+    setCurrentZoom(jump.zoom || 15);
+    fetchGISData(jump.sectorName);
+    queryTerrainLocation(jump.lat, jump.lng);
+    setActionNotice(`⚡ Jumped to ${jump.label} • Zero-line border fence & defense sensors in view`);
+    setTimeout(() => setActionNotice(null), 3500);
+    scrollToMap();
+  };
+
+  const handleJumpToBOP = (bop: { id: string; name: string; sector: string; lat: number; lng: number; sectorName?: string }) => {
+    setRawLat(bop.lat.toFixed(4));
+    setRawLng(bop.lng.toFixed(4));
+    setActivePreset(bop.id);
+    setCurrentCenter([bop.lat, bop.lng]);
+    setTargetCoords([bop.lat, bop.lng]);
+    setCurrentZoom(16);
+    if (bop.sectorName) fetchGISData(bop.sectorName);
+    queryTerrainLocation(bop.lat, bop.lng);
+    setActionNotice(`⚡ Jumped to BOP: ${bop.name} (${bop.sector}) • Surveillance sensors locked`);
+    setTimeout(() => setActionNotice(null), 3500);
+    scrollToMap();
+  };
+
+  const handleSelectBopFromMap = (bop: any) => {
+    const lat = bop.latitude;
+    const lng = bop.longitude;
+    if (!lat || !lng) return;
+    setRawLat(lat.toFixed(4));
+    setRawLng(lng.toFixed(4));
+    setActivePreset(bop.bop_id || bop.id || 'BOP_SELECTED');
+    setCurrentCenter([lat, lng]);
+    setTargetCoords([lat, lng]);
+    queryTerrainLocation(lat, lng);
+    setActionNotice(`🎯 Locked on BOP: ${bop.name} • Outpost sensors in focus`);
+    setTimeout(() => setActionNotice(null), 3500);
+    scrollToMap();
+  };
+
   const handleJumpToCustomCoords = () => {
-    if (!isNaN(inputLat) && !isNaN(inputLng)) {
+    const lat = parseFloat(rawLat);
+    const lng = parseFloat(rawLng);
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      setRawLat(lat.toFixed(4));
+      setRawLng(lng.toFixed(4));
       setActivePreset('CUSTOM');
-      setCurrentCenter([inputLat, inputLng]);
-      setTargetCoords([inputLat, inputLng]);
+      setCurrentCenter([lat, lng]);
+      setTargetCoords([lat, lng]);
       setCurrentZoom(16);
-      queryTerrainLocation(inputLat, inputLng);
-      setActionNotice(`Jumped to coordinates: ${inputLat.toFixed(4)}°N, ${inputLng.toFixed(4)}°E • Border zero-line & target point locked`);
+      queryTerrainLocation(lat, lng);
+      setActionNotice(`⚡ Jumped to coordinates: ${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E • Border zero-line & target point locked`);
       setTimeout(() => setActionNotice(null), 4000);
+      scrollToMap();
     }
+  };
+
+  const handleRecenterOutpost = () => {
+    const lat = 31.6048;
+    const lng = 74.5731;
+    setRawLat(lat.toFixed(4));
+    setRawLng(lng.toFixed(4));
+    setActivePreset('BOP_WAGAH');
+    setCurrentCenter([lat, lng]);
+    setTargetCoords([lat, lng]);
+    setCurrentZoom(15);
+    fetchGISData('Sector-North');
+    queryTerrainLocation(lat, lng);
+    setActionNotice('⚡ Reset to Wagah Outpost Zero-Line Frontier • Sentry View Locked');
+    setTimeout(() => setActionNotice(null), 3500);
+    scrollToMap();
   };
 
   const handleLiveGPSLocate = () => {
@@ -204,8 +327,8 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
         setIsLocatingGPS(false);
         const lat = 31.6048;
         const lng = 74.5731;
-        setInputLat(lat);
-        setInputLng(lng);
+        setRawLat(lat.toFixed(4));
+        setRawLng(lng.toFixed(4));
         setCurrentCenter([lat, lng]);
         setTargetCoords([lat, lng]);
         setCurrentZoom(17);
@@ -224,8 +347,8 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
         const lat = parseFloat(pos.coords.latitude.toFixed(5));
         const lng = parseFloat(pos.coords.longitude.toFixed(5));
         const acc = Math.round(pos.coords.accuracy);
-        setInputLat(lat);
-        setInputLng(lng);
+        setRawLat(lat.toFixed(4));
+        setRawLng(lng.toFixed(4));
         setActivePreset('CUSTOM');
         setCurrentCenter([lat, lng]);
         setTargetCoords([lat, lng]);
@@ -240,8 +363,8 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
         setIsLocatingGPS(false);
         const lat = 31.6048;
         const lng = 74.5731;
-        setInputLat(lat);
-        setInputLng(lng);
+        setRawLat(lat.toFixed(4));
+        setRawLng(lng.toFixed(4));
         setCurrentCenter([lat, lng]);
         setTargetCoords([lat, lng]);
         setCurrentZoom(17);
@@ -291,6 +414,7 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
     queryTerrainLocation(lat, lng);
     setActionNotice(`Navigating map to alert location: ${alert.title || alert.event_type || 'Threat'} (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E)`);
     setTimeout(() => setActionNotice(null), 4000);
+    scrollToMap();
   };
 
   const handleFocusBlindSpot = (spot: BlindSpot) => {
@@ -299,11 +423,12 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
     setCurrentCenter([lat, lng]);
     setTargetCoords([lat, lng]);
     setCurrentZoom(16);
-    setInputLat(lat);
-    setInputLng(lng);
+    setRawLat(lat.toFixed(4));
+    setRawLng(lng.toFixed(4));
     queryTerrainLocation(lat, lng);
     setActionNotice(`Focused on Blind Spot: ${spot.blind_spot_id} (${spot.proximity_to_border_m}m from wire)`);
     setTimeout(() => setActionNotice(null), 3500);
+    scrollToMap();
   };
 
   useEffect(() => {
@@ -412,7 +537,7 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 rounded-xl backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-emerald-600/20 text-emerald-400 rounded-lg border border-emerald-500/30">
-            <Map className="w-6 h-6 animate-pulse" />
+            <MapIcon className="w-6 h-6 animate-pulse" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white tracking-wide">GIS, Terrain & Tactical Blind-Spot Intelligence</h1>
@@ -421,6 +546,18 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setGisMapDimension(gisMapDimension === '2d' ? '3d' : '2d')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-mono font-bold transition cursor-pointer shadow-lg ${
+              gisMapDimension === '3d'
+                ? 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400'
+                : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-cyan-500/40'
+            }`}
+          >
+            <span>⛰️</span>
+            <span>{gisMapDimension === '3d' ? '2D RADAR MAP' : '3D TERRAIN FLYTHROUGH'}</span>
+          </button>
+
           <span className="text-xs font-mono px-2.5 py-1 rounded bg-black/40 border border-slate-700 text-emerald-400 hidden sm:inline-block">
             OPERATOR: {user?.username?.toUpperCase() || 'OFFICER'} ({user?.role?.toUpperCase() || 'COMMAND'})
           </span>
@@ -557,6 +694,61 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
                 </div>
               </div>
 
+              {/* Row 1.5: National Frontier Quick Jump Ribbon */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-2 border-t border-slate-800/80 scrollbar-thin">
+                <span className="text-[10px] font-mono text-cyan-400 font-bold px-1.5 flex items-center gap-1 shrink-0">
+                  <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                  JUMP SECTOR:
+                </span>
+                {NATIONAL_FRONTIER_JUMPS.map((jump) => {
+                  const isSelected = activePreset === jump.id;
+                  return (
+                    <button
+                      key={jump.id}
+                      type="button"
+                      onClick={() => handleJumpToFrontier(jump)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition border shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-md shadow-cyan-500/20 font-bold'
+                          : 'bg-slate-900/80 text-slate-300 hover:text-white border-slate-700 hover:border-slate-600'
+                      }`}
+                      title={`Jump map to ${jump.label} Zero-Line Sector`}
+                    >
+                      <span>🚩</span>
+                      <span>{jump.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Row 1.6: National Key BOP Outposts Quick Touch Ribbon */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1.5 border-t border-slate-800/80 scrollbar-thin">
+                <span className="text-[10px] font-mono text-emerald-400 font-bold px-1.5 flex items-center gap-1 shrink-0">
+                  <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
+                  JUMP BOP:
+                </span>
+                {PROMINENT_BOPS.map((bop) => {
+                  const isSelected = activePreset === bop.id;
+                  return (
+                    <button
+                      key={bop.id}
+                      type="button"
+                      onClick={() => handleJumpToBOP(bop)}
+                      className={`px-2 py-0.5 rounded-lg text-xs font-mono font-semibold transition border shrink-0 cursor-pointer flex items-center gap-1 ${
+                        isSelected
+                          ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500 shadow-md shadow-emerald-500/20 font-bold'
+                          : 'bg-slate-900/80 text-slate-300 hover:text-white border-slate-700 hover:border-slate-600'
+                      }`}
+                      title={`Jump map to ${bop.name} (${bop.sector}) Zero-Line Post`}
+                    >
+                      <span className="text-[11px]">🛡️</span>
+                      <span>{bop.name}</span>
+                      <span className="text-[9px] text-slate-400 font-normal">({bop.sector})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Row 2: Manual Coordinate Jump + Recenter Outpost */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-slate-800/80">
                 <div className="flex items-center gap-2 text-xs font-mono flex-wrap">
@@ -564,20 +756,28 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
                   <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1">
                     <span className="text-slate-500 text-[10px]">LAT:</span>
                     <input
-                      type="number"
-                      step="0.0001"
-                      value={inputLat}
-                      onChange={(e) => setInputLat(parseFloat(e.target.value))}
+                      type="text"
+                      inputMode="decimal"
+                      value={rawLat}
+                      onChange={(e) => setRawLat(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleJumpToCustomCoords();
+                      }}
+                      placeholder="31.6048"
                       className="w-20 bg-transparent text-white font-mono text-xs focus:outline-none"
                     />
                   </div>
                   <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1">
                     <span className="text-slate-500 text-[10px]">LNG:</span>
                     <input
-                      type="number"
-                      step="0.0001"
-                      value={inputLng}
-                      onChange={(e) => setInputLng(parseFloat(e.target.value))}
+                      type="text"
+                      inputMode="decimal"
+                      value={rawLng}
+                      onChange={(e) => setRawLng(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleJumpToCustomCoords();
+                      }}
+                      placeholder="74.5731"
                       className="w-20 bg-transparent text-white font-mono text-xs focus:outline-none"
                     />
                   </div>
@@ -594,7 +794,7 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
 
                 <button
                   type="button"
-                  onClick={() => handleSelectPreset('BOP_WAGAH')}
+                  onClick={handleRecenterOutpost}
                   className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg text-xs font-mono flex items-center gap-1.5 transition border border-slate-700 cursor-pointer self-start sm:self-auto"
                   title="Reset Map to Wagah Zero-Line Frontier"
                 >
@@ -627,7 +827,7 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
             </div>
 
             {/* Real Interactive Leaflet Geographic Map with FOV & Live Threats */}
-            <div className="rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
+            <div ref={mapWrapperRef} className="rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
               <TacticalLeafletMap
                 cameras={scopedCameras}
                 bops={scopedBops}
@@ -637,10 +837,13 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
                 center={currentCenter}
                 targetCoords={targetCoords}
                 zoom={currentZoom}
+                viewDimension={gisMapDimension}
+                onDimensionChange={setGisMapDimension}
+                onBopSelect={handleSelectBopFromMap}
                 height="540px"
                 onLocationFound={(lat, lng) => {
-                  setInputLat(lat);
-                  setInputLng(lng);
+                  setRawLat(lat.toFixed(4));
+                  setRawLng(lng.toFixed(4));
                   setTargetCoords([lat, lng]);
                   queryTerrainLocation(lat, lng);
                   setGpsStatusText(`GPS LOCKED: ${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E`);

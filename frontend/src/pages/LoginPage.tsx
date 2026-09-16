@@ -196,7 +196,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
           {/* Government & Defense Ministry Badges */}
           <div className="flex items-center justify-center gap-2 text-[10px] md:text-xs font-mono font-semibold tracking-wider text-amber-400 uppercase">
             <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
-              भारत सरकार • GOVERNMENT OF INDIA
+              GOVERNMENT OF INDIA • NATIONAL DEFENCE
             </span>
             <span className="hidden sm:inline-block text-slate-600">•</span>
             <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300">
@@ -214,7 +214,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
                 IBVAP <span className="text-amber-400 font-extrabold">DEFENSE COMMAND</span>
               </h1>
               <p className="text-xs sm:text-sm font-medium text-slate-400 tracking-wide">
-                Integrated Border Surveillance & Reconnaissance Platform • सीमा सुरक्षा कमान
+                Integrated Border Surveillance & Reconnaissance Platform • Border Defense Command
               </p>
             </div>
           </div>
@@ -464,9 +464,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
       <footer className="relative z-10 w-full border-t border-slate-800/80 bg-[#05080e] py-3.5 px-4 text-center">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] md:text-[11px] font-mono text-slate-500">
           <div className="flex items-center gap-2">
-            <span className="text-amber-500 font-bold">शौर्यम् • दक्षम • युद्ध्येय</span>
+            <span className="text-amber-500 font-bold">VALOR • RESOLVE • FORTITUDE</span>
             <span className="text-slate-700">|</span>
-            <span>BHARAT SEEMA SURAKSHA • VIGILANCE UNTO DEATH</span>
+            <span>NATIONAL BORDER DEFENSE • VIGILANCE UNTO DEATH</span>
           </div>
           <div>
             RESTRICTED DEFENSE PLATFORM • HOSTED ON SECURE DEFENSE NETWORK

@@ -8,12 +8,18 @@ import {
   Maximize2,
   Locate,
   X,
-  Cctv
+  Cctv,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Grid
 } from 'lucide-react';
 import { Camera } from '../../types/camera';
 import { SecurityEvent } from '../../types/event';
 import { GISLayer } from '../../services/gisService';
 import { LiveVideoPlayer } from '../cameras/LiveVideoPlayer';
+import { Tactical3DTerrainMap } from '../3d/Tactical3DTerrainMap';
 
 export interface TacticalBorderSegment {
   name: string;
@@ -145,6 +151,8 @@ interface TacticalLeafletMapProps {
   onBopSelect?: (bop: any) => void;
   onInspectCamera?: (camera: Camera) => void;
   onLocationFound?: (lat: number, lng: number) => void;
+  viewDimension?: '2d' | '3d';
+  onDimensionChange?: (dim: '2d' | '3d') => void;
 }
 
 type TileLayerType = 'dark' | 'satellite' | 'streets' | 'topo';
@@ -163,10 +171,12 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   selectedCameraId,
   targetCoords = null,
   initialLayer = 'satellite',
+  viewDimension = '2d',
   onCameraSelect,
   onBopSelect,
   onInspectCamera,
-  onLocationFound
+  onLocationFound,
+  onDimensionChange
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -174,9 +184,20 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   const labelsLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
 
+  const [activeDimension, setActiveDimension] = useState<'2d' | '3d'>(viewDimension);
+  useEffect(() => {
+    if (viewDimension) setActiveDimension(viewDimension);
+  }, [viewDimension]);
+
+  const handleSetDimension = useCallback((dim: '2d' | '3d') => {
+    setActiveDimension(dim);
+    onDimensionChange?.(dim);
+  }, [onDimensionChange]);
+
+
   const [activeLayer, setActiveLayer] = useState<TileLayerType>(initialLayer || 'satellite');
   const [currentZoomLevel, setCurrentZoomLevel] = useState<number>(zoom);
-  const [cursorCoords, setCursorCoords] = useState<[number, number] | null>(null);
+  const coordDisplayRef = useRef<HTMLSpanElement | null>(null);
 
   // Layer Visibility Toggles
   const [showBorderLayer, setShowBorderLayer] = useState<boolean>(true);
@@ -184,6 +205,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   const [showCamerasLayer, setShowCamerasLayer] = useState<boolean>(true);
   const [showCoverageLayer, setShowCoverageLayer] = useState<boolean>(true);
   const [showThreatsLayer, setShowThreatsLayer] = useState<boolean>(true);
+  const [showNodesGridLayer, setShowNodesGridLayer] = useState<boolean>(true);
 
   // Live Camera Stream Inspection State
   const [inspectedCamera, setInspectedCamera] = useState<Camera | null>(null);
@@ -282,6 +304,12 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
     if (!mapContainerRef.current) return;
     if (mapInstanceRef.current) return;
 
+    // Cleanse any existing Leaflet marker/cache on the container DOM element
+    if ((mapContainerRef.current as any)._leaflet_id) {
+      delete (mapContainerRef.current as any)._leaflet_id;
+    }
+    mapContainerRef.current.innerHTML = '';
+
     const map = L.map(mapContainerRef.current, {
       center: center,
       zoom: zoom,
@@ -323,7 +351,9 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
       setCurrentZoomLevel(Math.round(map.getZoom() * 10) / 10);
     });
     map.on('mousemove', (e: L.LeafletMouseEvent) => {
-      setCursorCoords([e.latlng.lat, e.latlng.lng]);
+      if (coordDisplayRef.current) {
+        coordDisplayRef.current.textContent = `📍 ${e.latlng.lat.toFixed(4)}°N, ${e.latlng.lng.toFixed(4)}°E`;
+      }
     });
 
     const timer = setTimeout(() => {
@@ -343,26 +373,121 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
     return () => {
       clearTimeout(timer);
       if (ro) ro.disconnect();
-      map.remove();
-      mapInstanceRef.current = null;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      if (mapContainerRef.current) {
+        delete (mapContainerRef.current as any)._leaflet_id;
+        mapContainerRef.current.innerHTML = '';
+      }
     };
   }, []);
 
-  // Fly to target location when props change
+  // When switching from 3D back to 2D, restore Leaflet container and invalidate size
+  useEffect(() => {
+    if (activeDimension === '2d' && mapInstanceRef.current && mapContainerRef.current) {
+      const map = mapInstanceRef.current;
+      const container = mapContainerRef.current;
+
+      // Ensure leaflet-container class is always attached
+      if (!container.classList.contains('leaflet-container')) {
+        container.classList.add('leaflet-container');
+      }
+
+      const restore2DView = () => {
+        if (!mapInstanceRef.current) return;
+        (map as any)._sizeChanged = true;
+        map.invalidateSize({ pan: false });
+        const curCenter = map.getCenter() || center;
+        const curZoom = map.getZoom() || zoom;
+        map.setView(curCenter, curZoom, { animate: false });
+      };
+
+      // 1. Immediate call
+      restore2DView();
+
+      // 2. Next animation frame
+      const raf = requestAnimationFrame(restore2DView);
+
+      // 3. Settled timeouts
+      const t1 = setTimeout(restore2DView, 80);
+      const t2 = setTimeout(restore2DView, 250);
+
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [activeDimension, center, zoom]);
+
+  // High-performance tactical jump helper: 0-latency setView for distant targets (>0.25 deg), snappy pan (0.3s) for local targets
+  const executeTacticalJump = useCallback((dest: [number, number], targetZoom: number = 16, forceInstant: boolean = false) => {
+    const map = mapInstanceRef.current;
+    if (!map || !dest || !dest[0] || !dest[1]) return;
+
+    let curLat = dest[0];
+    let curLng = dest[1];
+    try {
+      const live = map.getCenter();
+      if (live) {
+        curLat = live.lat;
+        curLng = live.lng;
+      }
+    } catch (_) {}
+
+    const dist = Math.hypot(curLat - dest[0], curLng - dest[1]);
+    prevCenterRef.current = dest;
+    prevZoomRef.current = targetZoom;
+
+    if (forceInstant || dist > 0.25) {
+      map.setView(dest, targetZoom, { animate: false });
+    } else {
+      map.panTo(dest, { animate: true, duration: 0.3 });
+    }
+  }, []);
+
+  // Unified Tactical Teleportation & Jump Engine (ZERO conflicting animations, instantaneous response)
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !center) return;
+    if (!map) return;
 
-    const latDiff = Math.abs((prevCenterRef.current?.[0] ?? 0) - center[0]);
-    const lngDiff = Math.abs((prevCenterRef.current?.[1] ?? 0) - center[1]);
-    const zoomDiff = Math.abs((prevZoomRef.current ?? 0) - zoom);
+    // Prioritize targetCoords if set, otherwise center
+    const dest: [number, number] | null = targetCoords || center;
+    if (!dest || !dest[0] || !dest[1]) return;
+
+    const targetZoom = targetCoords ? Math.max(map.getZoom?.() || 15, 16) : (zoom || 14);
+
+    let curLat = dest[0];
+    let curLng = dest[1];
+    try {
+      const liveCenter = map.getCenter();
+      if (liveCenter) {
+        curLat = liveCenter.lat;
+        curLng = liveCenter.lng;
+      }
+    } catch (_) {}
+
+    const latDiff = Math.abs(curLat - dest[0]);
+    const lngDiff = Math.abs(curLng - dest[1]);
+    const curZoom = map.getZoom?.() ?? prevZoomRef.current ?? targetZoom;
+    const zoomDiff = Math.abs(curZoom - targetZoom);
 
     if (latDiff > 0.0001 || lngDiff > 0.0001 || zoomDiff > 0.1) {
-      prevCenterRef.current = center;
-      prevZoomRef.current = zoom;
-      map.flyTo(center, zoom, { duration: 1.0 });
+      prevCenterRef.current = dest;
+      prevZoomRef.current = targetZoom;
+
+      const dist = Math.hypot(latDiff, lngDiff);
+      // If jumping across sectors (> 0.25° or ~25km): INSTANT ZERO-LATENCY TELEPORT
+      // No cosmic zoom out, no tile churn, no lag!
+      if (dist > 0.25) {
+        map.setView(dest, targetZoom, { animate: false });
+      } else {
+        map.panTo(dest, { animate: true, duration: 0.3 });
+      }
     }
-  }, [center[0], center[1], zoom]);
+  }, [center[0], center[1], zoom, targetCoords?.[0], targetCoords?.[1]]);
 
   // Tile Layer Switcher
   const switchTileLayer = (layerType: TileLayerType) => {
@@ -499,7 +624,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             pMarker.on('mouseout', () => pMarker.closePopup());
             pMarker.on('click', () => {
               pMarker.openPopup();
-              map.flyTo([pillar.lat, pillar.lng], 17, { animate: true, duration: 1.2 });
+              executeTacticalJump([pillar.lat, pillar.lng], 17);
             });
             pMarker.addTo(group);
           });
@@ -597,8 +722,15 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
       tMarker.on('mouseout', () => tMarker.closePopup());
       tMarker.on('click', () => {
         tMarker.openPopup();
-        map.flyTo(targetCoords, 17, { animate: true, duration: 1.2 });
+        executeTacticalJump(targetCoords, 17);
       });
+
+      // Auto-open target popup so coordinates and status are immediately visible
+      setTimeout(() => {
+        try {
+          tMarker.openPopup();
+        } catch (_) {}
+      }, 400);
     }
 
     // 3. Render Blind Spots (Red Hatched Polygons)
@@ -636,7 +768,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             poly.on('mouseout', () => poly.closePopup());
             poly.on('click', (e: any) => {
               poly.openPopup(e.latlng);
-              map.flyTo(e.latlng, 16, { animate: true, duration: 1.2 });
+              executeTacticalJump([e.latlng.lat, e.latlng.lng], 16);
             });
           }
         } catch (_) {}
@@ -741,7 +873,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         bMarker.on('mouseout', () => bMarker.closePopup());
         bMarker.on('click', () => {
           bMarker.openPopup();
-          map.flyTo([bLat, bLng], 16, { animate: true, duration: 1.2 });
+          executeTacticalJump([bLat, bLng], 16);
           if (onBopSelect) onBopSelect(bop);
         });
 
@@ -927,7 +1059,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         camMarker.on('mouseover', () => camMarker.openPopup());
         camMarker.on('click', () => {
           camMarker.openPopup();
-          map.flyTo([finalLat, finalLng], 17, { animate: true, duration: 1.2 });
+          executeTacticalJump([finalLat, finalLng], 17);
           if (onCameraSelect) onCameraSelect(cam);
         });
 
@@ -1022,7 +1154,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         thMarker.on('mouseover', () => thMarker.openPopup());
         thMarker.on('click', () => {
           thMarker.openPopup();
-          map.flyTo([thLat, thLng], 17, { animate: true, duration: 1.2 });
+          executeTacticalJump([thLat, thLng], 17);
         });
 
         thMarker.on('popupopen', () => {
@@ -1030,13 +1162,83 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
           if (flyBtn) {
             flyBtn.onclick = (e) => {
               e.stopPropagation();
-              map.flyTo([thLat, thLng], 17, { animate: true, duration: 1.2 });
+              executeTacticalJump([thLat, thLng], 17);
             };
           }
         });
 
         thMarker.addTo(group);
       });
+    }
+
+    // 7. Render Tactical Surveillance Nodes Grid & MGRS Telemetry Mesh Network
+    if (showNodesGridLayer) {
+      const allNodeCoords: [number, number][] = [];
+      cameras.forEach((c) => {
+        if (c.latitude && c.longitude) allNodeCoords.push([c.latitude, c.longitude]);
+      });
+      bops.forEach((b: any) => {
+        if (b.latitude && b.longitude) allNodeCoords.push([b.latitude, b.longitude]);
+      });
+
+      const baseLat = center ? center[0] : 31.6048;
+      const baseLng = center ? center[1] : 74.5731;
+
+      let minLat = baseLat - 0.08;
+      let maxLat = baseLat + 0.08;
+      let minLng = baseLng - 0.08;
+      let maxLng = baseLng + 0.08;
+
+      if (allNodeCoords.length > 0) {
+        minLat = Math.min(...allNodeCoords.map(([lat]) => lat)) - 0.04;
+        maxLat = Math.max(...allNodeCoords.map(([lat]) => lat)) + 0.04;
+        minLng = Math.min(...allNodeCoords.map(([, lng]) => lng)) - 0.04;
+        maxLng = Math.max(...allNodeCoords.map(([, lng]) => lng)) + 0.04;
+      }
+
+      const latStep = 0.02;
+      for (let lat = Math.floor(minLat / latStep) * latStep; lat <= maxLat; lat += latStep) {
+        L.polyline([[lat, minLng], [lat, maxLng]], {
+          color: '#0284c7',
+          weight: 0.8,
+          opacity: 0.25,
+          dashArray: '3, 6'
+        }).addTo(group);
+      }
+
+      const lngStep = 0.02;
+      for (let lng = Math.floor(minLng / lngStep) * lngStep; lng <= maxLng; lng += lngStep) {
+        L.polyline([[minLat, lng], [maxLat, lng]], {
+          color: '#0284c7',
+          weight: 0.8,
+          opacity: 0.25,
+          dashArray: '3, 6'
+        }).addTo(group);
+      }
+
+      if (allNodeCoords.length > 1) {
+        for (let i = 0; i < allNodeCoords.length; i++) {
+          const distances = allNodeCoords
+            .map((pt, idx) => {
+              if (idx === i) return { idx, d: Infinity, pt };
+              const d = Math.hypot(pt[0] - allNodeCoords[i][0], pt[1] - allNodeCoords[i][1]);
+              return { idx, d, pt };
+            })
+            .sort((a, b) => a.d - b.d);
+
+          const nearest = distances.slice(0, 2);
+          nearest.forEach((n) => {
+            if (n.d < 0.15 && i < n.idx) {
+              L.polyline([allNodeCoords[i], n.pt], {
+                color: '#38bdf8',
+                weight: 1.2,
+                opacity: 0.35,
+                dashArray: '4, 8'
+              }).addTo(group);
+            }
+          });
+        }
+      }
     }
 
     lastValidCoordsRef.current = validCoords;
@@ -1050,7 +1252,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         map.fitBounds(validCoords, { padding: [40, 40], maxZoom: 15 });
       }
     }
-  }, [cameras, bops, _sites, alerts, showBorderLayer, showBopsLayer, showCamerasLayer, showCoverageLayer, showThreatsLayer, selectedCameraId, targetCoords]);
+  }, [cameras, bops, _sites, alerts, showBorderLayer, showBopsLayer, showCamerasLayer, showCoverageLayer, showThreatsLayer, showNodesGridLayer, selectedCameraId, targetCoords, activeDimension]);
 
   const handleLiveLocate = useCallback(() => {
     setIsLocating(true);
@@ -1068,7 +1270,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
       const map = mapInstanceRef.current;
       if (!map) return;
 
-      map.flyTo([latitude, longitude], 17, { animate: true, duration: 1.5 });
+      executeTacticalJump([latitude, longitude], 17);
 
       if (userMarkerRef.current) {
         userMarkerRef.current.remove();
@@ -1105,7 +1307,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
       uMarker.on('mouseout', () => uMarker.closePopup());
       uMarker.on('click', () => {
         uMarker.openPopup();
-        map.flyTo([latitude, longitude], 17, { animate: true, duration: 1.2 });
+        executeTacticalJump([latitude, longitude], 17);
       });
       userMarkerRef.current = uMarker;
 
@@ -1148,19 +1350,114 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   };
   const handleRecenter = () => {
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo(center, zoom, { duration: 1.0 });
+      executeTacticalJump(center, zoom);
+    }
+  };
+
+  const handlePan = (direction: 'up' | 'down' | 'left' | 'right') => {
+    if (!mapInstanceRef.current) return;
+    const panStep = 180;
+    let dx = 0;
+    let dy = 0;
+    switch (direction) {
+      case 'up':
+        dy = -panStep;
+        break;
+      case 'down':
+        dy = panStep;
+        break;
+      case 'left':
+        dx = -panStep;
+        break;
+      case 'right':
+        dx = panStep;
+        break;
+    }
+    mapInstanceRef.current.panBy([dx, dy], { animate: true, duration: 0.25 });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      handlePan('up');
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      handlePan('down');
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      handlePan('left');
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      handlePan('right');
     }
   };
 
   return (
     <div className="relative w-full overflow-hidden bg-slate-950 select-none" style={{ height }}>
-      {/* Real Interactive Leaflet Container */}
-      <div ref={mapContainerRef} className="w-full h-full z-0" tabIndex={0} />
+      {/* Real Interactive Leaflet Container Wrapper - ALWAYS mounted to avoid reinitialization */}
+      <div
+        className={`absolute inset-0 w-full h-full z-0 ${
+          activeDimension === '3d' ? 'pointer-events-none' : 'pointer-events-auto'
+        }`}
+      >
+        <div
+          ref={mapContainerRef}
+          className="leaflet-container w-full h-full outline-none"
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
 
+      {/* 3D Terrain Flythrough View Overlay */}
+      {activeDimension === '3d' && (
+        <div className="absolute inset-0 z-20 w-full h-full bg-slate-950">
+          <Tactical3DTerrainMap
+            cameras={cameras}
+            bops={bops}
+            events={events}
+            alerts={alerts}
+            center={center}
+            targetCoords={targetCoords}
+            zoom={zoom}
+            height={height}
+            selectedCameraId={selectedCameraId}
+            onCameraSelect={onCameraSelect}
+            onInspectCamera={onInspectCamera}
+            onClose3D={() => handleSetDimension('2d')}
+            onSwitchTo2D={() => handleSetDimension('2d')}
+          />
+        </div>
+      )}
+
+      {/* 2D HUD Controls & Interactive Layers */}
+      {activeDimension === '2d' && (
+        <>
       {/* Top Left: Map Style & Interactive Layer Filters */}
       <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
-        {/* Style Switcher */}
-        <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
+        {/* Dimension & Style Switchers */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* 2D vs 3D Dimension Switcher */}
+          <div className="flex items-center bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
+            <button
+              type="button"
+              onClick={() => handleSetDimension('2d')}
+              className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 bg-cyan-600 text-white shadow"
+            >
+              <span>🗺️</span>
+              <span>2D</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetDimension('3d')}
+              className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <span>⛰️</span>
+              <span>3D Terrain</span>
+            </button>
+          </div>
+
+          {/* Style Switcher */}
+          <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
           <button
             type="button"
             onClick={() => switchTileLayer('dark')}
@@ -1200,6 +1497,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             Streets
           </button>
         </div>
+      </div>
 
         {/* Tactical Layer Visibility Toggles */}
         <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md border border-slate-800 p-1 rounded-xl shadow-xl flex-wrap">
@@ -1258,6 +1556,18 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             <span>🚨</span>
             <span>Radar Alerts</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowNodesGridLayer(!showNodesGridLayer)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+              showNodesGridLayer ? 'bg-cyan-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
+            }`}
+            title="Toggle Surveillance Nodes Grid & MGRS Telemetry Mesh"
+          >
+            <Grid className="w-3.5 h-3.5" />
+            <span>Nodes Grid</span>
+          </button>
         </div>
       </div>
 
@@ -1283,6 +1593,42 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             <Locate className={`w-3.5 h-3.5 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{isLocating ? 'Locating...' : 'My Post'}</span>
           </button>
+
+          {/* Directional Pan Buttons (Left, Up, Down, Right) */}
+          <div className="flex items-center gap-0.5 bg-slate-950/80 p-0.5 rounded-lg border border-slate-800">
+            <button
+              type="button"
+              onClick={() => handlePan('left')}
+              title="Pan Left (West ⬅️)"
+              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePan('up')}
+              title="Pan Up (North ⬆️)"
+              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              <ArrowUp className="w-3.5 h-3.5 text-cyan-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePan('down')}
+              title="Pan Down (South ⬇️)"
+              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              <ArrowDown className="w-3.5 h-3.5 text-cyan-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePan('right')}
+              title="Pan Right (East ➡️)"
+              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
+            </button>
+          </div>
 
           {/* Quick Zoom Buttons */}
           <button
@@ -1358,6 +1704,62 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         </div>
       </div>
 
+      {/* Tactical D-Pad Pan Navigation Pad */}
+      <div className="absolute bottom-3 left-3 z-10 hidden sm:flex flex-col items-center p-1.5 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl">
+        <div className="text-[8px] font-mono text-cyan-400 font-bold mb-1 flex items-center gap-1">
+          <Compass className="w-2.5 h-2.5 text-cyan-400" />
+          <span>NAV PAD</span>
+        </div>
+        <div className="grid grid-cols-3 gap-1 w-18 h-18 items-center justify-items-center">
+          <div />
+          <button
+            type="button"
+            onClick={() => handlePan('up')}
+            title="Pan North ⬆️ (Up)"
+            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+          >
+            <ArrowUp className="w-3 h-3" />
+          </button>
+          <div />
+
+          <button
+            type="button"
+            onClick={() => handlePan('left')}
+            title="Pan West ⬅️ (Left)"
+            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+          >
+            <ArrowLeft className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={handleRecenter}
+            title="Recenter Map (Center 🎯)"
+            className="w-5 h-5 flex items-center justify-center rounded bg-cyan-950 hover:bg-cyan-700 text-cyan-300 hover:text-white border border-cyan-500/50 transition shadow cursor-pointer active:scale-95 text-[9px] font-mono font-bold"
+          >
+            ●
+          </button>
+          <button
+            type="button"
+            onClick={() => handlePan('right')}
+            title="Pan East ➡️ (Right)"
+            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+          >
+            <ArrowRight className="w-3 h-3" />
+          </button>
+
+          <div />
+          <button
+            type="button"
+            onClick={() => handlePan('down')}
+            title="Pan South ⬇️ (Down)"
+            className="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-cyan-600 text-slate-300 hover:text-white border border-slate-700 transition shadow cursor-pointer active:scale-95"
+          >
+            <ArrowDown className="w-3 h-3" />
+          </button>
+          <div />
+        </div>
+      </div>
+
       {/* Bottom Right Floating Telemetry Strip */}
       <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
         <button
@@ -1375,11 +1777,13 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
           <span className="text-slate-600">•</span>
           <span>Cameras: <strong className="text-cyan-300">{cameras.length}</strong></span>
           <span className="text-slate-600">•</span>
-          <span className="text-emerald-400 font-bold">
-            📍 {cursorCoords ? `${cursorCoords[0].toFixed(4)}°N, ${cursorCoords[1].toFixed(4)}°E` : `${center[0].toFixed(4)}°N, ${center[1].toFixed(4)}°E`}
+          <span ref={coordDisplayRef} className="text-emerald-400 font-bold">
+            📍 {center[0].toFixed(4)}°N, {center[1].toFixed(4)}°E
           </span>
         </div>
       </div>
+        </>
+      )}
 
       {/* Live Stream Inspection Modal */}
       {inspectedCamera && (

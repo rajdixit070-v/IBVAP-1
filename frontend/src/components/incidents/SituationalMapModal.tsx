@@ -18,9 +18,12 @@ import {
   LayoutGrid,
   MapPin,
   ShieldAlert,
-  Compass
+  Compass,
+  Search,
+  RotateCcw
 } from 'lucide-react';
 import { TacticalLeafletMap } from '../common/TacticalLeafletMap';
+import { COMPREHENSIVE_CHECKPOSTS } from '../../constants/checkposts';
 
 interface SituationalMapModalProps {
   isOpen: boolean;
@@ -66,7 +69,8 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
   const [sites, setSites] = useState<Site[]>(initialSites);
   const [selectedCam, setSelectedCam] = useState<Camera | null>(targetCamera || null);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'INCIDENT' | 'ONLINE'>('ALL');
-  const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
+  const [viewMode, setViewMode] = useState<'map' | '3d' | 'grid'>('map');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Map viewport control
   const [activeSector, setActiveSector] = useState<string>(initialSector);
@@ -120,11 +124,36 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
     setMapZoom(jump.zoom);
   };
 
-  const filteredCameras = cameras.filter((cam) => {
+  // Fallback to comprehensive border posts if cameras are empty so Nodes Grid is always active
+  const allAvailableNodes: Camera[] = cameras.length > 0 ? cameras : COMPREHENSIVE_CHECKPOSTS.map((chk) => ({
+    camera_id: chk.id,
+    camera_name: `${chk.name} Sentinel Cam`,
+    latitude: chk.latitude || 31.6048,
+    longitude: chk.longitude || 74.5731,
+    bop_site: chk.name,
+    sector: chk.sector,
+    status: 'ONLINE',
+    stream_type: 'main',
+    site_id: chk.code,
+    resolution: '4K Tactical IR',
+    fps: 30,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  } as Camera));
+
+  const filteredCameras = allAvailableNodes.filter((cam) => {
     const hasInc = liveIncidents.some((i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED' && i.status !== 'RESOLVED');
     const hasAlert = liveAlerts.some((a) => a.camera_id === cam.camera_id && a.status !== 'RESOLVED');
-    if (activeFilter === 'INCIDENT') return hasInc || hasAlert;
-    if (activeFilter === 'ONLINE') return cam.status === 'ONLINE' || cam.status === 'HEALTHY';
+    if (activeFilter === 'INCIDENT' && !(hasInc || hasAlert)) return false;
+    if (activeFilter === 'ONLINE' && !(cam.status === 'ONLINE' || cam.status === 'HEALTHY')) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchId = cam.camera_id.toLowerCase().includes(q);
+      const matchName = cam.camera_name.toLowerCase().includes(q);
+      const matchBop = (cam.bop_site || '').toLowerCase().includes(q);
+      const matchSector = (cam.sector || '').toLowerCase().includes(q);
+      if (!matchId && !matchName && !matchBop && !matchSector) return false;
+    }
     return true;
   });
 
@@ -175,7 +204,28 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Search Nodes in Grid or Map */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search nodes, BOPs, sectors..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-6 py-1 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500 w-44 sm:w-52"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
             {/* View Mode Switcher */}
             <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
               <button
@@ -185,7 +235,16 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
                 }`}
               >
                 <MapIcon className="w-3.5 h-3.5" />
-                GIS Radar Map
+                GIS Radar
+              </button>
+              <button
+                onClick={() => setViewMode('3d')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-medium transition cursor-pointer ${
+                  viewMode === '3d' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>⛰️</span>
+                3D Terrain
               </button>
               <button
                 onClick={() => setViewMode('grid')}
@@ -194,7 +253,7 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
                 }`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                Nodes Grid
+                Nodes Grid ({filteredCameras.length})
               </button>
             </div>
 
@@ -207,7 +266,7 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
                     activeFilter === 'ALL' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  All ({cameras.length})
+                  All ({allAvailableNodes.length})
                 </button>
                 <button
                   onClick={() => setActiveFilter('INCIDENT')}
@@ -230,121 +289,171 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
           </div>
         </div>
 
-        {/* Main Display: Real Leaflet Map View OR Grid View */}
-        {viewMode === 'map' ? (
+        {/* Main Display: Real Leaflet Map View, 3D Terrain View OR Grid View */}
+        {viewMode === 'map' || viewMode === '3d' ? (
           <TacticalLeafletMap
+            key="situational-tactical-map"
             cameras={filteredCameras}
             bops={bops}
             sites={sites}
             alerts={liveAlerts}
             onCameraSelect={(cam) => setSelectedCam(cam)}
             center={mapCenter}
+            targetCoords={mapCenter}
             zoom={mapZoom}
             selectedCameraId={selectedCam?.camera_id}
+            viewDimension={viewMode === '3d' ? '3d' : '2d'}
+            onDimensionChange={(dim) => setViewMode(dim === '3d' ? '3d' : 'map')}
             height="500px"
           />
         ) : (
           /* Main Interactive Tactical Grid Display */
           <div className="relative w-full min-h-[440px] max-h-[520px] overflow-y-auto bg-[#070b12] border border-[#1e293b] rounded-2xl p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {filteredCameras.map((cam: Camera) => {
-                const activeInc = liveIncidents.find(
-                  (i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED' && i.status !== 'RESOLVED' && i.status !== 'FALSE_ALARM'
-                );
-                const activeAlert = liveAlerts.find(
-                  (a) => a.camera_id === cam.camera_id && a.status !== 'RESOLVED'
-                );
-                const isSelected = selectedCam?.camera_id === cam.camera_id;
+            {filteredCameras.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-400 mb-3">
+                  <Search className="w-6 h-6 text-slate-500" />
+                </div>
+                <div className="text-sm font-bold text-white font-mono">No Surveillance Nodes Found</div>
+                <div className="text-xs text-slate-400 font-mono mt-1 max-w-sm">
+                  No perimeter cameras or outposts matched the current filter or search criteria.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilter('ALL');
+                    setSearchQuery('');
+                  }}
+                  className="mt-4 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 shadow cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset All Filters</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {filteredCameras.map((cam: Camera) => {
+                  const activeInc = liveIncidents.find(
+                    (i) => i.camera_id === cam.camera_id && i.status !== 'CLOSED' && i.status !== 'RESOLVED' && i.status !== 'FALSE_ALARM'
+                  );
+                  const activeAlert = liveAlerts.find(
+                    (a) => a.camera_id === cam.camera_id && a.status !== 'RESOLVED'
+                  );
+                  const isSelected = selectedCam?.camera_id === cam.camera_id;
 
-                const url = cam.rtsp_url || '';
-                const st = cam.stream_type || '';
-                let MarkerIcon = Crosshair;
-                let markerColor = (activeInc || activeAlert) ? 'text-rose-400 animate-spin' : 'text-sky-400';
-                if (st === 'drone' || url.startsWith('udp://') || url.startsWith('rtmp://')) {
-                  MarkerIcon = Plane;
-                  if (!activeInc && !activeAlert) markerColor = 'text-purple-400';
-                } else if (st === 'webcam' || url.startsWith('webcam://')) {
-                  MarkerIcon = Laptop;
-                  if (!activeInc && !activeAlert) markerColor = 'text-cyan-400';
-                } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
-                  MarkerIcon = Smartphone;
-                  if (!activeInc && !activeAlert) markerColor = 'text-emerald-400';
-                }
+                  const url = cam.rtsp_url || '';
+                  const st = cam.stream_type || '';
+                  let MarkerIcon = Crosshair;
+                  let markerColor = (activeInc || activeAlert) ? 'text-rose-400 animate-spin' : 'text-sky-400';
+                  if (st === 'drone' || url.startsWith('udp://') || url.startsWith('rtmp://')) {
+                    MarkerIcon = Plane;
+                    if (!activeInc && !activeAlert) markerColor = 'text-purple-400';
+                  } else if (st === 'webcam' || url.startsWith('webcam://')) {
+                    MarkerIcon = Laptop;
+                    if (!activeInc && !activeAlert) markerColor = 'text-cyan-400';
+                  } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
+                    MarkerIcon = Smartphone;
+                    if (!activeInc && !activeAlert) markerColor = 'text-emerald-400';
+                  }
 
-                return (
-                  <div
-                    key={cam.camera_id}
-                    onClick={() => setSelectedCam(cam)}
-                    className={`p-3 rounded-xl border transition cursor-pointer relative group ${
-                      isSelected
-                        ? 'bg-sky-950/60 border-sky-400 shadow-xl shadow-sky-500/20'
-                        : (activeInc || activeAlert)
-                        ? 'bg-rose-950/70 border-rose-500 shadow-xl shadow-rose-500/30 ring-1 ring-rose-500'
-                        : 'bg-[#0f172a]/80 border-slate-800 hover:border-slate-700 hover:bg-[#131d35]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-1.5">
-                        <MarkerIcon className={`w-3.5 h-3.5 ${markerColor}`} />
-                        <span className="text-[11px] font-mono font-bold text-slate-200">{cam.camera_id}</span>
-                      </div>
+                  return (
+                    <div
+                      key={cam.camera_id}
+                      onClick={() => {
+                        setSelectedCam(cam);
+                        setMapCenter([cam.latitude || 31.6048, cam.longitude || 74.5731]);
+                        setMapZoom(16);
+                        setViewMode('map');
+                      }}
+                      className={`p-3 rounded-xl border transition cursor-pointer relative group flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-sky-950/60 border-sky-400 shadow-xl shadow-sky-500/20'
+                          : (activeInc || activeAlert)
+                          ? 'bg-rose-950/70 border-rose-500 shadow-xl shadow-rose-500/30 ring-1 ring-rose-500'
+                          : 'bg-[#0f172a]/80 border-slate-800 hover:border-slate-700 hover:bg-[#131d35]'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <MarkerIcon className={`w-3.5 h-3.5 ${markerColor}`} />
+                            <span className="text-[11px] font-mono font-bold text-slate-200">{cam.camera_id}</span>
+                          </div>
 
-                      {(activeInc || activeAlert) ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (activeInc && onSelectIncident) onSelectIncident(activeInc);
-                          }}
-                          className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-black font-mono tracking-wider shadow-lg animate-pulse"
-                        >
-                          🚨 THREAT
-                        </button>
-                      ) : (
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 ${
-                            cam.status === 'ONLINE' || cam.status === 'HEALTHY'
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : cam.status === 'MAINTENANCE'
-                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                              : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                          }`}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                          {cam.status || 'OFFLINE'}
-                        </span>
-                      )}
-                    </div>
+                          {(activeInc || activeAlert) ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (activeInc && onSelectIncident) onSelectIncident(activeInc);
+                              }}
+                              className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-black font-mono tracking-wider shadow-lg animate-pulse"
+                            >
+                              🚨 THREAT
+                            </button>
+                          ) : (
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 ${
+                                cam.status === 'ONLINE' || cam.status === 'HEALTHY'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : cam.status === 'MAINTENANCE'
+                                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                  : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                              }`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                              {cam.status || 'OFFLINE'}
+                            </span>
+                          )}
+                        </div>
 
-                    <div className="text-xs font-semibold text-white truncate">{cam.camera_name}</div>
-                    
-                    {/* Live Video Preview in Grid Tile */}
-                    <div className="my-2 aspect-video bg-black rounded-lg overflow-hidden border border-slate-800/80 relative shadow-inner">
-                      <LiveVideoPlayer camera={cam} autoPlay showControls={false} />
-                    </div>
+                        <div className="text-xs font-semibold text-white truncate">{cam.camera_name}</div>
+                        
+                        {/* Live Video Preview in Grid Tile */}
+                        <div className="my-2 aspect-video bg-black rounded-lg overflow-hidden border border-slate-800/80 relative shadow-inner">
+                          <LiveVideoPlayer camera={cam} autoPlay showControls={false} />
+                        </div>
 
-                    {(activeInc || activeAlert) && (
-                      <div className="mt-1.5 p-1.5 bg-rose-900/50 border border-rose-500/40 rounded-lg text-[10px] font-mono text-rose-200">
-                        <div className="font-bold flex items-center justify-between">
-                          <span>{activeInc?.title || activeAlert?.title || 'Target Detected'}</span>
-                          <span className="text-rose-300 font-black">Score: {activeInc?.risk_score || activeAlert?.risk_score || 85}/100</span>
+                        {(activeInc || activeAlert) && (
+                          <div className="mt-1.5 p-1.5 bg-rose-900/50 border border-rose-500/40 rounded-lg text-[10px] font-mono text-rose-200">
+                            <div className="font-bold flex items-center justify-between">
+                              <span>{activeInc?.title || activeAlert?.title || 'Target Detected'}</span>
+                              <span className="text-rose-300 font-black">Score: {activeInc?.risk_score || activeAlert?.risk_score || 85}/100</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="text-[10px] text-slate-400 font-mono mt-1.5 flex items-center justify-between">
+                          <span>{cam.bop_site || 'BOP Alpha'}</span>
+                          <span className="text-slate-500">{cam.sector || 'Sector Alpha'}</span>
+                        </div>
+
+                        {/* Lat / Long Coordinates */}
+                        <div className="text-[9px] text-cyan-400 font-mono mt-1 flex items-center gap-1 font-semibold truncate">
+                          <span>📍 GPS:</span>
+                          <span>{cam.latitude ? cam.latitude.toFixed(4) : '31.6048'}° N, {cam.longitude ? cam.longitude.toFixed(4) : '74.5731'}° E</span>
                         </div>
                       </div>
-                    )}
 
-                    <div className="text-[10px] text-slate-400 font-mono mt-1.5 flex items-center justify-between">
-                      <span>{cam.bop_site || 'BOP Alpha'}</span>
-                      <span className="text-slate-500">{cam.sector || 'Sector Alpha'}</span>
+                      {/* Action Button: Locate on Map */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCam(cam);
+                          setMapCenter([cam.latitude || 31.6048, cam.longitude || 74.5731]);
+                          setMapZoom(16);
+                          setViewMode('map');
+                        }}
+                        className="mt-2.5 w-full py-1.5 px-2 bg-cyan-600/90 hover:bg-cyan-500 text-white rounded-lg text-[10px] font-mono font-bold flex items-center justify-center gap-1.5 shadow transition cursor-pointer active:scale-95"
+                      >
+                        <MapPin className="w-3 h-3 text-cyan-200" />
+                        <span>LOCATE ON GIS MAP</span>
+                      </button>
                     </div>
-
-                    {/* Lat / Long Coordinates */}
-                    <div className="text-[9px] text-cyan-400 font-mono mt-1 flex items-center gap-1 font-semibold truncate">
-                      <span>📍 GPS:</span>
-                      <span>{cam.latitude ? cam.latitude.toFixed(4) : '31.6048'}° N, {cam.longitude ? cam.longitude.toFixed(4) : '74.5731'}° E</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
