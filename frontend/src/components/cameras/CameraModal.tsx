@@ -437,9 +437,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       const finalBopSite = formData.bop_site?.trim() || commanderPostName;
       const finalSector = formData.sector?.trim() || commanderSector;
 
+      const finalCameraName = (formData.camera_name || '').trim() || (isEditing ? (cameraToEdit?.camera_name || 'Perimeter Camera') : (cleanCameraId || 'Perimeter Camera'));
+
       if (isEditing) {
         const updatePayload: any = {
-          camera_name: formData.camera_name.trim(),
+          camera_name: finalCameraName,
           description: formData.description?.trim() || undefined,
           bop_site: finalBopSite,
           sector: finalSector,
@@ -459,7 +461,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       } else {
         const createPayload: any = {
           camera_id: cleanCameraId,
-          camera_name: formData.camera_name.trim(),
+          camera_name: finalCameraName,
           description: formData.description?.trim() || undefined,
           bop_site: finalBopSite,
           sector: finalSector,

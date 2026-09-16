@@ -33,11 +33,11 @@ def run_load():
 
     # 2. Fallback to direct Python database seeding when server is offline
     try:
+        from load_demo_data import load_demo_data
+        load_demo_data()
+    except (ImportError, ModuleNotFoundError):
         from backend.load_demo_data import load_demo_data
         load_demo_data()
-    except ImportError:
-        import load_demo_data
-        load_demo_data.load_demo_data()
 
 if __name__ == "__main__":
     run_load()

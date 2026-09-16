@@ -33,11 +33,11 @@ def run_clean():
 
     # 2. Fallback to direct Python database purge when server is offline
     try:
+        from clear_data import clear_database
+        clear_database()
+    except (ImportError, ModuleNotFoundError):
         from backend.clear_data import clear_database
         clear_database()
-    except ImportError:
-        import clear_data
-        clear_data.clear_database()
 
 if __name__ == "__main__":
     run_clean()

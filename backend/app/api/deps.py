@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -150,8 +151,16 @@ def verify_camera_access(camera_id: str, user: User, db: Session) -> Camera:
     """
     Object-level authorization check: Prevents Insecure Direct Object References (IDOR).
     Validates that the user's organization/site/BOP scope grants access to the camera.
+    Supports both database integer ID and camera_id string (e.g. CAM-001).
     """
-    camera = db.query(Camera).filter(Camera.camera_id == camera_id).first()
+    camera = None
+    if str(camera_id).isdigit():
+        camera = db.query(Camera).filter(Camera.id == int(camera_id)).first()
+    if not camera:
+        camera = db.query(Camera).filter(
+            or_(Camera.camera_id == str(camera_id).strip(), Camera.camera_id == str(camera_id).strip().upper())
+        ).first()
+
     if not camera:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
 

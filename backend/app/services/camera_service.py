@@ -82,11 +82,14 @@ def list_cameras(
 
 def get_camera_by_id(db: Session, camera_id: str) -> Optional[Camera]:
     """Finds camera by unique identifier (CAM-001) or database integer ID."""
-    if camera_id.isdigit():
+    if str(camera_id).isdigit():
         cam = db.query(Camera).filter(Camera.id == int(camera_id)).first()
         if cam:
             return cam
-    return db.query(Camera).filter(Camera.camera_id == camera_id).first()
+    cam = db.query(Camera).filter(Camera.camera_id == str(camera_id).strip()).first()
+    if not cam:
+        cam = db.query(Camera).filter(Camera.camera_id == str(camera_id).strip().upper()).first()
+    return cam
 
 def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
     """Creates a new camera, encrypts credentials, and starts stream + AI pipeline if enabled."""

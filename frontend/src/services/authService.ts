@@ -42,18 +42,20 @@ export const authService = {
   logout() {
     sessionStorage.removeItem('ibvap_token');
     sessionStorage.removeItem('ibvap_user');
-    localStorage.removeItem('ibvap_token');
-    localStorage.removeItem('ibvap_user');
+    try {
+      localStorage.removeItem('ibvap_token');
+      localStorage.removeItem('ibvap_user');
+    } catch {}
   },
 
   getToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return sessionStorage.getItem('ibvap_token') || localStorage.getItem('ibvap_token');
+    return sessionStorage.getItem('ibvap_token');
   },
 
   getStoredUser(): { username: string; role: string } | null {
     if (typeof window === 'undefined') return null;
-    const u = sessionStorage.getItem('ibvap_user') || localStorage.getItem('ibvap_user');
+    const u = sessionStorage.getItem('ibvap_user');
     return u ? JSON.parse(u) : null;
   }
 };

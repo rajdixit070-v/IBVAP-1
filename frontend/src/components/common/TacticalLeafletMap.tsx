@@ -623,7 +623,6 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             pMarker.on('mouseover', () => pMarker.openPopup());
             pMarker.on('mouseout', () => pMarker.closePopup());
             pMarker.on('click', () => {
-              pMarker.openPopup();
               executeTacticalJump([pillar.lat, pillar.lng], 17);
             });
             pMarker.addTo(group);
@@ -717,20 +716,12 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             Zero-line boundary fence and surveillance sensors locked.
           </div>
         </div>
-      `, { closeOnClick: false });
+      `);
       tMarker.on('mouseover', () => tMarker.openPopup());
       tMarker.on('mouseout', () => tMarker.closePopup());
       tMarker.on('click', () => {
-        tMarker.openPopup();
         executeTacticalJump(targetCoords, 17);
       });
-
-      // Auto-open target popup so coordinates and status are immediately visible
-      setTimeout(() => {
-        try {
-          tMarker.openPopup();
-        } catch (_) {}
-      }, 400);
     }
 
     // 3. Render Blind Spots (Red Hatched Polygons)
@@ -767,7 +758,6 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
             poly.on('mouseover', (e: any) => poly.openPopup(e.latlng));
             poly.on('mouseout', () => poly.closePopup());
             poly.on('click', (e: any) => {
-              poly.openPopup(e.latlng);
               executeTacticalJump([e.latlng.lat, e.latlng.lng], 16);
             });
           }
@@ -872,7 +862,6 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         bMarker.on('mouseover', () => bMarker.openPopup());
         bMarker.on('mouseout', () => bMarker.closePopup());
         bMarker.on('click', () => {
-          bMarker.openPopup();
           executeTacticalJump([bLat, bLng], 16);
           if (onBopSelect) onBopSelect(bop);
         });
@@ -1057,8 +1046,8 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         });
 
         camMarker.on('mouseover', () => camMarker.openPopup());
+        camMarker.on('mouseout', () => camMarker.closePopup());
         camMarker.on('click', () => {
-          camMarker.openPopup();
           executeTacticalJump([finalLat, finalLng], 17);
           if (onCameraSelect) onCameraSelect(cam);
         });
@@ -1152,8 +1141,8 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
         `);
 
         thMarker.on('mouseover', () => thMarker.openPopup());
+        thMarker.on('mouseout', () => thMarker.closePopup());
         thMarker.on('click', () => {
-          thMarker.openPopup();
           executeTacticalJump([thLat, thLng], 17);
         });
 
@@ -1302,11 +1291,10 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
           Lng: ${longitude.toFixed(5)}°<br/>
           Accuracy: ±${Math.round(accuracy)} meters
         </div>
-      `, { closeOnClick: false });
+      `);
       uMarker.on('mouseover', () => uMarker.openPopup());
       uMarker.on('mouseout', () => uMarker.closePopup());
       uMarker.on('click', () => {
-        uMarker.openPopup();
         executeTacticalJump([latitude, longitude], 17);
       });
       userMarkerRef.current = uMarker;
