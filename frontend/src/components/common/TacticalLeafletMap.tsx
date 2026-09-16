@@ -171,7 +171,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   selectedCameraId,
   targetCoords = null,
   initialLayer = 'satellite',
-  viewDimension = '2d',
+  viewDimension = '3d',
   onCameraSelect,
   onBopSelect,
   onInspectCamera,
@@ -184,7 +184,7 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
   const labelsLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
 
-  const [activeDimension, setActiveDimension] = useState<'2d' | '3d'>(viewDimension);
+  const [activeDimension, setActiveDimension] = useState<'2d' | '3d'>(viewDimension || '3d');
   useEffect(() => {
     if (viewDimension) setActiveDimension(viewDimension);
   }, [viewDimension]);
@@ -229,27 +229,24 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
     fallbackSubdomains?: string[] | string;
   }> = {
     satellite: {
-      base: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-      subdomains: ['0', '1', '2', '3'],
-      fallback: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; Google Satellite & Hybrid Tactical Imagery',
-      maxNativeZoom: 21,
+      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      fallback: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; Esri &mdash; High-Resolution Satellite & Aerial Imagery',
+      maxNativeZoom: 19,
       maxZoom: 22
     },
     topo: {
-      base: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
-      subdomains: ['0', '1', '2', '3'],
-      fallback: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; Google Topographic Terrain & Elevation Relief',
-      maxNativeZoom: 20,
+      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+      fallback: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; Esri &mdash; World Topographic Terrain Elevation',
+      maxNativeZoom: 19,
       maxZoom: 22
     },
     streets: {
-      base: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-      subdomains: ['0', '1', '2', '3'],
+      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
       fallback: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '&copy; Google Road Network & Tactical GIS',
-      maxNativeZoom: 20,
+      attribution: '&copy; Esri &mdash; Tactical Road & Navigation GIS',
+      maxNativeZoom: 19,
       maxZoom: 22
     },
     dark: {

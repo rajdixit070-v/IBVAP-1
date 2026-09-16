@@ -44,11 +44,11 @@ const DEM_TERRARIUM_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terra
 // High-resolution Satellite imagery (ESRI World Imagery) - photorealistic global coverage
 const SATELLITE_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
-// OpenTopoMap contours and shaded elevation
-const TOPO_TILES = 'https://tile.opentopomap.org/{z}/{x}/{y}.png';
+// Esri World Topo Map - reliable, no API key required
+const TOPO_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
 
-// CartoDB Dark Matter for Night Operations & Thermal Radar
-const DARK_TILES = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
+// Esri World Dark Gray Base for Night Operations & Thermal Radar - 100% free, no API key required
+const DARK_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
 
 /**
  * Builds a MapLibre GL style specification for 3D Terrain with physical elevation and imagery
@@ -85,8 +85,8 @@ function buildMapStyle(styleType: TerrainMapStyle): maplibregl.StyleSpecificatio
       type: 'raster',
       tiles: [TOPO_TILES],
       tileSize: 256,
-      maxzoom: 17,
-      attribution: '© OpenTopoMap, SRTM'
+      maxzoom: 18,
+      attribution: '© Esri, USGS, Intermap'
     };
     layers.push({
       id: 'base-topo-layer',
@@ -100,8 +100,8 @@ function buildMapStyle(styleType: TerrainMapStyle): maplibregl.StyleSpecificatio
       type: 'raster',
       tiles: [DARK_TILES],
       tileSize: 256,
-      maxzoom: 19,
-      attribution: '© CARTO, OpenStreetMap'
+      maxzoom: 16,
+      attribution: '© Esri, HERE, Garmin'
     };
     layers.push({
       id: 'base-dark-layer',

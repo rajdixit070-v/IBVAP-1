@@ -38,35 +38,32 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
   } = useCameras();
 
   const { user } = useAuth();
-  const isCommanderOrAdmin = 
+  const isSuperAdmin = 
     user?.role === 'admin' || 
     user?.role === 'SUPER_ADMIN' || 
-    user?.scope_type === 'GLOBAL' ||
-    user?.role?.toLowerCase() === 'commander' ||
-    user?.role?.toLowerCase() === 'bop_commander' ||
-    user?.username === 'officer_alpha';
-  const isSuperAdmin = isCommanderOrAdmin;
+    user?.role === 'superadmin' ||
+    user?.scope_type === 'GLOBAL';
   const commanderScope = (user?.scope_id && user?.scope_id !== '*') ? user.scope_id : 'BOP-WAGAH';
 
-  // Commander Cameras: Scoped to the commander's outpost / border sector or all cameras
+  // Commander Cameras: Scoped strictly to the commander's assigned outpost & attached sensors
   const scopedCameras = useMemo(() => {
-    if (isCommanderOrAdmin) return cameras;
-    const term = commanderScope.toLowerCase().replace('bop-', '').replace('bop_', '');
-    const postName = (user?.post_name || '').toLowerCase();
-    const sectorName = (user?.sector || '').toLowerCase();
+    if (isSuperAdmin) return cameras;
+    const term = commanderScope.toLowerCase().replace('bop-', '').replace('bop_', '').trim();
+    const postName = (user?.post_name || '').toLowerCase().trim();
+    const sectorName = (user?.sector || '').toLowerCase().trim();
 
-    const filtered = cameras.filter((c) => {
+    return cameras.filter((c) => {
       const bop = (c.bop_site || '').toLowerCase();
       const sec = (c.sector || '').toLowerCase();
       const cid = (c.camera_id || '').toLowerCase();
+      const bopId = ((c as any).bop_id || '').toLowerCase();
       return (
-        (term && (bop.includes(term) || cid.includes(term))) ||
-        (postName && (bop.includes(postName) || cid.includes(postName))) ||
+        (term && (bop.includes(term) || cid.includes(term) || bopId.includes(term))) ||
+        (postName && (bop.includes(postName) || postName.includes(bop) || cid.includes(postName))) ||
         (sectorName && sec.includes(sectorName))
       );
     });
-    return filtered.length > 0 ? filtered : cameras;
-  }, [cameras, isCommanderOrAdmin, commanderScope, user?.post_name, user?.sector]);
+  }, [cameras, isSuperAdmin, commanderScope, user?.post_name, user?.sector]);
 
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 

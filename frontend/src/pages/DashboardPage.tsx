@@ -100,11 +100,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   // Dynamic Commander Outpost Resolution (Supports ANY logged-in Commander)
   const currentBop = useMemo(() => {
     if (isSuperAdmin) return bops[0] || null;
+    const scopeLower = String(user?.scope_id || '').toLowerCase().trim();
+    const postNameLower = String(user?.post_name || '').toLowerCase().trim();
     if (bops.length > 0) {
-      return bops[0];
+      const found = bops.find(b => 
+        (scopeLower && (String(b.bop_id).toLowerCase() === scopeLower || String(b.id).toLowerCase() === scopeLower)) ||
+        (postNameLower && String(b.name).toLowerCase().includes(postNameLower))
+      );
+      if (found) return found;
     }
     return null;
-  }, [bops, isSuperAdmin]);
+  }, [bops, isSuperAdmin, user?.scope_id, user?.post_name]);
 
   // Commander Identity - dynamically adapts to whoever logs in
   const commanderScope = (user?.scope_id && user?.scope_id !== '*') ? user.scope_id : (currentBop?.bop_id || 'BOP-WAGAH');
@@ -121,37 +127,37 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   }, [commanderScope, user?.post_name]);
 
   const commanderPostName = currentBop?.name || user?.post_name || matchedCommanderPost.name;
-  const commanderSector = currentBop?.location || user?.sector || matchedCommanderPost.sector || 'Frontier Sector';
+  const commanderSector = currentBop?.location || user?.sector || matchedCommanderPost.sector || 'Punjab Frontier';
   const commanderLat = currentBop?.latitude ?? matchedCommanderPost.latitude ?? 31.6048;
   const commanderLng = currentBop?.longitude ?? matchedCommanderPost.longitude ?? 74.5731;
 
-  // Dynamically filter cameras for the logged-in Commander's post
+  // Dynamically filter cameras for the logged-in Commander's post (strictly scoped)
   const scopedCameras = useMemo(() => {
     if (isSuperAdmin) return cameras;
-    const postLower = commanderPostName.toLowerCase();
-    const scopeLower = commanderScope.toLowerCase();
+    const postLower = (commanderPostName || '').toLowerCase().trim();
+    const scopeLower = (commanderScope || '').toLowerCase().trim();
+    const postCode = (matchedCommanderPost?.code || '').toLowerCase().trim();
 
-    const filtered = cameras.filter(c => {
-      const bopSite = (c.bop_site || '').toLowerCase();
-      const camId = (c.camera_id || '').toLowerCase();
+    return cameras.filter(c => {
+      const bopSite = (c.bop_site || '').toLowerCase().trim();
+      const camId = (c.camera_id || '').toLowerCase().trim();
+      const bopId = ((c as any).bop_id || '').toLowerCase().trim();
       return (
-        bopSite.includes(postLower) ||
-        bopSite.includes(scopeLower) ||
-        camId.includes(scopeLower) ||
-        (c.bop_id && c.bop_id.toLowerCase() === scopeLower)
+        (postLower && (bopSite.includes(postLower) || postLower.includes(bopSite))) ||
+        (scopeLower && (bopSite.includes(scopeLower) || scopeLower.includes(bopSite) || bopId.includes(scopeLower))) ||
+        (postCode && (camId.includes(postCode) || bopSite.includes(postCode)))
       );
     });
-    return filtered.length > 0 ? filtered : cameras;
-  }, [cameras, isSuperAdmin, commanderPostName, commanderScope]);
+  }, [cameras, isSuperAdmin, commanderPostName, commanderScope, matchedCommanderPost]);
 
   // Dynamically filter alerts for the logged-in Commander's post
   const scopedAlerts = useMemo(() => {
     if (isSuperAdmin) return alerts;
-    const postLower = commanderPostName.toLowerCase();
-    const scopeLower = commanderScope.toLowerCase();
+    const postLower = (commanderPostName || '').toLowerCase().trim();
+    const scopeLower = (commanderScope || '').toLowerCase().trim();
 
     return alerts.filter(a => {
-      const bopSite = (a.bop_site || '').toLowerCase();
+      const bopSite = (a.bop_site || '').toLowerCase().trim();
       return bopSite.includes(postLower) || bopSite.includes(scopeLower) || scopedCameras.some(c => c.camera_id === a.camera_id);
     });
   }, [alerts, isSuperAdmin, commanderPostName, commanderScope, scopedCameras]);

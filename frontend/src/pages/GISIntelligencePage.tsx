@@ -189,79 +189,125 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
     );
   }, [allAvailableBops, commanderScopeId, commanderPostName]);
 
+  // Filter BOPs by Frontier for Admin selection
+  const frontierBops = useMemo(() => {
+    if (!selectedFrontier || selectedFrontier === 'ALL' || selectedFrontier.toLowerCase().includes('all')) {
+      return allAvailableBops;
+    }
+    const cleanFrontier = selectedFrontier.toLowerCase();
+
+    // Map common keywords
+    const keywords: string[] = [];
+    if (cleanFrontier.includes('punjab')) keywords.push('punjab', 'wagah', 'hussaini', 'sadqi', 'fazilka', 'khemkaran', 'dbn', 'derababananak');
+    if (cleanFrontier.includes('rajasthan')) keywords.push('rajasthan', 'tanot', 'longewala', 'munabao', 'jaisalmer', 'barmer', 'bikaner', 'ganganagar');
+    if (cleanFrontier.includes('jammu')) keywords.push('jammu', 'suchet', 'samba', 'rs pura', 'kathua', 'akhnoor', 'hiranagar');
+    if (cleanFrontier.includes('gujarat')) keywords.push('gujarat', 'creek', 'kutch', 'lakhpat', 'koteshwar', 'bhuj');
+    if (cleanFrontier.includes('kashmir')) keywords.push('kashmir', 'uri', 'kupwara', 'baramulla', 'tithwal', 'poonch', 'loc');
+    if (cleanFrontier.includes('ladakh')) keywords.push('ladakh', 'galwan', 'pangong', 'dbo', 'daulat', 'chushul', 'lac');
+    if (cleanFrontier.includes('south bengal') || cleanFrontier.includes('bengal')) keywords.push('bengal', 'petrapole', 'sundarbans', 'haridaspur', 'ghoja', 'malda');
+    if (cleanFrontier.includes('north bengal')) keywords.push('north bengal', 'fulbari', 'siliguri', 'changrabandha', 'hili');
+    if (cleanFrontier.includes('tripura')) keywords.push('tripura', 'agartala', 'srimantapur', 'akhoura');
+    if (cleanFrontier.includes('meghalaya')) keywords.push('meghalaya', 'dawki', 'garo', 'tamabil', 'baghmara');
+    if (cleanFrontier.includes('mizoram')) keywords.push('mizoram', 'cachar', 'zokhawt', 'champhai');
+    if (cleanFrontier.includes('assam')) keywords.push('assam', 'dhubri', 'karimganj', 'mankachar');
+
+    return allAvailableBops.filter(b => {
+      const bopSector = String(b.sector || b.location || '').toLowerCase();
+      const bopState = String(b.state || '').toLowerCase();
+      const bopName = String(b.name || '').toLowerCase();
+      const bopId = String(b.bop_id || b.id || '').toLowerCase();
+      const bopCode = String(b.code || '').toLowerCase();
+
+      if (bopSector.includes(cleanFrontier) || cleanFrontier.includes(bopSector)) return true;
+      if (bopState && (bopState.includes(cleanFrontier) || cleanFrontier.includes(bopState))) return true;
+
+      for (const kw of keywords) {
+        if (bopSector.includes(kw) || bopState.includes(kw) || bopName.includes(kw) || bopId.includes(kw) || bopCode.includes(kw)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [allAvailableBops, selectedFrontier]);
+
   // Scoped BOPs:
-  // Admin sees all available BOPs.
-  // Commander ONLY SEES THEIR SINGLE ASSIGNED BOP!
+  // Admin: If 'ALL', shows all BOPs. If specific Frontier selected, ONLY SHOWS THAT FRONTIER'S BOPS!
+  // Commander: ONLY SEES THEIR SINGLE ASSIGNED BOP!
   const scopedBops = useMemo(() => {
-    if (isSuperAdmin) return allAvailableBops;
+    if (isSuperAdmin) {
+      if (!selectedFrontier || selectedFrontier === 'ALL' || selectedFrontier.toLowerCase().includes('all')) {
+        return allAvailableBops;
+      }
+      return frontierBops.length > 0 ? frontierBops : allAvailableBops;
+    }
     return matchedCommanderBop ? [matchedCommanderBop] : [];
-  }, [isSuperAdmin, allAvailableBops, matchedCommanderBop]);
+  }, [isSuperAdmin, allAvailableBops, frontierBops, selectedFrontier, matchedCommanderBop]);
 
   // Scoped Cameras:
-  // Admin sees all cameras.
-  // Commander ONLY SEES CAMERAS ADDED FOR / ASSOCIATED WITH THEIR ASSIGNED BOP!
+  // Admin: If 'ALL', shows all cameras. If specific Frontier, ONLY SHOWS CAMERAS ATTACHED TO THAT FRONTIER'S BOPS!
+  // Commander: ONLY SEES CAMERAS ATTACHED TO THEIR SINGLE ASSIGNED BOP!
   const scopedCameras = useMemo(() => {
-    if (isSuperAdmin) return cameras;
-    const targetBopId = String(matchedCommanderBop?.bop_id || matchedCommanderBop?.id || '').toLowerCase();
-    const targetBopName = String(matchedCommanderBop?.name || commanderPostName || '').toLowerCase();
-    const targetBopCode = String(matchedCommanderBop?.code || '').toLowerCase();
+    if (isSuperAdmin && (!selectedFrontier || selectedFrontier === 'ALL' || selectedFrontier.toLowerCase().includes('all'))) {
+      return cameras;
+    }
+
+    const allowedBopNames = new Set<string>();
+    const allowedBopIds = new Set<string>();
+    const allowedBopCodes = new Set<string>();
+    const allowedBopSectors = new Set<string>();
+    const allowedBopLocations: [number, number][] = [];
+
+    scopedBops.forEach(b => {
+      if (b.name) allowedBopNames.add(String(b.name).toLowerCase().trim());
+      if (b.bop_id) allowedBopIds.add(String(b.bop_id).toLowerCase().trim());
+      if (b.id) allowedBopIds.add(String(b.id).toLowerCase().trim());
+      if (b.code) allowedBopCodes.add(String(b.code).toLowerCase().trim());
+      if (b.sector) allowedBopSectors.add(String(b.sector).toLowerCase().trim());
+      if (b.location) allowedBopSectors.add(String(b.location).toLowerCase().trim());
+      if (b.latitude && b.longitude) allowedBopLocations.push([b.latitude, b.longitude]);
+    });
+
+    if (!isSuperAdmin) {
+      if (commanderPostName) allowedBopNames.add(String(commanderPostName).toLowerCase().trim());
+      if (commanderScopeId) allowedBopIds.add(String(commanderScopeId).toLowerCase().trim());
+      if (commanderSector) allowedBopSectors.add(String(commanderSector).toLowerCase().trim());
+    }
 
     return cameras.filter(c => {
       const camBop = String(c.bop_site || (c as any).bop_id || '').toLowerCase().trim();
       const camId = String(c.camera_id || '').toLowerCase().trim();
+      const camSector = String(c.sector || '').toLowerCase().trim();
 
-      // Direct name or BOP ID/code match
-      if (camBop && (
-        camBop.includes(targetBopName) || targetBopName.includes(camBop) ||
-        (targetBopId && (camBop.includes(targetBopId) || targetBopId.includes(camBop))) ||
-        (targetBopCode && (camBop.includes(targetBopCode) || targetBopCode.includes(camBop)))
-      )) {
-        return true;
+      for (const name of allowedBopNames) {
+        if (camBop && (camBop.includes(name) || name.includes(camBop))) return true;
       }
-
-      // Camera ID contains BOP code (e.g. CAM-WAGAH-01)
-      if (targetBopCode && camId.includes(targetBopCode)) {
-        return true;
+      for (const id of allowedBopIds) {
+        if (camBop && (camBop.includes(id) || id.includes(camBop))) return true;
+        if (camId && (camId.includes(id) || id.includes(camId))) return true;
       }
-
-      // Proximity match: within 15 km
-      if (c.latitude && c.longitude && matchedCommanderBop?.latitude && matchedCommanderBop?.longitude) {
-        const dLat = Math.abs(c.latitude - matchedCommanderBop.latitude);
-        const dLng = Math.abs(c.longitude - matchedCommanderBop.longitude);
-        if (dLat < 0.15 && dLng < 0.15) {
-          return true;
+      for (const code of allowedBopCodes) {
+        if ((camBop && camBop.includes(code)) || (camId && camId.includes(code))) return true;
+      }
+      if (isSuperAdmin && camSector) {
+        for (const s of allowedBopSectors) {
+          if (camSector.includes(s) || s.includes(camSector)) return true;
+        }
+      }
+      if (c.latitude && c.longitude) {
+        for (const [bLat, bLng] of allowedBopLocations) {
+          const dLat = Math.abs(c.latitude - bLat);
+          const dLng = Math.abs(c.longitude - bLng);
+          const threshold = isSuperAdmin ? 0.35 : 0.20;
+          if (dLat < threshold && dLng < threshold) {
+            return true;
+          }
         }
       }
 
       return false;
     });
-  }, [cameras, isSuperAdmin, matchedCommanderBop, commanderPostName]);
+  }, [cameras, isSuperAdmin, selectedFrontier, scopedBops, commanderPostName, commanderScopeId, commanderSector]);
 
-  // Filter BOPs by Frontier for Admin selection
-  const frontierBops = useMemo(() => {
-    if (selectedFrontier === 'ALL') return allAvailableBops;
-    const cleanFrontier = selectedFrontier.toLowerCase();
-    return allAvailableBops.filter(b => {
-      const bopSector = String(b.location || b.sector || '').toLowerCase();
-      const bopState = String(b.state || '').toLowerCase();
-      const bopName = String(b.name || '').toLowerCase();
-      return (
-        bopSector.includes(cleanFrontier) ||
-        cleanFrontier.includes(bopSector) ||
-        (cleanFrontier.includes('punjab') && (bopSector.includes('punjab') || bopState.includes('punjab'))) ||
-        (cleanFrontier.includes('rajasthan') && (bopSector.includes('rajasthan') || bopState.includes('rajasthan'))) ||
-        (cleanFrontier.includes('jammu') && (bopSector.includes('jammu') || bopState.includes('jammu'))) ||
-        (cleanFrontier.includes('gujarat') && (bopSector.includes('gujarat') || bopState.includes('gujarat'))) ||
-        (cleanFrontier.includes('kashmir') && (bopSector.includes('kashmir') || bopName.includes('uri') || bopName.includes('kupwara'))) ||
-        (cleanFrontier.includes('ladakh') && (bopSector.includes('ladakh') || bopName.includes('galwan') || bopName.includes('pangong'))) ||
-        (cleanFrontier.includes('bengal') && (bopSector.includes('bengal') || bopState.includes('bengal'))) ||
-        (cleanFrontier.includes('tripura') && (bopSector.includes('tripura') || bopState.includes('tripura'))) ||
-        (cleanFrontier.includes('meghalaya') && (bopSector.includes('meghalaya') || bopState.includes('meghalaya'))) ||
-        (cleanFrontier.includes('mizoram') && (bopSector.includes('mizoram') || bopState.includes('mizoram'))) ||
-        (cleanFrontier.includes('assam') && (bopSector.includes('assam') || bopState.includes('assam')))
-      );
-    });
-  }, [allAvailableBops, selectedFrontier]);
   const [layers, setLayers] = useState<GISLayer[]>([]);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
@@ -276,7 +322,7 @@ export const GISIntelligencePage: React.FC<GISIntelligencePageProps> = () => {
 
   // Interactive Coordinates & Sector Navigation State
   const mapWrapperRef = useRef<HTMLDivElement | null>(null);
-  const [gisMapDimension, setGisMapDimension] = useState<'2d' | '3d'>('2d');
+  const [gisMapDimension, setGisMapDimension] = useState<'2d' | '3d'>('3d');
   const [activePreset, setActivePreset] = useState<string>('BOP_WAGAH');
   const [rawLat, setRawLat] = useState<string>('31.6048');
   const [rawLng, setRawLng] = useState<string>('74.5731');
