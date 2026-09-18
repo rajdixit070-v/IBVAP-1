@@ -475,12 +475,17 @@ class RTSPStreamer:
         if len(self._fps_timestamps) > 1:
             self.fps = len(self._fps_timestamps) / (self._fps_timestamps[-1] - self._fps_timestamps[0] + 0.001)
 
-        # Encode JPEG for low-latency web broadcast
-        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-        success, jpeg_buf = cv2.imencode('.jpg', frame, encode_params)
+        # Encode JPEG for low-latency web broadcast (efficient 720p preview)
+        h, w = frame.shape[:2]
+        if w > 1280:
+            preview_frame = cv2.resize(frame, (1280, 720), interpolation=cv2.INTER_AREA)
+        else:
+            preview_frame = frame
+        encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+        success, jpeg_buf = cv2.imencode('.jpg', preview_frame, encode_params)
         
         with self._lock:
-            self._latest_raw_frame = frame
+            self._latest_raw_frame = preview_frame
             if success:
                 self._latest_jpeg = jpeg_buf.tobytes()
             self._latest_frame_time = timestamp
@@ -814,14 +819,14 @@ class RTSPStreamer:
         self._update_status("HEALTHY", None)
         logger.info(f"[{self.camera_id}] Tactical Video Ingestion Active (Equipment: {self.stream_type.upper()})")
 
-        target_fps = 25.0
+        target_fps = 8.0
         frame_interval = 1.0 / target_fps
         width = 1920
 
         # Motion simulation state
         x_pos = 220.0
-        speed = 3.5
-        person_speed = 2.2
+        speed = 4.5
+        person_speed = 3.0
         p_offset = 0.0
 
         while self._running:
@@ -845,7 +850,7 @@ class RTSPStreamer:
             # Process frame
             self._process_new_frame(frame, loop_start)
 
-            # Regulate frame rate
+            # Regulate frame rate with cooperative yielding
             elapsed = time.time() - loop_start
-            sleep_time = max(0.001, frame_interval - elapsed)
+            sleep_time = max(0.02, frame_interval - elapsed)
             time.sleep(sleep_time)

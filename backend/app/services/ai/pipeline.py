@@ -23,7 +23,7 @@ class CameraAIWorker:
         self,
         camera_id: str,
         detector: YOLOObjectDetector,
-        target_fps: float = 10.0,
+        target_fps: float = 3.0,
         input_size: int = 640,
         broadcast_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
     ):
@@ -251,9 +251,9 @@ class CameraAIWorker:
                 self.status = "ERROR"
                 self.error_message = str(e)
 
-            # Throttle to target FPS
+            # Throttle to target FPS with cooperative yielding
             elapsed_total = time.time() - loop_start
-            sleep_time = max(0.005, min_frame_interval - elapsed_total)
+            sleep_time = max(0.05, min_frame_interval - elapsed_total)
             time.sleep(sleep_time)
 
     def get_status_schema(self) -> CameraAIStatus:

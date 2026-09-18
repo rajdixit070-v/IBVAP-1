@@ -639,7 +639,7 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                         camera_id=cam.camera_id,
                         enabled=True,
                         model_name="yolov8n",
-                        target_fps=10.0,
+                        target_fps=3.0,
                         input_size=640,
                         conf_person=0.40,
                         conf_vehicle=0.45,
@@ -651,9 +651,10 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                     db.commit()
 
                 if config.enabled:
+                    cam_fps = min(float(config.target_fps or 3.0), 3.0)
                     ai_pipeline_manager.register_camera(
                         camera_id=cam.camera_id,
-                        target_fps=config.target_fps,
+                        target_fps=cam_fps,
                         auto_start=True
                     )
             except Exception as ai_e:
