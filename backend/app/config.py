@@ -14,8 +14,8 @@ if os.path.exists(_env_path):
 logger = logging.getLogger("ibvap.config")
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "IBVAP — Intelligent Border Video Analytics Platform"
-    VERSION: str = "15.0.0-PROD"
+    PROJECT_NAME: str = "IBVAP - Integrated Border Surveillance Platform"
+    VERSION: str = "15.2.0-ONLINE"
     ENV_MODE: str = os.getenv("ENV_MODE", "development")  # production, development, test
     DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() in ("true", "1", "yes")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

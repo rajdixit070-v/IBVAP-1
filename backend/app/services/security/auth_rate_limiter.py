@@ -122,10 +122,12 @@ class AuthRateLimiter:
     @classmethod
     def record_successful_login(cls, username: str, db: Session):
         """Clears failed login attempt counters upon successful authentication."""
-        if username in cls._failed_login_history:
-            cls._failed_login_history[username] = []
+        clean = (username or "").strip().lower()
+        cls._failed_login_history.pop(clean, None)
+        cls._failed_login_history.pop(username, None)
 
-        user = db.query(User).filter(User.username == username).first()
+        from sqlalchemy import func
+        user = db.query(User).filter(func.lower(User.username) == clean).first()
         if user:
             user.failed_login_attempts = 0
             user.locked_until = None
@@ -135,10 +137,12 @@ class AuthRateLimiter:
     @classmethod
     def unlock_user_account(cls, username: str, db: Session) -> bool:
         """Administratively unlocks a locked account."""
-        if username in cls._failed_login_history:
-            cls._failed_login_history[username] = []
+        clean = (username or "").strip().lower()
+        cls._failed_login_history.pop(clean, None)
+        cls._failed_login_history.pop(username, None)
 
-        user = db.query(User).filter(User.username == username).first()
+        from sqlalchemy import func
+        user = db.query(User).filter(func.lower(User.username) == clean).first()
         if user:
             user.failed_login_attempts = 0
             user.locked_until = None
