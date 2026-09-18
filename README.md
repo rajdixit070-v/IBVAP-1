@@ -122,6 +122,15 @@ docker compose up -d --build
 
 ---
 
+## 🔑 Default Login Credentials
+
+| Role | Callsign / Username | Password | Operational Access Level |
+|:---|:---|:---|:---|
+| **Super Admin / National HQ** | `admin` | `AdminSecure@IBVAP2026!` | Full Multi-Frontier C2, All BOPs, Camera Management, System Health |
+| **BOP Commander** | `officer_alpha` | `OfficerSecure@IBVAP2026!` | Assigned Outpost Perimeter, Outpost Cameras, Incident Response, QRT Dispatch |
+
+---
+
 ## 📁 Project Directory Structure
 
 ```text

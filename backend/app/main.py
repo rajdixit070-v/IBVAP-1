@@ -452,6 +452,7 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
     db = SessionLocal()
     try:
         # Create default Admin if not exists
+        # Create default Admin if not exists, or unlock and sync password
         admin = db.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
         if not admin:
             admin = User(
@@ -464,6 +465,13 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             db.add(admin)
             db.commit()
             logger.info(f"Default admin user '{settings.DEFAULT_ADMIN_USERNAME}' created.")
+        else:
+            admin.is_active = True
+            admin.locked_until = None
+            admin.failed_login_attempts = 0
+            admin.hashed_password = get_password_hash(settings.DEFAULT_ADMIN_PASSWORD)
+            db.commit()
+            logger.info(f"Default admin user '{settings.DEFAULT_ADMIN_USERNAME}' unlocked and synchronized.")
 
         # Assign global admin scope
         admin_scope = db.query(SiteUserScope).filter(SiteUserScope.username == settings.DEFAULT_ADMIN_USERNAME).first()
@@ -478,7 +486,7 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             db.add(admin_scope)
             db.commit()
 
-        # Create default Checkpost Officer if not exists
+        # Create default Checkpost Officer if not exists, or unlock and sync password
         officer = db.query(User).filter(User.username == settings.DEFAULT_OFFICER_USERNAME).first()
         if not officer:
             officer = User(
@@ -492,10 +500,19 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             db.commit()
             logger.info(f"Default officer user '{settings.DEFAULT_OFFICER_USERNAME}' created.")
         else:
-            # Ensure active and password updated if needed
-            if not officer.is_active:
-                officer.is_active = True
-                db.commit()
+            officer.is_active = True
+            officer.locked_until = None
+            officer.failed_login_attempts = 0
+            officer.hashed_password = get_password_hash(settings.DEFAULT_OFFICER_PASSWORD)
+            db.commit()
+            logger.info(f"Default officer user '{settings.DEFAULT_OFFICER_USERNAME}' unlocked and synchronized.")
+
+        # Clean up any active IP blocks to prevent locking out operators on restart
+        try:
+            db.query(BlockedIPEntry).filter(BlockedIPEntry.is_active == True).update({"is_active": False})
+            db.commit()
+        except Exception:
+            pass
 
         # Assign BOP-ALPHA scope to officer
         officer_scope = db.query(SiteUserScope).filter(SiteUserScope.username == settings.DEFAULT_OFFICER_USERNAME).first()
