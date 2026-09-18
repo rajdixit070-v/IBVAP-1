@@ -65,11 +65,22 @@ export class SecurityEventsWebSocket {
   private connect() {
     if (this.isClosedExplicitly) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
+    let wsBase: string;
+    const envApi = import.meta.env.VITE_API_URL;
+    if (envApi && envApi.startsWith('http')) {
+      wsBase = envApi.replace(/^http/, 'ws').replace(/\/+$/, '');
+      if (!wsBase.endsWith('/api/v1')) {
+        wsBase = `${wsBase}/api/v1`;
+      }
+    } else {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      wsBase = `${protocol}//${host}/api/v1`;
+    }
+
     const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    const url = `${protocol}//${host}/api/v1/ws/security-events${tokenParam}`;
+    const url = `${wsBase}/ws/security-events${tokenParam}`;
 
     try {
       this.ws = new WebSocket(url);
