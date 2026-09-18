@@ -601,38 +601,14 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             seed_demo_data(db)
             ensure_default_border_cameras(db)
 
-        # Initialize AI configs, start RTSP/synthetic streamers, and auto-register active cameras
+        # Initialize AI configs and ensure cameras are marked ONLINE
         try:
-            from app.core.security import decrypt_credential
             cameras = db.query(Camera).filter(Camera.enabled == True).all()
             for cam in cameras:
                 # Restore any degraded/offline enabled camera back to ONLINE
                 if cam.status in ["OFFLINE", "CONNECTING"] and not cam.is_maintenance:
                     cam.status = "ONLINE"
-            db.commit()
-        except Exception as e_cam_stat:
-            db.rollback()
-            logger.warning(f"Notice restoring camera statuses: {e_cam_stat}")
-            cameras = []
 
-        for cam in cameras:
-            # Start camera in stream_manager so live video feed is immediately working
-            try:
-                decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
-                stream_manager.start_camera(
-                    camera_id=cam.camera_id,
-                    camera_name=cam.camera_name,
-                    bop_site=cam.bop_site,
-                    rtsp_url=cam.rtsp_url,
-                    username=cam.username,
-                    password=decrypted_pw,
-                    stream_type=cam.stream_type or "main"
-                )
-                logger.info(f"Started video stream for camera {cam.camera_id} ({cam.rtsp_url})")
-            except Exception as se:
-                logger.warning(f"Could not auto-start streamer for {cam.camera_id}: {se}")
-
-            try:
                 config = db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == cam.camera_id).first()
                 if not config:
                     config = CameraAIConfig(
@@ -648,18 +624,11 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                         conf_other=0.40
                     )
                     db.add(config)
-                    db.commit()
-
-                if config.enabled:
-                    cam_fps = min(float(config.target_fps or 3.0), 3.0)
-                    ai_pipeline_manager.register_camera(
-                        camera_id=cam.camera_id,
-                        target_fps=cam_fps,
-                        auto_start=True
-                    )
-            except Exception as ai_e:
-                db.rollback()
-                logger.warning(f"Notice configuring AI pipeline for {cam.camera_id}: {ai_e}")
+            db.commit()
+        except Exception as e_cam_stat:
+            db.rollback()
+            logger.warning(f"Notice restoring camera statuses: {e_cam_stat}")
+            cameras = []
 
         # Seed Phase 13 AI Model Registry defaults
         if db.query(AIModelRegistry).count() == 0:
@@ -759,12 +728,52 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                     anomaly_detection=True,
                     loitering_threshold_seconds=180
                 )
+                db.add(prof)
+        db.commit()
+
         # 5. GIS Layers (Base Border Topology)
         if db.query(GISLayer).count() == 0:
             GISService.init_default_layers(db, "SITE-BORDER-NORTH")
 
     finally:
         db.close()
+
+
+async def background_post_startup():
+    """Warms up background camera feeds and starts health monitor after port bind."""
+    await asyncio.sleep(1.0)
+    try:
+        from app.database import SessionLocal
+        from app.models.camera import Camera
+        from app.core.security import decrypt_credential
+
+        db = SessionLocal()
+        try:
+            cameras = db.query(Camera).filter(Camera.enabled == True).all()
+            for cam in cameras:
+                try:
+                    decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
+                    stream_manager.start_camera(
+                        camera_id=cam.camera_id,
+                        camera_name=cam.camera_name,
+                        bop_site=cam.bop_site,
+                        rtsp_url=cam.rtsp_url,
+                        username=cam.username,
+                        password=decrypted_pw,
+                        stream_type=cam.stream_type or "main"
+                    )
+                except Exception as se:
+                    logger.warning(f"Notice auto-starting streamer for {cam.camera_id}: {se}")
+                await asyncio.sleep(0.2)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Background camera warmup notice: {e}")
+
+    try:
+        await health_monitor.start()
+    except Exception as e:
+        logger.warning(f"Error starting health_monitor: {e}")
 
 
 @asynccontextmanager
@@ -781,15 +790,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error during init_db_defaults: {e}", exc_info=True)
 
-    try:
-        await health_monitor.start()
-    except Exception as e:
-        logger.warning(f"Error starting health_monitor: {e}")
+    # Launch background warmup asynchronously so Uvicorn can immediately bind $PORT
+    bg_task = asyncio.create_task(background_post_startup())
 
     logger.info("IBVAP Platform Ready.")
     yield
     # Shutdown
     logger.info("Shutting down IBVAP Platform gracefully...")
+    try:
+        bg_task.cancel()
+    except Exception:
+        pass
     try:
         await health_monitor.stop()
     except Exception:
