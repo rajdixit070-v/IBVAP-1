@@ -1,24 +1,24 @@
 <div align="center">
   <img src="frontend/public/logo.png" width="160" alt="IBVAP Tactical Defense Emblem" />
   <h1>IBVAP — Intelligent Border Vision Analytics Platform</h1>
-  <p><strong>Next-Generation Autonomous Perimeter Defense & Dual-Spectrum Multi-BOP Surveillance C2 Matrix</strong></p>
+  <p><strong>Next-Generation Autonomous Perimeter Defense, Dual-Spectrum Surveillance & 3D Tactical Terrain C2 Matrix</strong></p>
 
   [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-  [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com)
   [![React 18](https://img.shields.io/badge/React-18+-61dafb.svg)](https://reactjs.org/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg)](https://www.typescriptlang.org/)
-  [![Tactical GIS](https://img.shields.io/badge/Tactical_GIS-Leaflet%20Offline%2FOnline-10B981.svg)](https://leafletjs.com/)
+  [![3D Terrain](https://img.shields.io/badge/3D_Terrain-MapLibre%20WebGL%20DEM-06B6D4.svg)](https://maplibre.org/)
   [![Zero-Trust Security](https://img.shields.io/badge/Security-Zero--Trust%20Hardened-emerald.svg)](docs/SECURITY.md)
-  [![Tests Passing](https://img.shields.io/badge/Tests-256%2F256%20Passed-brightgreen.svg)](backend/tests/)
+  [![Production Ready](https://img.shields.io/badge/Deploy-Render%20%2B%20Vercel%20%7C%20Docker-blueviolet.svg)](#-cloud-deployment-guide-render--vercel)
 </div>
 
 ---
 
 ## 📌 Executive Overview
 
-**IBVAP (Intelligent Border Vision Analytics Platform)** is an enterprise-grade, mission-critical Command & Control (C2) situational awareness matrix engineered for border defense organizations (e.g., BSF, ITBP, Army).
+**IBVAP (Intelligent Border Vision Analytics Platform)** is an enterprise-grade, mission-critical Command & Control (C2) situational awareness platform engineered for national border defense operations (e.g., BSF, ITBP, Army).
 
-The platform autonomously ingests 4K optical and Long-Wave Infrared (LWIR) thermal video streams from forward **Border Outposts (BOPs)**, applies high-performance **Edge AI inference (YOLOv8x + ByteTrack)**, suppresses environmental false alarms (fog, swaying vegetation, dust, wildlife), and streams real-time threat vectors directly to Sector Headquarters and Quick Reaction Teams (QRT).
+The platform autonomously ingests 4K optical, PTZ, and Long-Wave Infrared (LWIR) thermal video streams from forward **Border Outposts (BOPs)** across national frontiers (Punjab, Rajasthan, Jammu, Gujarat, Kashmir, Ladakh, Bengal, Northeast). It provides real-time **3D Terrain WebGL Elevation**, **Edge AI object detection & tracking (YOLOv8 + ByteTrack)**, strict **role-based outpost perimeter isolation**, and instant threat alerts directly to Sector Headquarters and Quick Reaction Teams (QRT).
 
 ---
 
@@ -26,153 +26,173 @@ The platform autonomously ingests 4K optical and Long-Wave Infrared (LWIR) therm
 
 ```mermaid
 graph TD
-    A[Remote Border Cameras / NVR / DVR] -->|RTSP / ONVIF / WireGuard| B[Edge Ingestion & Blur Diagnostics]
-    B --> C[Dual-Spectrum AI Inference: YOLOv8x + ByteTrack]
+    A[Remote Border Cameras / NVR / PTZ / Drones] -->|RTSP / ONVIF / WebRTC| B[Edge Ingestion & Blur Diagnostics]
+    B --> C[Dual-Spectrum AI Inference: YOLOv8 + ByteTrack]
     C --> D[Tactical Fusion & False Alarm Filter]
-    D --> E[Sub-10ms WebSocket Telemetry Bus]
-    E --> F[React Tactical Command HUD & GIS Map]
-    E --> G[Automated QRT Sirens & Playbook Dispatch]
+    D --> E[Sub-15ms WebSocket Telemetry Bus]
+    E --> F[React Tactical Command HUD & 3D WebGL Terrain Map]
+    E --> G[Automated QRT Sirens & Incident Playbooks]
 ```
 
-### 1. Dual-Spectrum Optical & Thermal Vision Engine
+### 1. Realistic 3D WebGL Mountain Terrain & Tactical GIS
+- **Photorealistic 3D Mountain Elevation**: Native WebGL 3D raster-DEM terrain powered by MapLibre GL JS with AWS Open Data Terrarium elevation tiles and `1.85x` vertical exaggeration. True ridgelines, peaks, valleys, and riverbeds render naturally.
+- **100% Free, Public & Keyless Tile Services**: Zero dependency on paid Google Maps or CartoDB API keys. Seamlessly switches between **Satellite Orthophoto** (Esri World Imagery), **Topographic Contours** (Esri World Topo), **Tactical Dark Ops** (Esri Dark Canvas), and **Navigation Roads** (OpenStreetMap).
+- **3D Border Wire & FOV Projections**: International zero-line perimeter fences and camera Field-of-View (FOV) fan cones dynamically conform to 3D mountain slopes.
+- **Interactive 3D Navigation**: Built-in 3D D-pad (North, South, East, West), tilt angle control (horizon view vs. top-down 2D radar), 360° bearing compass, and autonomous drone orbit patrol mode.
+
+### 2. Multi-Tier Role Scoping & Outpost Perimeter Isolation
+- **Super Admin Mode**:
+  - Nationwide frontier selector ribbon (Punjab, Rajasthan, Jammu, Gujarat, Kashmir, Ladakh, South Bengal, North Bengal, Tripura, Meghalaya, Mizoram, Assam).
+  - Selecting any Frontier dynamically restricts the map and sensor feeds to **only the BOPs belonging to that Frontier** and **only the cameras attached to those BOPs**.
+  - "All Frontiers" view unlocks national defense grid monitoring.
+- **BOP Commander Mode**:
+  - Strict outpost perimeter isolation: Commander only sees their **assigned Frontier**, their **single assigned BOP**, and **only cameras attached to their outpost**.
+  - All foreign checkposts and unauthorized cameras across other borders are completely filtered out.
+
+### 3. Dual-Spectrum Optical & Thermal Vision Engine
 - **Nocturnal Stealth Detection**: Seamlessly switches to LWIR thermal telemetry during zero-lux darkness, blizzard, or dense alpine fog.
 - **False Alarm Suppression**: Filters out over 95% of false alarms caused by desert dust plumes, flowing river ripples, and stray wildlife.
-- **Lens Tamper & Blur Telemetry**: Continuously evaluates Laplacian variance to detect lens occlusion, physical tampering, or fog build-up.
-
-### 2. Tactical GIS Mapping & Zero-Dependency Zoom Engine
-- **Independent Tile Layers**: Integrated support for CartoDB Dark Matter, OpenStreetMap (Roads & Border Infrastructure), Topographic Relief, and Satellite Imagery with zero paid API key dependencies.
-- **Ultra-Fine Smooth Zoom**: Instant zoom range from **5.0x to 22.0x** with fine fractional increments (0.5x).
-- **Tactical Preset Jump**: Quick-switch buttons for **Sector (11x)**, **Post (14x)**, **Fence (17x)**, **Close-Up (19x)**, and **Ultra (21.5x)**.
-- **GPS Live Post Pinning**: Browser-assisted hardware GPS detection for auto-centering the operator's current forward post.
-
-### 3. Multi-Camera Ingestion & NVR/DVR Gateway
-- **Multi-Brand Compatibility**: Native RTSP and ONVIF support for Hikvision, Dahua, Axis, CP Plus, and Hanwha cameras.
-- **Multi-Channel NVR/DVR Integration**: Register centralized recorders and stream individual sub-channels (`/ch1/main`, `/ch2/sub`) without saturating outpost bandwidth.
-- **Edge Failover & Resilient Reconnection**: Exponential backoff reconnection loop maintains stream integrity during harsh weather or intermittent satellite connections.
+- **Lens Tamper & Blur Telemetry**: Evaluates Laplacian variance to detect lens occlusion, physical tampering, or fog build-up.
 
 ### 4. Edge AI, ByteTrack & Movement Intelligence
 - **Deep Tracking**: ByteTrack Kalman filters assign persistent tracking IDs across occlusions, tree canopies, and temporary obstacles.
 - **Geometric Virtual Fencing**: Arbitrary polygon intrusion zones, directional tripwires, and buffer exclusion zones.
 - **Cross-Camera Handover (Re-ID)**: Re-identifies suspicious personnel or rogue vehicles across adjacent observation towers.
 
-### 5. Tactical Incident Command & QRT Dispatch
-- **Sub-150ms Telemetry**: Automated instant audio and visual alert broadcast to on-duty commanders and QRT dispatchers.
-- **Evidence Bundles**: Forensic image snapshot logging with SHA-256 cryptographic hashes and GPS/MGRS coordinates.
-- **Audit Trails**: Non-repudiation logging compliant with defense inspection standards.
+### 5. Multi-Camera Ingestion & NVR/DVR Gateway
+- **Multi-Brand Compatibility**: Native RTSP and ONVIF support for Hikvision, Dahua, Axis, CP Plus, and Hanwha cameras.
+- **Multi-Channel NVR/DVR Integration**: Register centralized recorders and stream individual sub-channels (`/ch1/main`, `/ch2/sub`) without saturating outpost bandwidth.
+- **Edge Failover & Resilient Reconnection**: Exponential backoff reconnection loop maintains stream integrity during harsh weather or intermittent satellite connections.
 
 ---
 
-## 🚀 Quick Start Guide
+## ☁️ Cloud Deployment Guide (Render + Vercel)
+
+IBVAP is architected for decoupled cloud deployment: **FastAPI Backend on Render** and **React 3D Frontend on Vercel**.
+
+### Part 1: Deploy Backend on Render
+1. Go to [Render.com](https://render.com) and create a **New Web Service**.
+2. Connect your GitHub repository: `rajdixit070-v/IBVAP-1`.
+3. Configure the Web Service:
+   - **Root Directory**: `backend`
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Plan**: `Free`
+4. In the **Environment Variables** section, paste the configuration:
+   ```env
+   ENV_MODE=production
+   DEMO_MODE=false
+   LOG_LEVEL=INFO
+   SECRET_KEY=e8b9f1d4a7c2e0b5c8a1f6d3e7b2a9c4f0d5e8b1a6c3e9f2a7c4b1d8e5f0a3c7
+   CREDENTIAL_ENCRYPTION_KEY=37EsX1lJv2BRoaxV2bzfni1HB3y4fiTGMeJvtGtnLOY=
+   ACCESS_TOKEN_EXPIRE_MINUTES=1440
+   DATABASE_URL=sqlite:///./ibvap.db
+   STORAGE_PATH=./storage
+   EVIDENCE_STORAGE_PATH=./storage/evidence
+   TEMP_STORAGE_PATH=./storage/temp
+   DEFAULT_ADMIN_USERNAME=admin
+   DEFAULT_ADMIN_PASSWORD=AdminSecure@IBVAP2026!
+   DEFAULT_ADMIN_EMAIL=admin@ibvap.mil
+   DEFAULT_OFFICER_USERNAME=officer_alpha
+   DEFAULT_OFFICER_PASSWORD=OfficerSecure@IBVAP2026!
+   DEFAULT_OFFICER_EMAIL=officer.alpha@ibvap.mil
+   CORS_ORIGINS=https://*.vercel.app,http://localhost:5173
+   MAX_AI_WORKERS=8
+   FRAME_SAMPLE_RATE=2
+   INFERENCE_QUEUE_MAX_SIZE=100
+   TARGET_INFERENCE_FPS=10.0
+   MAX_BATCH_SIZE=4
+   YOLO_MODEL_PATH=yolov8n.pt
+   WEATHER_PROVIDER=none
+   WEATHER_API_KEY=none
+   ```
+   *(Optional: Connect a free Render PostgreSQL database and replace `DATABASE_URL` with the internal Postgres URL).*
+5. Click **Create Web Service**. Once live, copy your backend URL (e.g. `https://ibvap-backend-illu.onrender.com`).
+
+---
+
+### Part 2: Deploy Frontend on Vercel
+1. Go to [Vercel.com](https://vercel.com) and click **Add New... ➔ Project**.
+2. Import repository `IBVAP-1`.
+3. Configure the Project Settings:
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: Click **Edit** ➔ select **`frontend`** ➔ Click **Continue**.
+   - **Build & Development Settings**: Keep Override toggles **OFF** (use defaults).
+4. Add the Environment Variable:
+   - **Key**: `VITE_API_URL`
+   - **Value**: `https://ibvap-backend-illu.onrender.com/api/v1` *(replace with your Render backend URL)*
+5. Click **Deploy**. In under 60 seconds, your site will be live at `https://your-project.vercel.app`!
+
+---
+
+## 💻 Local Development Setup
 
 ### Prerequisites
 - **Python**: 3.10 or higher
 - **Node.js**: 18.x or higher with `npm`
-- **Hardware**: Compatible with standard x86_64 machines, laptops, or NVIDIA Jetson edge nodes (CUDA optional for GPU acceleration).
 
----
-
-### Step 1: Backend Setup & Server Launch
-
-```powershell
-# 1. Navigate to backend directory
+### Step 1: Backend Setup
+```bash
+# Navigate to backend directory
 cd backend
 
-# 2. Create and activate Python virtual environment
+# Create and activate Python virtual environment
 python -m venv venv
-.\venv\Scripts\Activate.ps1    # On Linux/macOS: source venv/bin/activate
+# On Windows:
+.\venv\Scripts\Activate.ps1
+# On Linux/macOS:
+source venv/bin/activate
 
-# 3. Install core dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 4. Initialize environment configuration
-Copy-Item .env.example .env    # On Linux/macOS: cp .env.example .env
+# Copy environment template
+cp .env.example .env
 
-# 5. Launch FastAPI backend server
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Launch FastAPI backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-*The backend API will be live at `http://localhost:8000` with Swagger docs at `http://localhost:8000/docs`.*
+*API Swagger documentation available at: `http://localhost:8000/docs`.*
 
----
-
-### Step 2: Frontend Setup & Web Portal Launch
-
-```powershell
-# 1. Open a new terminal and navigate to frontend directory
+### Step 2: Frontend Setup
+```bash
+# Navigate to frontend directory
 cd frontend
 
-# 2. Install Node.js packages
+# Install packages
 npm install
 
-# 3. Start high-speed Vite development server
+# Start Vite development server
 npm run dev
 ```
-*Access the Web Command Center at `http://localhost:5173`.*
+*Command Center UI available at: `http://localhost:5173`.*
 
 ---
 
-### 🔑 Default Credentials & Roles
+## 🐳 Docker & VPS Deployment (Option 3)
 
-| Role | Username | Default Password | Access Scope |
-|:---|:---|:---|:---|
-| **Super Admin / General HQ** | `admin` | `Admin@IBVAP2026` | Full Multi-Site, System Health, Tactical GIS, Officer Management |
-| **BOP Sector Commander** | `commander_bop1` | `Commander@123` | Forward Outpost Perimeter, Camera PTZ, QRT Dispatch |
-| **Field QRT Operator** | `operator_qrt1` | `Operator@123` | Live Incident Feed, Tactical Alert Response |
+Run the entire platform with one command on any Linux VPS (Ubuntu / Debian):
 
----
-
-## 🌐 Connecting Remote Cameras Across Networks / Wi-Fi
-
-When border cameras are on a separate Wi-Fi, 4G dongle, or remote outpost network while the HQ server is elsewhere, use one of the following production setups:
-
-### Option A: Tactical VPN / WireGuard Mesh (Recommended for Defense)
-1. Deploy a lightweight WireGuard or Tailscale client on the forward outpost edge node (or router).
-2. Assign static virtual IPs (e.g., `10.8.0.25` for Camera 1, `10.8.0.26` for NVR).
-3. Connect the camera in IBVAP using the secure private IP:
-   ```text
-   rtsp://admin:Password123@10.8.0.25:554/Streaming/Channels/101
-   ```
-
-### Option B: Cloudflare Tunnel / Reverse Proxy (Zero Port-Forwarding)
-1. Run `cloudflared` on the outpost machine connected to the camera's local Wi-Fi.
-2. Expose the RTSP or WebRTC stream securely over an outbound-only HTTPS/WSS tunnel.
-
-### Option C: Static Public IP / Router Port Forwarding
-1. If the outpost Wi-Fi has a static WAN IP, forward port `554` (RTSP) and port `80/8000` (ONVIF) on the router.
-2. In IBVAP, input the public IP or DDNS hostname:
-   ```text
-   rtsp://operator:CameraPass@122.160.x.x:554/live
-   ```
-
----
-
-## 🤖 AI Model Provisioning & Truthful Runtime Status
-
-IBVAP strictly guarantees **operational truthfulness**: if physical neural network weights (`.pt` or `.onnx`) are not mounted, the system **never invents fake detections or synthetic coordinates**.
-
-| Environment Variable | Target Weights | Capabilities | Missing Fallback State |
-|:---|:---|:---|:---|
-| `YOLO_MODEL_PATH` | `models/yolov8n.pt` | Person, Vehicle, Drone, Animal detection | `FILE_MISSING` / Status: Stream live without overlays |
-| `FACE_MODEL_PATH` | `models/face_recognition_sface.onnx` | Biometric embedding & verification | `FACE_MODEL_UNAVAILABLE` |
-| `DRONE_MODEL_PATH` | `models/yolov8_drone.pt` | Specialized UAV silhouette tracking | `NOT_CONFIGURED` |
-
-Inspect the live runtime model health endpoint anytime:
 ```bash
-GET /api/v1/ai/models/status
-Authorization: Bearer <JWT_TOKEN>
+# Clone the repository
+git clone https://github.com/rajdixit070-v/IBVAP-1.git
+cd IBVAP-1
+
+# Launch full stack (FastAPI Backend + React Frontend + Nginx Reverse Proxy)
+docker compose up -d --build
 ```
+- **Frontend**: Port `80` (`http://your-server-ip`)
+- **Backend API**: Port `8000` (`http://your-server-ip:8000/api/v1`)
 
 ---
 
-## 🧪 Automated Testing & Production Build
+## 🔑 Default Credentials & Access Levels
 
-```powershell
-# Run backend pytest suite (250+ automated unit & integration tests)
-python -m pytest backend/tests
-
-# Build production frontend bundle
-cd frontend
-npm run build
-```
+| Role | Default Username | Default Password | Access Scope |
+|:---|:---|:---|:---|
+| **Super Admin / National HQ** | `admin` | `AdminSecure@IBVAP2026!` | Nationwide Multi-Frontier C2, System Health, Tactical 3D GIS, User Management |
+| **BOP Sector Commander** | `officer_alpha` | `OfficerSecure@IBVAP2026!` | Assigned Outpost Perimeter, Outpost Cameras, QRT Dispatch |
 
 ---
 
@@ -182,29 +202,31 @@ npm run build
 IBVAP-1/
 ├── backend/
 │   ├── app/
-│   │   ├── api/             # REST Endpoints (Cameras, Alerts, Health, Users, Playbooks)
-│   │   ├── core/            # Security, JWT, Zero-Trust Encryption, Configuration
-│   │   ├── models/          # SQLAlchemy Database Schemas & Pydantic DTOs
-│   │   ├── services/        # Video Ingestion, YOLOv8x, ByteTrack, Telemetry Bus
-│   │   └── main.py          # FastAPI Application Gateway
-│   ├── requirements.txt     # Python Dependencies
-│   └── tests/               # 250+ Production Verification Tests
+│   │   ├── api/             # REST Endpoints (Cameras, Alerts, Health, Users, GIS, Drones)
+│   │   ├── core/            # Security, JWT, Fernet Encryption, Configuration
+│   │   ├── models/          # SQLAlchemy Database Schemas & Pydantic Models
+│   │   ├── services/        # Video Ingestion, YOLOv8, ByteTrack, Telemetry Bus
+│   │   └── main.py          # FastAPI Application Gateway & Lifespan Handler
+│   ├── Dockerfile           # Backend Container Image
+│   └── requirements.txt     # Python Dependencies
 ├── frontend/
-│   ├── public/              # Official IBVAP Favicon, Logo & Tactical Icons
+│   ├── public/              # Official IBVAP Favicon, Logo & Tactical Assets
 │   ├── src/
-│   │   ├── components/      # Tactical UI (Leaflet Map, Cameras, Alerts, HUD)
-│   │   ├── pages/           # Command Center, Sector Health, Dispatches, Login
-│   │   ├── services/        # Axios API Client & WebSocket Event Stream
+│   │   ├── components/      # Tactical 3D Map (MapLibre), Leaflet Map, Camera Modals, HUD
+│   │   ├── pages/           # GIS Intelligence, Command Center, Sector Health, Dispatches
+│   │   ├── services/        # Axios API Client & Sub-15ms WebSocket Event Stream
 │   │   └── App.tsx          # Main React Application Router
+│   ├── Dockerfile           # Multi-Stage Frontend Nginx Container Image
+│   ├── nginx.conf           # Reverse Proxy & SPA Routing Configuration
+│   ├── vercel.json          # Vercel SPA Client-Side Routing Rewrites
 │   └── package.json         # Node.js Dependencies & Build Scripts
+├── docker-compose.yml       # Production Multi-Container Orchestration
+├── .env.example             # Complete Environment Configuration Template
 └── README.md                # Master Documentation & Setup Guide
 ```
 
 ---
 
-## 🛡️ Defense & Compliance Mandate
+## 🛡️ License & Defense Inspection Compliance
 
-Designed and engineered in strict accordance with the **Ministry of Home Affairs (MHA) Comprehensive Integrated Border Management System (CIBMS)** guidelines and defense data isolation standards.
-
-- **Data Privacy**: Role-based cryptographic redaction of facial telemetry.
-- **Zero-Trust Hardening**: AES-256 credential encryption at rest, rate-limited login defense, and tamper-resistant audit trails.
+Built strictly in compliance with enterprise zero-trust security architectures, non-repudiation cryptographic audit logs, and defense-grade situational awareness standards.
