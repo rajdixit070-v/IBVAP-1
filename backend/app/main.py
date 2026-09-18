@@ -322,129 +322,130 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
     Base.metadata.create_all(bind=engine)
     
     # Auto-migrate columns for SQLite if missing
-    try:
-        with engine.connect() as conn:
-            # Cameras
-            cursor = conn.execute(text("PRAGMA table_info(cameras)"))
-            cols = [row[1] for row in cursor.fetchall()]
-            if cols:
-                if "edge_node_id" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN edge_node_id VARCHAR(50) DEFAULT 'EDGE-BOP-001'"))
-                if "stream_profile" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN stream_profile VARCHAR(20) DEFAULT 'HIGH'"))
-                if "priority" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN priority VARCHAR(20) DEFAULT 'NORMAL'"))
-                if "expected_fps" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN expected_fps FLOAT DEFAULT 25.0"))
-                if "frame_drops" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN frame_drops INTEGER DEFAULT 0"))
-                if "stream_latency_ms" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN stream_latency_ms FLOAT DEFAULT 35.0"))
-                if "reconnect_count" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN reconnect_count INTEGER DEFAULT 0"))
-                if "image_quality_score" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN image_quality_score FLOAT DEFAULT 88.0"))
-                if "tampering_detected" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN tampering_detected BOOLEAN DEFAULT 0"))
-                if "is_maintenance" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN is_maintenance BOOLEAN DEFAULT 0"))
-                if "maintenance_reason" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN maintenance_reason VARCHAR(255)"))
-                if "site_id" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
-                if "bop_id" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN bop_id VARCHAR(50)"))
-                if "sub_stream_url" not in cols:
-                    conn.execute(text("ALTER TABLE cameras ADD COLUMN sub_stream_url VARCHAR(500)"))
+    if engine.dialect.name == "sqlite":
+        try:
+            with engine.connect() as conn:
+                # Cameras
+                cursor = conn.execute(text("PRAGMA table_info(cameras)"))
+                cols = [row[1] for row in cursor.fetchall()]
+                if cols:
+                    if "edge_node_id" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN edge_node_id VARCHAR(50) DEFAULT 'EDGE-BOP-001'"))
+                    if "stream_profile" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN stream_profile VARCHAR(20) DEFAULT 'HIGH'"))
+                    if "priority" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN priority VARCHAR(20) DEFAULT 'NORMAL'"))
+                    if "expected_fps" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN expected_fps FLOAT DEFAULT 25.0"))
+                    if "frame_drops" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN frame_drops INTEGER DEFAULT 0"))
+                    if "stream_latency_ms" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN stream_latency_ms FLOAT DEFAULT 35.0"))
+                    if "reconnect_count" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN reconnect_count INTEGER DEFAULT 0"))
+                    if "image_quality_score" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN image_quality_score FLOAT DEFAULT 88.0"))
+                    if "tampering_detected" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN tampering_detected BOOLEAN DEFAULT 0"))
+                    if "is_maintenance" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN is_maintenance BOOLEAN DEFAULT 0"))
+                    if "maintenance_reason" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN maintenance_reason VARCHAR(255)"))
+                    if "site_id" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
+                    if "bop_id" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN bop_id VARCHAR(50)"))
+                    if "sub_stream_url" not in cols:
+                        conn.execute(text("ALTER TABLE cameras ADD COLUMN sub_stream_url VARCHAR(500)"))
 
-            # Edge Nodes Phase 12 auto-migrations
-            cursor = conn.execute(text("PRAGMA table_info(edge_nodes)"))
-            edge_cols = [row[1] for row in cursor.fetchall()]
-            if edge_cols:
-                if "site_id" not in edge_cols:
-                    conn.execute(text("ALTER TABLE edge_nodes ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
-                if "bop_id" not in edge_cols:
-                    conn.execute(text("ALTER TABLE edge_nodes ADD COLUMN bop_id VARCHAR(50)"))
+                # Edge Nodes Phase 12 auto-migrations
+                cursor = conn.execute(text("PRAGMA table_info(edge_nodes)"))
+                edge_cols = [row[1] for row in cursor.fetchall()]
+                if edge_cols:
+                    if "site_id" not in edge_cols:
+                        conn.execute(text("ALTER TABLE edge_nodes ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
+                    if "bop_id" not in edge_cols:
+                        conn.execute(text("ALTER TABLE edge_nodes ADD COLUMN bop_id VARCHAR(50)"))
 
-            # Users Phase 14 auto-migrations
-            cursor = conn.execute(text("PRAGMA table_info(users)"))
-            user_cols = [row[1] for row in cursor.fetchall()]
-            if user_cols:
-                if "failed_login_attempts" not in user_cols:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0"))
-                if "locked_until" not in user_cols:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN locked_until DATETIME"))
-                if "last_login_at" not in user_cols:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN last_login_at DATETIME"))
-                if "last_password_change" not in user_cols:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN last_password_change DATETIME"))
-                if "mfa_enabled" not in user_cols:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN mfa_enabled BOOLEAN DEFAULT 0"))
-                if "force_password_change" not in user_cols:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN force_password_change BOOLEAN DEFAULT 0"))
+                # Users Phase 14 auto-migrations
+                cursor = conn.execute(text("PRAGMA table_info(users)"))
+                user_cols = [row[1] for row in cursor.fetchall()]
+                if user_cols:
+                    if "failed_login_attempts" not in user_cols:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0"))
+                    if "locked_until" not in user_cols:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN locked_until DATETIME"))
+                    if "last_login_at" not in user_cols:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN last_login_at DATETIME"))
+                    if "last_password_change" not in user_cols:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN last_password_change DATETIME"))
+                    if "mfa_enabled" not in user_cols:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN mfa_enabled BOOLEAN DEFAULT 0"))
+                    if "force_password_change" not in user_cols:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN force_password_change BOOLEAN DEFAULT 0"))
 
-            # Incidents Phase 10 auto-migrations
-            cursor = conn.execute(text("PRAGMA table_info(incidents)"))
-            inc_cols = [row[1] for row in cursor.fetchall()]
-            if inc_cols:
-                if "incident_type" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN incident_type VARCHAR(30) DEFAULT 'SECURITY'"))
-                if "escalation_level" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN escalation_level INTEGER DEFAULT 1"))
-                if "escalation_due_at" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN escalation_due_at DATETIME"))
-                if "resolution_category" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN resolution_category VARCHAR(50)"))
-                if "global_track_id" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN global_track_id VARCHAR(50)"))
-                if "related_cameras_json" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN related_cameras_json TEXT DEFAULT '[]'"))
-                if "parent_incident_id" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN parent_incident_id VARCHAR(50)"))
-                if "playbook_id" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN playbook_id VARCHAR(50)"))
-                if "checklist_json" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN checklist_json TEXT DEFAULT '[]'"))
-                if "review_json" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN review_json TEXT DEFAULT '{}'"))
-                if "assigned_team" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN assigned_team VARCHAR(100)"))
-                if "assigned_at" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN assigned_at DATETIME"))
-                if "assigned_by" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN assigned_by VARCHAR(100)"))
-                if "version" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN version INTEGER DEFAULT 1"))
-                if "resolved_by" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN resolved_by VARCHAR(100)"))
-                if "closed_by" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN closed_by VARCHAR(100)"))
-                if "site_id" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
-                if "bop_id" not in inc_cols:
-                    conn.execute(text("ALTER TABLE incidents ADD COLUMN bop_id VARCHAR(50)"))
+                # Incidents Phase 10 auto-migrations
+                cursor = conn.execute(text("PRAGMA table_info(incidents)"))
+                inc_cols = [row[1] for row in cursor.fetchall()]
+                if inc_cols:
+                    if "incident_type" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN incident_type VARCHAR(30) DEFAULT 'SECURITY'"))
+                    if "escalation_level" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN escalation_level INTEGER DEFAULT 1"))
+                    if "escalation_due_at" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN escalation_due_at DATETIME"))
+                    if "resolution_category" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN resolution_category VARCHAR(50)"))
+                    if "global_track_id" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN global_track_id VARCHAR(50)"))
+                    if "related_cameras_json" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN related_cameras_json TEXT DEFAULT '[]'"))
+                    if "parent_incident_id" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN parent_incident_id VARCHAR(50)"))
+                    if "playbook_id" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN playbook_id VARCHAR(50)"))
+                    if "checklist_json" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN checklist_json TEXT DEFAULT '[]'"))
+                    if "review_json" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN review_json TEXT DEFAULT '{}'"))
+                    if "assigned_team" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN assigned_team VARCHAR(100)"))
+                    if "assigned_at" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN assigned_at DATETIME"))
+                    if "assigned_by" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN assigned_by VARCHAR(100)"))
+                    if "version" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN version INTEGER DEFAULT 1"))
+                    if "resolved_by" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN resolved_by VARCHAR(100)"))
+                    if "closed_by" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN closed_by VARCHAR(100)"))
+                    if "site_id" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN site_id VARCHAR(50) DEFAULT 'SITE-BORDER-NORTH'"))
+                    if "bop_id" not in inc_cols:
+                        conn.execute(text("ALTER TABLE incidents ADD COLUMN bop_id VARCHAR(50)"))
 
-            # Alerts auto-migrations
-            cursor = conn.execute(text("PRAGMA table_info(alerts)"))
-            alert_cols = [row[1] for row in cursor.fetchall()]
-            if alert_cols:
-                if "resolved_at" not in alert_cols:
-                    conn.execute(text("ALTER TABLE alerts ADD COLUMN resolved_at DATETIME"))
-                if "resolved_by" not in alert_cols:
-                    conn.execute(text("ALTER TABLE alerts ADD COLUMN resolved_by VARCHAR(100)"))
-                if "resolution_notes" not in alert_cols:
-                    conn.execute(text("ALTER TABLE alerts ADD COLUMN resolution_notes VARCHAR(500)"))
+                # Alerts auto-migrations
+                cursor = conn.execute(text("PRAGMA table_info(alerts)"))
+                alert_cols = [row[1] for row in cursor.fetchall()]
+                if alert_cols:
+                    if "resolved_at" not in alert_cols:
+                        conn.execute(text("ALTER TABLE alerts ADD COLUMN resolved_at DATETIME"))
+                    if "resolved_by" not in alert_cols:
+                        conn.execute(text("ALTER TABLE alerts ADD COLUMN resolved_by VARCHAR(100)"))
+                    if "resolution_notes" not in alert_cols:
+                        conn.execute(text("ALTER TABLE alerts ADD COLUMN resolution_notes VARCHAR(500)"))
 
-            # Multimodal security events auto-migrations
-            cursor = conn.execute(text("PRAGMA table_info(multimodal_security_events)"))
-            mme_cols = [row[1] for row in cursor.fetchall()]
-            if mme_cols:
-                if "evidence_sha256" not in mme_cols:
-                    conn.execute(text("ALTER TABLE multimodal_security_events ADD COLUMN evidence_sha256 VARCHAR(64)"))
+                # Multimodal security events auto-migrations
+                cursor = conn.execute(text("PRAGMA table_info(multimodal_security_events)"))
+                mme_cols = [row[1] for row in cursor.fetchall()]
+                if mme_cols:
+                    if "evidence_sha256" not in mme_cols:
+                        conn.execute(text("ALTER TABLE multimodal_security_events ADD COLUMN evidence_sha256 VARCHAR(64)"))
 
-            conn.commit()
-    except Exception as e:
-        logger.warning(f"Schema auto-migration notice: {e}")
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Schema auto-migration notice: {e}")
 
     # Ensure default response playbooks are seeded
     playbook_service.ensure_default_playbooks()
@@ -601,14 +602,20 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             ensure_default_border_cameras(db)
 
         # Initialize AI configs, start RTSP/synthetic streamers, and auto-register active cameras
-        from app.core.security import decrypt_credential
-        cameras = db.query(Camera).filter(Camera.enabled == True).all()
-        for cam in cameras:
-            # Restore any degraded/offline enabled camera back to ONLINE
-            if cam.status in ["OFFLINE", "CONNECTING"] and not cam.is_maintenance:
-                cam.status = "ONLINE"
-                db.commit()
+        try:
+            from app.core.security import decrypt_credential
+            cameras = db.query(Camera).filter(Camera.enabled == True).all()
+            for cam in cameras:
+                # Restore any degraded/offline enabled camera back to ONLINE
+                if cam.status in ["OFFLINE", "CONNECTING"] and not cam.is_maintenance:
+                    cam.status = "ONLINE"
+            db.commit()
+        except Exception as e_cam_stat:
+            db.rollback()
+            logger.warning(f"Notice restoring camera statuses: {e_cam_stat}")
+            cameras = []
 
+        for cam in cameras:
             # Start camera in stream_manager so live video feed is immediately working
             try:
                 decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
@@ -625,29 +632,33 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             except Exception as se:
                 logger.warning(f"Could not auto-start streamer for {cam.camera_id}: {se}")
 
-            config = db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == cam.camera_id).first()
-            if not config:
-                config = CameraAIConfig(
-                    camera_id=cam.camera_id,
-                    enabled=True,
-                    model_name="yolov8n",
-                    target_fps=10.0,
-                    input_size=640,
-                    conf_person=0.40,
-                    conf_vehicle=0.45,
-                    conf_animal=0.35,
-                    conf_drone=0.30,
-                    conf_other=0.40
-                )
-                db.add(config)
-                db.commit()
+            try:
+                config = db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == cam.camera_id).first()
+                if not config:
+                    config = CameraAIConfig(
+                        camera_id=cam.camera_id,
+                        enabled=True,
+                        model_name="yolov8n",
+                        target_fps=10.0,
+                        input_size=640,
+                        conf_person=0.40,
+                        conf_vehicle=0.45,
+                        conf_animal=0.35,
+                        conf_drone=0.30,
+                        conf_other=0.40
+                    )
+                    db.add(config)
+                    db.commit()
 
-            if config.enabled:
-                ai_pipeline_manager.register_camera(
-                    camera_id=cam.camera_id,
-                    target_fps=config.target_fps,
-                    auto_start=True
-                )
+                if config.enabled:
+                    ai_pipeline_manager.register_camera(
+                        camera_id=cam.camera_id,
+                        target_fps=config.target_fps,
+                        auto_start=True
+                    )
+            except Exception as ai_e:
+                db.rollback()
+                logger.warning(f"Notice configuring AI pipeline for {cam.camera_id}: {ai_e}")
 
         # Seed Phase 13 AI Model Registry defaults
         if db.query(AIModelRegistry).count() == 0:
@@ -759,16 +770,37 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Initializing IBVAP Platform & Intelligence Matrix...")
-    validate_environment()
-    init_db_defaults()
-    await health_monitor.start()
+    try:
+        validate_environment()
+    except Exception as e:
+        logger.warning(f"Environment validation notice: {e}")
+
+    try:
+        init_db_defaults()
+    except Exception as e:
+        logger.error(f"Error during init_db_defaults: {e}", exc_info=True)
+
+    try:
+        await health_monitor.start()
+    except Exception as e:
+        logger.warning(f"Error starting health_monitor: {e}")
+
     logger.info("IBVAP Platform Ready.")
     yield
     # Shutdown
     logger.info("Shutting down IBVAP Platform gracefully...")
-    await health_monitor.stop()
-    ai_pipeline_manager.unregister_all()
-    stream_manager.shutdown_all()
+    try:
+        await health_monitor.stop()
+    except Exception:
+        pass
+    try:
+        ai_pipeline_manager.unregister_all()
+    except Exception:
+        pass
+    try:
+        stream_manager.shutdown_all()
+    except Exception:
+        pass
     logger.info("Shutdown complete.")
 
 app = FastAPI(

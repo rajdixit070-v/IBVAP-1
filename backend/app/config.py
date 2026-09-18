@@ -133,9 +133,6 @@ def validate_environment() -> dict:
         if settings.CREDENTIAL_ENCRYPTION_KEY == "b3B2YaaAYm9yZGVyLWVuY3J5cHVpaW9uLWkuLTI0MjY=":
             validation_status["warnings"].append("Default CREDENTIAL_ENCRYPTION_KEY detected in production. Using valid Fernet key.")
             settings.CREDENTIAL_ENCRYPTION_KEY = "37EsX1lJv2BRoaxV2bzfni1HB3y4fiTGMeJvtGtnLOY="
-        if settings.DEFAULT_ADMIN_PASSWORD == "Admin@IBVAP2026":
-            validation_status["warnings"].append("Default DEFAULT_ADMIN_PASSWORD detected in production mode. Updated to AdminSecure@IBVAP2026!")
-            settings.DEFAULT_ADMIN_PASSWORD = "AdminSecure@IBVAP2026!"
         if settings.DATABASE_URL.startswith("sqlite"):
             validation_status["warnings"].append("SQLite is used in production. Recommended: PostgreSQL cluster.")
             
