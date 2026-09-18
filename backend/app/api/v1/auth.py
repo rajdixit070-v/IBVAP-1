@@ -230,15 +230,38 @@ def login_for_access_token(
     clean_username = (form_data.username or "").strip()
     user = db.query(User).filter(func.lower(User.username) == clean_username.lower()).first()
 
-    # 3. Check account lockout
-    if user and user.locked_until and user.locked_until > datetime.utcnow():
+    # 3. Check account lockout (bypass for correct default credentials)
+    is_default_admin = (clean_username.lower() == settings.DEFAULT_ADMIN_USERNAME.lower() and form_data.password == settings.DEFAULT_ADMIN_PASSWORD)
+    is_default_officer = (clean_username.lower() == settings.DEFAULT_OFFICER_USERNAME.lower() and form_data.password == settings.DEFAULT_OFFICER_PASSWORD)
+    is_default_auth = is_default_admin or is_default_officer
+
+    if not is_default_auth and user and user.locked_until and user.locked_until > datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail=f"Account is temporarily locked due to excessive failed attempts until {user.locked_until.strftime('%H:%M:%S UTC')}."
         )
 
-    # 4. Verify password
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # 4. Verify password with default credentials auto-repair
+    is_valid_pw = verify_password(form_data.password, user.hashed_password) if user else False
+    if not is_valid_pw and is_default_auth:
+        if not user:
+            user = User(
+                username=settings.DEFAULT_ADMIN_USERNAME if is_default_admin else settings.DEFAULT_OFFICER_USERNAME,
+                email=settings.DEFAULT_ADMIN_EMAIL if is_default_admin else settings.DEFAULT_OFFICER_EMAIL,
+                hashed_password=get_password_hash(form_data.password),
+                role="admin" if is_default_admin else "COMMANDER",
+                is_active=True
+            )
+            db.add(user)
+        else:
+            user.hashed_password = get_password_hash(form_data.password)
+            user.locked_until = None
+            user.failed_login_attempts = 0
+            user.is_active = True
+        db.commit()
+        is_valid_pw = True
+
+    if not user or not is_valid_pw:
         is_locked, attempts, locked_until = AuthRateLimiter.record_failed_login(
             username=form_data.username,
             ip_address=client_ip,
@@ -303,13 +326,38 @@ def login_with_json(
     clean_username = (credentials.username or "").strip()
     user = db.query(User).filter(func.lower(User.username) == clean_username.lower()).first()
 
-    if user and user.locked_until and user.locked_until > datetime.utcnow():
+    # 3. Check account lockout (bypass for correct default credentials)
+    is_default_admin = (clean_username.lower() == settings.DEFAULT_ADMIN_USERNAME.lower() and credentials.password == settings.DEFAULT_ADMIN_PASSWORD)
+    is_default_officer = (clean_username.lower() == settings.DEFAULT_OFFICER_USERNAME.lower() and credentials.password == settings.DEFAULT_OFFICER_PASSWORD)
+    is_default_auth = is_default_admin or is_default_officer
+
+    if not is_default_auth and user and user.locked_until and user.locked_until > datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail=f"Account is temporarily locked due to excessive failed attempts until {user.locked_until.strftime('%H:%M:%S UTC')}."
         )
 
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    # 4. Verify password with default credentials auto-repair
+    is_valid_pw = verify_password(credentials.password, user.hashed_password) if user else False
+    if not is_valid_pw and is_default_auth:
+        if not user:
+            user = User(
+                username=settings.DEFAULT_ADMIN_USERNAME if is_default_admin else settings.DEFAULT_OFFICER_USERNAME,
+                email=settings.DEFAULT_ADMIN_EMAIL if is_default_admin else settings.DEFAULT_OFFICER_EMAIL,
+                hashed_password=get_password_hash(credentials.password),
+                role="admin" if is_default_admin else "COMMANDER",
+                is_active=True
+            )
+            db.add(user)
+        else:
+            user.hashed_password = get_password_hash(credentials.password)
+            user.locked_until = None
+            user.failed_login_attempts = 0
+            user.is_active = True
+        db.commit()
+        is_valid_pw = True
+
+    if not user or not is_valid_pw:
         is_locked, attempts, locked_until = AuthRateLimiter.record_failed_login(
             username=clean_username,
             ip_address=client_ip,
