@@ -6,6 +6,8 @@ from app.config import settings
 from sqlalchemy.pool import NullPool
 
 _db_url = settings.DATABASE_URL
+if _db_url.startswith("postgres://"):
+    _db_url = _db_url.replace("postgres://", "postgresql://", 1)
 if _db_url in ("sqlite:///./ibvap.db", "sqlite:///ibvap.db", "sqlite:///./backend/ibvap.db"):
     _db_url = f"sqlite:///{settings._db_path}"
 
