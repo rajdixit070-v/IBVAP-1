@@ -113,7 +113,7 @@ def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
         encrypted_password=encrypted_pw,
         stream_type=camera_in.stream_type or "main",
         enabled=camera_in.enabled,
-        status="CONNECTING" if camera_in.enabled else "OFFLINE"
+        status="ONLINE" if camera_in.enabled else "OFFLINE"
     )
     db.add(db_camera)
     db.commit()
@@ -128,7 +128,8 @@ def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
             bop_site=db_camera.bop_site,
             rtsp_url=db_camera.rtsp_url,
             username=db_camera.username,
-            password=decrypted_pw
+            password=decrypted_pw,
+            stream_type=db_camera.stream_type
         )
 
         # Initialize AI Pipeline Configuration and start worker
@@ -205,7 +206,8 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
             bop_site=db_camera.bop_site,
             rtsp_url=db_camera.rtsp_url,
             username=db_camera.username,
-            password=decrypted_pw
+            password=decrypted_pw,
+            stream_type=db_camera.stream_type
         )
         ai_pipeline_manager.register_camera(
             camera_id=db_camera.camera_id,

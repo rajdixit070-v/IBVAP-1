@@ -19,7 +19,7 @@ import {
   X
 } from 'lucide-react';
 import { dispatchService } from '../services/dispatchService';
-import { evidenceService } from '../services/evidenceService';
+import { evidenceService, getEvidenceFileUrl } from '../services/evidenceService';
 import { BOPDispatch } from '../types/dispatch';
 import { Evidence } from '../types/incident';
 import { useAuth } from '../context/AuthContext';
@@ -615,7 +615,7 @@ export const CheckpostDispatchesPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredEvidence.map((ev) => {
                 const isVideo = ev.evidence_type === 'VIDEO_CLIP';
-                const fileUrl = `/api/v1/evidence/${ev.evidence_id}/file`;
+                const fileUrl = getEvidenceFileUrl(ev.evidence_id);
 
                 return (
                   <div
@@ -727,13 +727,13 @@ export const CheckpostDispatchesPage: React.FC = () => {
             <div className="rounded-xl overflow-hidden bg-slate-950 border border-slate-800 max-h-72 flex items-center justify-center">
               {selectedPreviewEvidence.evidence_type === 'VIDEO_CLIP' ? (
                 <video
-                  src={`/api/v1/evidence/${selectedPreviewEvidence.evidence_id}/file`}
+                  src={getEvidenceFileUrl(selectedPreviewEvidence.evidence_id)}
                   controls
                   className="max-h-72 w-full object-contain"
                 />
               ) : (
                 <img
-                  src={`/api/v1/evidence/${selectedPreviewEvidence.evidence_id}/file`}
+                  src={getEvidenceFileUrl(selectedPreviewEvidence.evidence_id)}
                   alt={selectedPreviewEvidence.evidence_id}
                   className="max-h-72 w-full object-contain"
                 />

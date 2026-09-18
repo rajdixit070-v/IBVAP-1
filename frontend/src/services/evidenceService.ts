@@ -1,5 +1,22 @@
-import api from './api';
+import api, { getApiBaseUrl } from './api';
 import { Evidence } from '../types/incident';
+
+export const getEvidenceFileUrl = (evidenceId: string): string => {
+  const base = getApiBaseUrl();
+  return `${base}/evidence/${encodeURIComponent(evidenceId)}/file`;
+};
+
+export const formatEvidenceUrl = (urlOrId?: string | null): string | null => {
+  if (!urlOrId) return null;
+  if (urlOrId.startsWith('http://') || urlOrId.startsWith('https://')) return urlOrId;
+  const base = getApiBaseUrl();
+  const cleanId = urlOrId
+    .replace(/^\/?api\/v1\/evidence\//, '')
+    .replace(/^\/?evidence\//, '')
+    .replace(/\/file$/, '')
+    .replace(/\/download$/, '');
+  return `${base}/evidence/${encodeURIComponent(cleanId)}/file`;
+};
 
 export const evidenceService = {
   async listEvidence(params?: { camera_id?: string; evidence_type?: string; limit?: number }): Promise<Evidence[]> {

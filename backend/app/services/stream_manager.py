@@ -50,7 +50,8 @@ class StreamManager:
         bop_site: str,
         rtsp_url: str,
         username: Optional[str] = None,
-        password: Optional[str] = None
+        password: Optional[str] = None,
+        stream_type: Optional[str] = "main"
     ) -> RTSPStreamer:
         """Starts video ingestion for a given camera with thread-safe duplicate protection."""
         old_streamer = None
@@ -60,7 +61,8 @@ class StreamManager:
                 # Check if URL/credentials changed
                 if (streamer.base_rtsp_url != rtsp_url or 
                     streamer.username != username or 
-                    streamer.password != password):
+                    streamer.password != password or
+                    getattr(streamer, "stream_type", "main") != (stream_type or "main")):
                     logger.info(f"[{camera_id}] Updating stream configuration...")
                     old_streamer = self._streamers.pop(camera_id, None)
                 else:
@@ -81,7 +83,8 @@ class StreamManager:
             rtsp_url=rtsp_url,
             username=username,
             password=password,
-            on_status_change=self._on_camera_status_change
+            on_status_change=self._on_camera_status_change,
+            stream_type=stream_type or "main"
         )
         with self._lock:
             self._streamers[camera_id] = streamer
@@ -120,7 +123,8 @@ class StreamManager:
                         bop_site=cam.bop_site,
                         rtsp_url=cam.rtsp_url,
                         username=cam.username,
-                        password=decrypted_pw
+                        password=decrypted_pw,
+                        stream_type=cam.stream_type or "main"
                     )
             finally:
                 db.close()

@@ -1,4 +1,5 @@
 import { authService } from './authService';
+import { getWsBaseUrl } from './api';
 
 export class LiveFeedWebSocket {
   private ws: WebSocket | null = null;
@@ -17,11 +18,10 @@ export class LiveFeedWebSocket {
 
   private connect() {
     if (this.isDestroyed) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
+    const wsBase = getWsBaseUrl();
     const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    const wsUrl = `${protocol}//${host}/api/v1/ws/live-feed/${this.cameraId}${tokenParam}`;
+    const wsUrl = `${wsBase}/ws/live-feed/${this.cameraId}${tokenParam}`;
 
     this.ws = new WebSocket(wsUrl);
     this.ws.binaryType = 'blob';
@@ -73,11 +73,10 @@ export class HealthWebSocket {
 
   private connect() {
     if (this.isDestroyed) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
+    const wsBase = getWsBaseUrl();
     const token = localStorage.getItem('ibvap_token');
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    const wsUrl = `${protocol}//${host}/api/v1/ws/health${tokenParam}`;
+    const wsUrl = `${wsBase}/ws/health${tokenParam}`;
 
     this.ws = new WebSocket(wsUrl);
 
@@ -129,11 +128,10 @@ export class AlertsWebSocket {
 
   private connect() {
     if (this.isDestroyed) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
+    const wsBase = getWsBaseUrl();
     const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    const wsUrl = `${protocol}//${host}/api/v1/ws/alerts${tokenParam}`;
+    const wsUrl = `${wsBase}/ws/alerts${tokenParam}`;
 
     try {
       this.ws = new WebSocket(wsUrl);

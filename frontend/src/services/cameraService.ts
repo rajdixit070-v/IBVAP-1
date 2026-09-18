@@ -1,4 +1,4 @@
-import api from './api';
+import api, { getApiBaseUrl } from './api';
 import { authService } from './authService';
 import {
   Camera,
@@ -87,13 +87,15 @@ export const cameraService = {
   getLiveStreamUrl(cameraId: string, fps = 25, profile: 'main' | 'sub' = 'main'): string {
     const token = authService.getToken();
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `/api/v1/cameras/${cameraId}/live?fps=${fps}&profile=${profile}${tokenParam}`;
+    const base = getApiBaseUrl();
+    return `${base}/cameras/${cameraId}/live?fps=${fps}&profile=${profile}${tokenParam}`;
   },
 
   getSnapshotUrl(cameraId: string): string {
     const token = authService.getToken();
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `/api/v1/cameras/${cameraId}/snapshot?t=${Date.now()}${tokenParam}`;
+    const base = getApiBaseUrl();
+    return `${base}/cameras/${cameraId}/snapshot?t=${Date.now()}${tokenParam}`;
   },
 
   async getSnapshotBlob(cameraId: string): Promise<Blob> {

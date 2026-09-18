@@ -1,4 +1,4 @@
-import api from './api';
+import api, { getWsBaseUrl } from './api';
 import { authService } from './authService';
 import {
   CameraAIStatus,
@@ -81,10 +81,10 @@ export class AIFeedWebSocket {
   }
 
   private connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsBase = getWsBaseUrl();
     const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/ai-feed/${this.cameraId}${tokenParam}`;
+    const wsUrl = `${wsBase}/ws/ai-feed/${this.cameraId}${tokenParam}`;
 
     try {
       this.ws = new WebSocket(wsUrl);

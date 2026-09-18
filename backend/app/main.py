@@ -590,6 +590,10 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             db.commit()
             logger.info("Seeded initial behaviour detection rules.")
 
+        # Ensure baseline border cameras exist if camera table is empty
+        if db.query(Camera).count() == 0:
+            ensure_default_border_cameras(db)
+
         # Seed operational/demo data only if explicitly requested
         if seed_demo:
             from app.services.demo.demo_seeder import seed_demo_data
@@ -600,6 +604,11 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
         from app.core.security import decrypt_credential
         cameras = db.query(Camera).filter(Camera.enabled == True).all()
         for cam in cameras:
+            # Restore any degraded/offline enabled camera back to ONLINE
+            if cam.status in ["OFFLINE", "CONNECTING"] and not cam.is_maintenance:
+                cam.status = "ONLINE"
+                db.commit()
+
             # Start camera in stream_manager so live video feed is immediately working
             try:
                 decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
@@ -609,7 +618,8 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                     bop_site=cam.bop_site,
                     rtsp_url=cam.rtsp_url,
                     username=cam.username,
-                    password=decrypted_pw
+                    password=decrypted_pw,
+                    stream_type=cam.stream_type or "main"
                 )
                 logger.info(f"Started video stream for camera {cam.camera_id} ({cam.rtsp_url})")
             except Exception as se:

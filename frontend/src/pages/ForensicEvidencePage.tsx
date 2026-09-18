@@ -18,7 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Evidence } from '../types/incident';
-import { evidenceService } from '../services/evidenceService';
+import { evidenceService, getEvidenceFileUrl } from '../services/evidenceService';
 import { useCameras } from '../context/CameraContext';
 
 interface ForensicEvidencePageProps {}
@@ -372,7 +372,7 @@ export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredEvidence.map((ev) => {
-            const fileUrl = `/api/v1/evidence/${ev.evidence_id}/file`;
+            const fileUrl = getEvidenceFileUrl(ev.evidence_id);
             return (
               <div
                 key={ev.evidence_id}
@@ -497,7 +497,7 @@ export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = () => {
             <div className="p-4 space-y-4">
               <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-black max-h-[58vh] flex items-center justify-center">
                 <img
-                  src={`/api/v1/evidence/${selectedEvidence.evidence_id}/file`}
+                  src={getEvidenceFileUrl(selectedEvidence.evidence_id)}
                   alt={selectedEvidence.evidence_id}
                   className="max-h-[56vh] w-auto object-contain"
                 />
@@ -557,7 +557,7 @@ export const ForensicEvidencePage: React.FC<ForensicEvidencePageProps> = () => {
                     CLOSE
                   </button>
                   <a
-                    href={`/api/v1/evidence/${selectedEvidence.evidence_id}/file`}
+                    href={getEvidenceFileUrl(selectedEvidence.evidence_id)}
                     download={`${selectedEvidence.evidence_id}.jpg`}
                     target="_blank"
                     rel="noopener noreferrer"

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { Incident, Evidence } from '../../types/incident';
 import { incidentService } from '../../services/incidentService';
+import { getEvidenceFileUrl } from '../../services/evidenceService';
 import { useCameras } from '../../context/CameraContext';
 import { LiveVideoPlayer } from '../cameras/LiveVideoPlayer';
 import {
@@ -376,7 +377,7 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
                     {/* Visual Evidence Snapshot */}
                     <div className="relative rounded-lg overflow-hidden border border-slate-700 bg-black/60 aspect-video">
                       <img
-                        src={`/api/v1/evidence/${ev.evidence_id}/file`}
+                        src={getEvidenceFileUrl(ev.evidence_id)}
                         alt={ev.evidence_id}
                         className="w-full h-full object-contain"
                         onError={(e) => {

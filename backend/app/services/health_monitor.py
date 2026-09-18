@@ -228,7 +228,8 @@ class HealthMonitor:
                             bop_site=cam.bop_site,
                             rtsp_url=cam.rtsp_url,
                             username=cam.username,
-                            password=decrypted_pw
+                            password=decrypted_pw,
+                            stream_type=cam.stream_type or "main"
                         )
 
                     # Check for frame timeout

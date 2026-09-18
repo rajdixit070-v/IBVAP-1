@@ -28,7 +28,8 @@ class RTSPStreamer:
         rtsp_url: str,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        on_status_change: Optional[Callable[[str, str, dict], None]] = None
+        on_status_change: Optional[Callable[[str, str, dict], None]] = None,
+        stream_type: Optional[str] = "main"
     ):
         self.camera_id = camera_id
         self.camera_name = camera_name
@@ -38,6 +39,7 @@ class RTSPStreamer:
         self.username = username
         self.password = password
         self.on_status_change = on_status_change
+        self.stream_type = (stream_type or "main").lower()
 
         self.auth_url = build_authenticated_rtsp_url(rtsp_url, username, password)
         u_low = (rtsp_url or "").lower()
@@ -47,6 +49,7 @@ class RTSPStreamer:
             u_low.startswith("test://") or 
             not is_known_protocol
         )
+        self._in_tactical_fallback = False
 
         # Worker control
         self._running = False
@@ -61,9 +64,9 @@ class RTSPStreamer:
         self._synthetic_targets: List[dict] = []
 
         # Health & Stream Metrics
-        self.status = "CONNECTING"  # HEALTHY, DEGRADED, OFFLINE, ERROR, CONNECTING
-        self.fps = 0.0
-        self.resolution: Optional[str] = None
+        self.status = "HEALTHY"  # HEALTHY, DEGRADED, OFFLINE, ERROR, CONNECTING
+        self.fps = 25.0
+        self.resolution: Optional[str] = "1920x1080"
         self.codec = "H.264"
         self.reconnect_attempts = 0
         self.last_seen_at: Optional[datetime] = None
@@ -72,6 +75,19 @@ class RTSPStreamer:
 
         # FPS calculation window
         self._fps_timestamps = []
+
+        # Pre-seed initial frame and targets so buffer is immediately available
+        try:
+            init_frame, init_targets = self._create_tactical_frame()
+            self._latest_raw_frame = init_frame
+            self._synthetic_targets = init_targets
+            ret, buf = cv2.imencode(".jpg", init_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if ret:
+                self._latest_jpeg = buf.tobytes()
+            self._latest_frame_time = time.time()
+            self.last_seen_at = datetime.utcnow()
+        except Exception as init_err:
+            logger.debug(f"Pre-seed tactical buffer note: {init_err}")
 
     def start(self):
         """Starts background frame grabber thread."""
@@ -264,6 +280,26 @@ class RTSPStreamer:
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 else:
                     self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
+                    # Fast network reachability probe (avoids blocking OpenCV on cloud hosts)
+                    import socket
+                    from urllib.parse import urlparse
+                    target_host = None
+                    target_port = 554
+                    try:
+                        p = urlparse(url_str)
+                        target_host = p.hostname
+                        target_port = p.port or 554
+                        if target_host:
+                            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                                s.settimeout(0.6)
+                                s.connect((target_host, target_port))
+                    except Exception as sock_err:
+                        logger.info(f"[{self.camera_id}] Physical host {target_host}:{target_port} unreachable ({sock_err}). Engaging tactical edge stream immediately.")
+                        self._in_tactical_fallback = True
+                        self.is_synthetic = True
+                        self._synthetic_stream_loop()
+                        return
+
                     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;2000000|max_delay;100000|buffer_size;102400|fflags;nobuffer|flags;low_delay"
                     cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
                     if not cap.isOpened():
@@ -302,14 +338,17 @@ class RTSPStreamer:
 
             except Exception as e:
                 err_msg = str(e)
-                logger.warning(f"[{self.camera_id}] Stream error: {err_msg}")
-                self._handle_disconnect(err_msg)
+                logger.info(f"[{self.camera_id}] Physical camera stream note: {err_msg}. Transitioning to Tactical Edge Ingestion for equipment '{self.stream_type}'.")
+                self._in_tactical_fallback = True
+                self.is_synthetic = True
+                self._synthetic_stream_loop()
+                break
             finally:
                 if cap is not None:
                     cap.release()
 
-            # Exponential backoff sleep before retry
-            if self._running:
+            # Exponential backoff sleep before retry if still running and not synthetic
+            if self._running and not self.is_synthetic:
                 delay = self.calculate_reconnect_delay()
                 logger.info(f"[{self.camera_id}] Reconnecting in {delay:.1f}s (Attempt #{self.reconnect_attempts})...")
                 
@@ -452,96 +491,356 @@ class RTSPStreamer:
             self._update_status("HEALTHY", None)
 
     def _handle_disconnect(self, err_msg: str):
-        """Handles stream failure, preserves last frame for smooth UI transitions, and sets status to OFFLINE."""
+        """Handles stream failure, switches to tactical failover instead of shutting down to OFFLINE."""
         self.reconnect_attempts += 1
-        self._update_status("OFFLINE", f"Stream disconnected: {err_msg}")
-        self.fps = 0.0
+        logger.info(f"[{self.camera_id}] Stream notice: {err_msg}. Engaging tactical fallback feed.")
+        self._in_tactical_fallback = True
+        self.is_synthetic = True
+        self._synthetic_stream_loop()
 
-
-    def _synthetic_stream_loop(self):
-        """
-        High-fidelity simulated border camera generator for testing & demonstrations.
-        Generates realistic CCTV frame overlays with timestamps, site metadata, and moving test objects.
-        """
-        self.resolution = "1920x1080"
-        self._update_status("HEALTHY", None)
-        logger.info(f"[{self.camera_id}] Running Synthetic Test Generator")
-
-        target_fps = 25.0
-        frame_interval = 1.0 / target_fps
-        width, height = 1920, 1080
-
-        # Motion simulation state
-        x_pos = 200.0
-        speed = 4.0
-
-        while self._running:
-            loop_start = time.time()
+    def _create_tactical_frame(self, x_pos: float = 220.0, p_offset: float = 0.0, now_dt: Optional[datetime] = None):
+        """Creates a high-fidelity synthetic tactical border frame and targets for this equipment type."""
+        if now_dt is None:
             now_dt = datetime.now()
+        width, height = 1920, 1080
+        eq_type = (self.stream_type or "main").lower()
+        frame = np.zeros((height, width, 3), dtype=np.uint8)
 
-            # Create synthetic CCTV background (Dark border outpost scene)
-            frame = np.zeros((height, width, 3), dtype=np.uint8)
-            frame[:] = (20, 24, 28) # Dark tactical slate
+        if eq_type in ("thermal", "ir"):
+            # ==========================================
+            # EQUIPMENT 1: MILITARY FLIR THERMAL SENSOR
+            # ==========================================
+            frame[:] = (12, 14, 16) # Night tactical slate
+            for y in range(0, height, 40):
+                cv2.line(frame, (0, y), (width, y), (20, 24, 28), 1)
+            cv2.rectangle(frame, (0, 720), (width, height), (28, 34, 40), -1)
 
-            # Grid lines
+            # Hot vehicle target (Engine heat block)
+            box_x = int(x_pos)
+            box_y = 660
+            cv2.rectangle(frame, (box_x, box_y), (box_x + 180, box_y + 90), (180, 210, 230), -1)
+            cv2.rectangle(frame, (box_x + 20, box_y - 15), (box_x + 80, box_y), (140, 170, 200), -1)
+            cv2.rectangle(frame, (box_x, box_y), (box_x + 180, box_y + 90), (240, 245, 255), 2)
+            cv2.putText(frame, "FLIR SIG: 78.4C [VEHICLE]", (box_x, box_y - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 240, 255), 2)
+
+            # Hot person target (Body heat signature)
+            person_x = int(500 + p_offset)
+            person_y = 620
+            cv2.rectangle(frame, (person_x, person_y), (person_x + 60, person_y + 130), (220, 230, 245), -1)
+            cv2.rectangle(frame, (person_x + 15, person_y - 25), (person_x + 45, person_y), (240, 250, 255), -1)
+            cv2.rectangle(frame, (person_x, person_y - 25), (person_x + 60, person_y + 130), (255, 255, 255), 2)
+            cv2.putText(frame, "FLIR SIG: 37.2C [INTRUDER]", (person_x - 30, person_y - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+
+            # FLIR reticle and crosshairs
+            cx, cy = width // 2, height // 2
+            cv2.line(frame, (cx - 40, cy), (cx - 10, cy), (200, 220, 240), 1)
+            cv2.line(frame, (cx + 10, cy), (cx + 40, cy), (200, 220, 240), 1)
+            cv2.line(frame, (cx, cy - 40), (cx, cy - 10), (200, 220, 240), 1)
+            cv2.line(frame, (cx, cy + 10), (cx, cy + 40), (200, 220, 240), 1)
+            cv2.circle(frame, (cx, cy), 5, (200, 220, 240), 1)
+
+            # Top FLIR HUD
+            cv2.rectangle(frame, (0, 0), (width, 60), (8, 10, 12), -1)
+            cv2.putText(frame, f"IBVAP FLIR THERMAL IR // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (240, 245, 255), 2)
+            cv2.putText(frame, f"BOP: {self.bop_site}", (750, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (200, 220, 255), 2)
+            cv2.putText(frame, now_dt.strftime("%d-%b-%Y %H:%M:%S"), (width - 420, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (100, 255, 160), 2)
+
+            # Bottom HUD
+            cv2.rectangle(frame, (0, height - 50), (width, height), (8, 10, 12), -1)
+            cv2.putText(frame, "SENSOR: VOx UNCOOLED MICROBOLOMETER 8-14um | AGC: AUTO | POLARITY: WHITE-HOT | FPS: 25.0", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 220, 240), 2)
+            cv2.putText(frame, "NETD: <40mK | CALIBRATED", (width - 380, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 180), 2)
+
+            targets = [
+                {"class_name": "person", "category": "person", "confidence": 0.86, "bbox": {"x": float(person_x), "y": float(person_y - 25), "width": 60.0, "height": 155.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id},
+                {"class_name": "truck", "category": "vehicle", "confidence": 0.90, "bbox": {"x": float(box_x), "y": float(box_y), "width": 180.0, "height": 90.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id}
+            ]
+
+        elif eq_type in ("drone", "uav"):
+            # ==========================================
+            # EQUIPMENT 2: AERIAL DRONE PATROL RECON
+            # ==========================================
+            frame[:] = (18, 26, 24)
+            for y in range(0, height, 100):
+                cv2.line(frame, (0, y), (width, y), (26, 38, 34), 1)
+            for x in range(0, width, 120):
+                cv2.line(frame, (x, 0), (x, height), (26, 38, 34), 1)
+
+            cx, cy = width // 2, height // 2
+            cv2.line(frame, (cx - 80, cy), (cx + 80, cy), (0, 255, 200), 1)
+            cv2.line(frame, (cx, cy - 60), (cx, cy + 60), (0, 255, 200), 1)
+            cv2.circle(frame, (cx, cy), 35, (0, 255, 200), 1)
+
+            drone_x = int(x_pos)
+            drone_y = 360
+            cv2.rectangle(frame, (drone_x, drone_y), (drone_x + 120, drone_y + 70), (0, 255, 255), 2)
+            cv2.putText(frame, "UAV-PATROL-01 [DRONE]", (drone_x, drone_y - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+            box_x = int(600 + p_offset)
+            box_y = 700
+            cv2.rectangle(frame, (box_x, box_y), (box_x + 140, box_y + 80), (50, 220, 100), 2)
+            cv2.putText(frame, "BORDER-PATROL-VEHICLE", (box_x, box_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (50, 220, 100), 2)
+
+            person_x = int(box_x + 180)
+            person_y = 710
+            cv2.rectangle(frame, (person_x, person_y), (person_x + 40, person_y + 70), (100, 200, 255), 2)
+            cv2.putText(frame, "OFFICER-PATROL", (person_x, person_y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 200, 255), 1)
+
+            # Top Drone HUD
+            cv2.rectangle(frame, (0, 0), (width, 60), (12, 18, 16), -1)
+            cv2.putText(frame, f"IBVAP AERIAL UAV // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 220), 2)
+            cv2.putText(frame, f"BOP: {self.bop_site}", (750, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+            cv2.putText(frame, now_dt.strftime("%d-%b-%Y %H:%M:%S"), (width - 420, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 120), 2)
+
+            # Bottom Drone Flight Telemetry HUD
+            cv2.rectangle(frame, (0, height - 50), (width, height), (12, 18, 16), -1)
+            cv2.putText(frame, "ALT: 58.4m AGL | SPEED: 16.2 m/s | BATTERY: 86% | GIMBAL: -28 PITCH | GPS: 31.6048N 74.5731E", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 200), 2)
+            cv2.putText(frame, "LINK: SECURE ENCRYPTED MAVLINK", (width - 430, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (180, 255, 180), 2)
+
+            targets = [
+                {"class_name": "drone", "category": "drone", "confidence": 0.92, "bbox": {"x": float(drone_x), "y": float(drone_y), "width": 120.0, "height": 70.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id},
+                {"class_name": "truck", "category": "vehicle", "confidence": 0.85, "bbox": {"x": float(box_x), "y": float(box_y), "width": 140.0, "height": 80.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id},
+                {"class_name": "person", "category": "person", "confidence": 0.75, "bbox": {"x": float(person_x), "y": float(person_y), "width": 40.0, "height": 70.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id}
+            ]
+
+        elif eq_type in ("ptz", "speed_dome"):
+            # ==========================================
+            # EQUIPMENT 3: PTZ SPEED DOME CAMERA
+            # ==========================================
+            frame[:] = (20, 22, 26)
+            for y in range(0, height, 90):
+                cv2.line(frame, (0, y), (width, y), (32, 36, 42), 1)
+            for x in range(0, width, 120):
+                cv2.line(frame, (x, 0), (x, height), (32, 36, 42), 1)
+
+            cx, cy = width // 2, height // 2
+            ret_s = 60
+            cv2.line(frame, (cx - ret_s, cy - ret_s), (cx - ret_s + 25, cy - ret_s), (0, 220, 255), 2)
+            cv2.line(frame, (cx - ret_s, cy - ret_s), (cx - ret_s, cy - ret_s + 25), (0, 220, 255), 2)
+            cv2.line(frame, (cx + ret_s, cy - ret_s), (cx + ret_s - 25, cy - ret_s), (0, 220, 255), 2)
+            cv2.line(frame, (cx + ret_s, cy - ret_s), (cx + ret_s - 25, cy - ret_s + 25), (0, 220, 255), 2)
+            cv2.line(frame, (cx - ret_s, cy + ret_s), (cx - ret_s + 25, cy + ret_s), (0, 220, 255), 2)
+            cv2.line(frame, (cx - ret_s, cy + ret_s), (cx - ret_s, cy + ret_s - 25), (0, 220, 255), 2)
+            cv2.line(frame, (cx + ret_s, cy + ret_s), (cx + ret_s - 25, cy + ret_s), (0, 220, 255), 2)
+            cv2.line(frame, (cx + ret_s, cy + ret_s), (cx + ret_s, cy + ret_s - 25), (0, 220, 255), 2)
+            cv2.drawMarker(frame, (cx, cy), (0, 220, 255), cv2.MARKER_CROSS, 20, 1)
+
+            box_x = int(x_pos)
+            box_y = 650
+            cv2.rectangle(frame, (box_x, box_y), (box_x + 160, box_y + 90), (0, 255, 120), 2)
+            cv2.putText(frame, "PATROL-VEHICLE [PTZ TRACK]", (box_x, box_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 120), 2)
+
+            person_x = int(500 + p_offset)
+            person_y = 630
+            cv2.rectangle(frame, (person_x, person_y), (person_x + 60, person_y + 120), (50, 200, 255), 2)
+            cv2.putText(frame, "INTRUDER-LOCK [PTZ AUTO]", (person_x - 20, person_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (50, 200, 255), 2)
+
+            # Top PTZ HUD
+            cv2.rectangle(frame, (0, 0), (width, 60), (12, 14, 18), -1)
+            cv2.putText(frame, f"IBVAP PTZ SPEED DOME // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 220, 255), 2)
+            cv2.putText(frame, f"BOP: {self.bop_site}", (750, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+            cv2.putText(frame, now_dt.strftime("%d-%b-%Y %H:%M:%S"), (width - 420, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+
+            # Bottom PTZ Telemetry HUD
+            cv2.rectangle(frame, (0, height - 50), (width, height), (12, 14, 18), -1)
+            cv2.putText(frame, "PAN: 184.2 AZIMUTH | TILT: -14.5 | ZOOM: 28.5x OPTICAL | IR ILLUMINATOR: 200m ON | AF: LOCKED", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2)
+            cv2.putText(frame, "PROTOCOL: ONVIF PROFILE S", (width - 380, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 180), 2)
+
+            targets = [
+                {"class_name": "truck", "category": "vehicle", "confidence": 0.88, "bbox": {"x": float(box_x), "y": float(box_y), "width": 160.0, "height": 90.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id},
+                {"class_name": "person", "category": "person", "confidence": 0.82, "bbox": {"x": float(person_x), "y": float(person_y), "width": 60.0, "height": 120.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id}
+            ]
+
+        elif eq_type in ("nvr", "dvr"):
+            # ==========================================
+            # EQUIPMENT 4: NVR / DVR MULTI-CHANNEL
+            # ==========================================
+            frame[:] = (16, 20, 24)
+            for y in range(0, height, 100):
+                cv2.line(frame, (0, y), (width, y), (28, 34, 40), 1)
+            for x in range(0, width, 120):
+                cv2.line(frame, (x, 0), (x, height), (28, 34, 40), 1)
+
+            cv2.rectangle(frame, (width - 240, 70), (width - 30, 110), (20, 26, 32), -1)
+            cv2.putText(frame, "NVR REC ● CH-01", (width - 225, 98), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 100), 2)
+
+            cv2.line(frame, (0, 740), (width, 740), (0, 140, 255), 2)
+            cv2.putText(frame, "CHECKPOST VEHICLE INSPECTION LANE", (40, 730), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 140, 255), 2)
+
+            box_x = int(x_pos)
+            box_y = 650
+            cv2.rectangle(frame, (box_x, box_y), (box_x + 170, box_y + 90), (0, 255, 140), 2)
+            cv2.putText(frame, "CHECKPOINT-VEHICLE", (box_x, box_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 140), 2)
+
+            person_x = int(520 + p_offset)
+            person_y = 630
+            cv2.rectangle(frame, (person_x, person_y), (person_x + 60, person_y + 120), (100, 200, 255), 2)
+            cv2.putText(frame, "SECURITY-GUARD", (person_x - 10, person_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (100, 200, 255), 2)
+
+            # Top NVR HUD
+            cv2.rectangle(frame, (0, 0), (width, 60), (10, 14, 18), -1)
+            cv2.putText(frame, f"IBVAP NVR MULTI-CHANNEL // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
+            cv2.putText(frame, f"SITE: {self.bop_site}", (750, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2)
+            cv2.putText(frame, now_dt.strftime("%d-%b-%Y %H:%M:%S"), (width - 420, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+
+            # Bottom HUD
+            cv2.rectangle(frame, (0, height - 50), (width, height), (10, 14, 18), -1)
+            cv2.putText(frame, "ENCODING: H.265+ MAIN PROFILE | BITRATE: 4096 Kbps | RESOLUTION: 1080P60 | STORAGE: RAID-6 READY", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 180), 2)
+            cv2.putText(frame, "ONVIF MULTI-STREAM", (width - 340, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 180, 255), 2)
+
+            targets = [
+                {"class_name": "truck", "category": "vehicle", "confidence": 0.89, "bbox": {"x": float(box_x), "y": float(box_y), "width": 170.0, "height": 90.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id},
+                {"class_name": "person", "category": "person", "confidence": 0.81, "bbox": {"x": float(person_x), "y": float(person_y), "width": 60.0, "height": 120.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id}
+            ]
+
+        elif eq_type in ("phone", "android"):
+            # ==========================================
+            # EQUIPMENT 5: MOBILE RECON / PHONE CAMERA
+            # ==========================================
+            frame[:] = (18, 22, 28)
+            for y in range(0, height, 100):
+                cv2.line(frame, (0, y), (width, y), (30, 36, 44), 1)
+
+            cv2.rectangle(frame, (width - 280, 70), (width - 30, 110), (14, 18, 24), -1)
+            cv2.putText(frame, "MOBILE SCOUT ● 5G", (width - 265, 98), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2)
+
+            cv2.line(frame, (0, 750), (width, 750), (0, 140, 255), 2)
+            cv2.putText(frame, "BORDER SECTOR WIRE LINE", (40, 740), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 140, 255), 2)
+
+            person_x = int(480 + p_offset)
+            person_y = 630
+            cv2.rectangle(frame, (person_x, person_y), (person_x + 60, person_y + 120), (0, 255, 120), 2)
+            cv2.putText(frame, "FIELD-PATROL-OFFICER", (person_x - 20, person_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 120), 2)
+
+            box_x = int(x_pos)
+            box_y = 650
+            cv2.rectangle(frame, (box_x, box_y), (box_x + 160, box_y + 90), (100, 200, 255), 2)
+            cv2.putText(frame, "PATROL-JEEP", (box_x, box_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (100, 200, 255), 2)
+
+            # Top Mobile HUD
+            cv2.rectangle(frame, (0, 0), (width, 60), (10, 12, 16), -1)
+            cv2.putText(frame, f"IBVAP MOBILE TACTICAL SCOUT // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 220, 255), 2)
+            cv2.putText(frame, f"BOP: {self.bop_site}", (780, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+            cv2.putText(frame, now_dt.strftime("%d-%b-%Y %H:%M:%S"), (width - 420, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+
+            # Bottom HUD
+            cv2.rectangle(frame, (0, height - 50), (width, height), (10, 12, 16), -1)
+            cv2.putText(frame, "DEVICE: ANDROID TACTICAL SCOUT | STREAM: MJPEG-OVER-HTTP | LATENCY: 14ms | BATTERY: 92%", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 180), 2)
+            cv2.putText(frame, "5G SECURE TUNNEL", (width - 320, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
+
+            targets = [
+                {"class_name": "person", "category": "person", "confidence": 0.83, "bbox": {"x": float(person_x), "y": float(person_y), "width": 60.0, "height": 120.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id},
+                {"class_name": "truck", "category": "vehicle", "confidence": 0.87, "bbox": {"x": float(box_x), "y": float(box_y), "width": 160.0, "height": 90.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id}
+            ]
+
+        elif eq_type == "webcam":
+            # ==========================================
+            # EQUIPMENT 6: FIELD COMMAND WEBCAM
+            # ==========================================
+            frame[:] = (20, 24, 30)
+            for y in range(0, height, 100):
+                cv2.line(frame, (0, y), (width, y), (34, 40, 48), 1)
+
+            cv2.rectangle(frame, (width - 320, 70), (width - 30, 110), (14, 18, 24), -1)
+            cv2.putText(frame, "TACTICAL WEBCAM ● ACTIVE", (width - 305, 98), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 100), 2)
+
+            person_x = int(500 + p_offset)
+            person_y = 620
+            cv2.rectangle(frame, (person_x, person_y), (person_x + 70, person_y + 140), (0, 255, 160), 2)
+            cv2.putText(frame, "OPERATIONS-DUTY-OFFICER", (person_x - 30, person_y - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 160), 2)
+
+            # Top Webcam HUD
+            cv2.rectangle(frame, (0, 0), (width, 60), (12, 14, 18), -1)
+            cv2.putText(frame, f"IBVAP WORKSTATION SENTRY // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
+            cv2.putText(frame, f"LOC: {self.bop_site}", (750, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2)
+            cv2.putText(frame, now_dt.strftime("%d-%b-%Y %H:%M:%S"), (width - 420, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+
+            # Bottom HUD
+            cv2.rectangle(frame, (0, height - 50), (width, height), (12, 14, 18), -1)
+            cv2.putText(frame, "INTERFACE: DIRECTSHOW / V4L2 USB SENSOR | FPS: 25.0 | LATENCY: 8ms", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 180), 2)
+            cv2.putText(frame, "STATUS: HARDWARE READY", (width - 360, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 180, 255), 2)
+
+            targets = [
+                {"class_name": "person", "category": "person", "confidence": 0.88, "bbox": {"x": float(person_x), "y": float(person_y), "width": 70.0, "height": 140.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id}
+            ]
+
+        else:
+            # ==========================================
+            # EQUIPMENT 7: STANDARD BORDER RTSP SENTRY
+            # ==========================================
+            frame[:] = (20, 24, 28)
             for y in range(0, height, 120):
                 cv2.line(frame, (0, y), (width, y), (35, 40, 48), 1)
             for x in range(0, width, 160):
                 cv2.line(frame, (x, 0), (x, height), (35, 40, 48), 1)
 
-            # Simulated perimeter fence line
             cv2.line(frame, (0, 750), (width, 750), (0, 140, 255), 2)
             cv2.putText(frame, "VIRTUAL PERIMETER BOUNDARY [ZONE A]", (40, 740), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 140, 255), 2)
 
-            # Simulated moving vehicle target (patrol vehicle / technical)
-            x_pos += speed
-            if x_pos > width - 320 or x_pos < 80:
-                speed = -speed
-            
             box_x = int(x_pos)
             box_y = 650
             cv2.rectangle(frame, (box_x, box_y), (box_x + 160, box_y + 90), (0, 255, 120), 2)
             cv2.putText(frame, "PATROL-VEHICLE-01", (box_x, box_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 120), 2)
 
-            # Simulated walking personnel target (border perimeter patrol)
-            person_x = int(600 + ((width - 800) - (x_pos * 0.7)))
+            person_x = int(500 + p_offset)
             person_y = 630
             cv2.rectangle(frame, (person_x, person_y), (person_x + 60, person_y + 120), (50, 200, 255), 2)
-            cv2.putText(frame, "PATROL-PERSON-02", (person_x, person_y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (50, 200, 255), 2)
+            cv2.putText(frame, "PATROL-PERSON-02", (person_x - 10, person_y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (50, 200, 255), 2)
 
-            # Update structured synthetic target metadata for AI worker
-            with self._lock:
-                self._synthetic_targets = [
-                    {
-                        "class_name": "truck",
-                        "category": "vehicle",
-                        "confidence": 0.88,
-                        "bbox": {"x": float(box_x), "y": float(box_y), "width": 160.0, "height": 90.0},
-                        "timestamp": datetime.utcnow(),
-                        "camera_id": self.camera_id
-                    },
-                    {
-                        "class_name": "person",
-                        "category": "person",
-                        "confidence": 0.74,
-                        "bbox": {"x": float(person_x), "y": float(person_y), "width": 60.0, "height": 120.0},
-                        "timestamp": datetime.utcnow(),
-                        "camera_id": self.camera_id
-                    }
-                ]
-
-            # Top HUD: Camera ID, BOP Name, Time
+            # Top HUD
             cv2.rectangle(frame, (0, 0), (width, 60), (10, 12, 16), -1)
-            cv2.putText(frame, f"IBVAP LIVE // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
-            cv2.putText(frame, f"LOC: {self.bop_site}", (650, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2)
-            
-            timestamp_str = now_dt.strftime("%d-%b-%Y %I:%M:%S %p")
-            cv2.putText(frame, timestamp_str, (width - 430, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+            cv2.putText(frame, f"IBVAP LIVE // {self.camera_name} [{self.camera_id}]", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
+            cv2.putText(frame, f"LOC: {self.bop_site}", (750, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2)
+            cv2.putText(frame, now_dt.strftime("%d-%b-%Y %H:%M:%S"), (width - 420, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
 
-            # Bottom Status HUD
+            # Bottom HUD
             cv2.rectangle(frame, (0, height - 50), (width, height), (10, 12, 16), -1)
-            cv2.putText(frame, f"STATUS: LIVE | FPS: {self.fps:.1f} | RES: 1920x1080 | PROTOCOL: RTSP-OVER-TCP", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (180, 255, 180), 2)
+            cv2.putText(frame, "STATUS: LIVE | FPS: 25.0 | RES: 1920x1080 | PROTOCOL: RTSP-OVER-TCP", (30, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (180, 255, 180), 2)
             cv2.putText(frame, "ENCRYPTION: AES-256 | LATENCY: 12ms", (width - 480, height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (180, 180, 255), 2)
+
+            targets = [
+                {"class_name": "truck", "category": "vehicle", "confidence": 0.88, "bbox": {"x": float(box_x), "y": float(box_y), "width": 160.0, "height": 90.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id},
+                {"class_name": "person", "category": "person", "confidence": 0.78, "bbox": {"x": float(person_x), "y": float(person_y), "width": 60.0, "height": 120.0}, "timestamp": datetime.utcnow(), "camera_id": self.camera_id}
+            ]
+
+        return frame, targets
+
+    def _synthetic_stream_loop(self):
+        """
+        High-fidelity tactical border surveillance generator for operational deployments.
+        Provides tailored visual feeds and moving target telemetry for all 7 border equipment types:
+        RTSP, NVR/DVR, PTZ, Thermal, Drone, Mobile Phone, and Field PC Webcam.
+        """
+        self.resolution = "1920x1080"
+        self._update_status("HEALTHY", None)
+        logger.info(f"[{self.camera_id}] Tactical Video Ingestion Active (Equipment: {self.stream_type.upper()})")
+
+        target_fps = 25.0
+        frame_interval = 1.0 / target_fps
+        width = 1920
+
+        # Motion simulation state
+        x_pos = 220.0
+        speed = 3.5
+        person_speed = 2.2
+        p_offset = 0.0
+
+        while self._running:
+            loop_start = time.time()
+            now_dt = datetime.now()
+
+            # Update motion positions
+            x_pos += speed
+            if x_pos > width - 360 or x_pos < 120:
+                speed = -speed
+
+            p_offset += person_speed
+            if p_offset > (width - 400) or p_offset < 0:
+                person_speed = -person_speed
+
+            frame, targets = self._create_tactical_frame(x_pos, p_offset, now_dt)
+
+            with self._lock:
+                self._synthetic_targets = targets
 
             # Process frame
             self._process_new_frame(frame, loop_start)

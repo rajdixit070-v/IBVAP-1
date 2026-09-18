@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { incidentService } from '../../services/incidentService';
 import { alertSoundService } from '../../services/alertSoundService';
+import { formatEvidenceUrl } from '../../services/evidenceService';
 import { AlertsWebSocket } from '../../services/websocket';
 import { Notification } from '../../types/incident';
 import { ShieldAlert, User, Car, PawPrint, Plane, X, ExternalLink, MapPin, Volume2 } from 'lucide-react';
@@ -46,7 +47,7 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
           channel: 'WEBSOCKET',
           alert_id: d.alert_id,
           evidence_id: d.evidence_id,
-          evidence_url: d.evidence_url || (d.evidence_id ? `/api/v1/evidence/${d.evidence_id}/file` : undefined),
+          evidence_url: formatEvidenceUrl(d.evidence_url || d.evidence_id) || undefined,
           camera_id: d.camera_id,
           created_at: d.created_at || new Date().toISOString()
         };
@@ -113,7 +114,7 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
   const isCritical = activeAlert.severity === 'CRITICAL' || activeAlert.priority === 'CRITICAL';
   const isHigh = activeAlert.severity === 'HIGH' || activeAlert.priority === 'HIGH';
 
-  const evidenceUrl = activeAlert.evidence_url || (activeAlert.evidence_id ? `/api/v1/evidence/${activeAlert.evidence_id}/file` : null);
+  const evidenceUrl = formatEvidenceUrl(activeAlert.evidence_url || activeAlert.evidence_id);
 
   return (
     <div className="fixed top-20 right-6 z-50 max-w-md w-full animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto">

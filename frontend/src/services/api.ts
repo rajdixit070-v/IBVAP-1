@@ -7,6 +7,18 @@ export const getApiBaseUrl = (): string => {
   return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
 };
 
+export const getWsBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && (envUrl.startsWith('http://') || envUrl.startsWith('https://'))) {
+    const wsProto = envUrl.startsWith('https://') ? 'wss:' : 'ws:';
+    const clean = envUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    return clean.endsWith('/api/v1') ? `${wsProto}//${clean}` : `${wsProto}//${clean}/api/v1`;
+  }
+  const protocol = (typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
+  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8000';
+  return `${protocol}//${host}/api/v1`;
+};
+
 const api = axios.create({
   baseURL: getApiBaseUrl(),
   headers: {

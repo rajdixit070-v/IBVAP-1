@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Notification } from '../../types/incident';
 import { incidentService } from '../../services/incidentService';
+import { formatEvidenceUrl } from '../../services/evidenceService';
 import { Bell, CheckCheck, X, Trash2 } from 'lucide-react';
 
 interface NotificationDrawerProps {
@@ -145,7 +146,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
               {(n.evidence_url || n.evidence_id) && (
                 <div className="mt-2 rounded-lg overflow-hidden border border-slate-700 bg-black/40">
                   <img
-                    src={n.evidence_url || `/api/v1/evidence/${n.evidence_id}/file`}
+                    src={formatEvidenceUrl(n.evidence_url || n.evidence_id) || ''}
                     alt="Forensic Evidence"
                     className="w-full h-24 object-cover"
                     onError={(e) => {

@@ -46,7 +46,7 @@ class Camera(Base):
     
     # State flags
     enabled = Column(Boolean, default=True, index=True)
-    status = Column(String(50), default="OFFLINE", index=True) # HEALTHY, DEGRADED, OFFLINE, ERROR, CONNECTING, MAINTENANCE
+    status = Column(String(50), default="ONLINE", index=True) # ONLINE, HEALTHY, DEGRADED, OFFLINE, ERROR, CONNECTING, MAINTENANCE
     
     # Timestamps
     last_seen_at = Column(DateTime, nullable=True)

@@ -3,6 +3,7 @@ import { Modal } from '../common/Modal';
 import { SecurityEvent } from '../../types/event';
 import { RiskBadge } from './RiskBadge';
 import { eventService } from '../../services/eventService';
+import { formatEvidenceUrl } from '../../services/evidenceService';
 import {
   ShieldAlert,
   Clock,
@@ -124,7 +125,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
             </div>
             <div className="relative rounded-lg overflow-hidden border border-slate-700 bg-black/60 aspect-video">
               <img
-                src={event.evidence_url || `/api/v1/evidence/${event.evidence_id}/file`}
+                src={formatEvidenceUrl(event.evidence_url || event.evidence_id) || ''}
                 alt="Intrusion Forensic Evidence"
                 className="w-full h-full object-contain"
                 onError={(e) => {

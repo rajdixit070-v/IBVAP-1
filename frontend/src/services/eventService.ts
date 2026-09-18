@@ -1,4 +1,4 @@
-import api from './api';
+import api, { getWsBaseUrl } from './api';
 import { authService } from './authService';
 import { SecurityEvent, SecurityEventsSummary, SystemRiskConfig } from '../types/event';
 
@@ -65,19 +65,7 @@ export class SecurityEventsWebSocket {
   private connect() {
     if (this.isClosedExplicitly) return;
 
-    let wsBase: string;
-    const envApi = import.meta.env.VITE_API_URL;
-    if (envApi && envApi.startsWith('http')) {
-      wsBase = envApi.replace(/^http/, 'ws').replace(/\/+$/, '');
-      if (!wsBase.endsWith('/api/v1')) {
-        wsBase = `${wsBase}/api/v1`;
-      }
-    } else {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      wsBase = `${protocol}//${host}/api/v1`;
-    }
-
+    const wsBase = getWsBaseUrl();
     const token = authService.getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const url = `${wsBase}/ws/security-events${tokenParam}`;

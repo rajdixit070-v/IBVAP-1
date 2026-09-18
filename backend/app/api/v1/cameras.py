@@ -251,7 +251,7 @@ def get_live_camera_status(
 def get_live_video_stream(
     camera_id: str,
     fps: Optional[float] = Query(25.0, ge=1.0, le=60.0),
-    profile: Optional[str] = Query("main", regex="^(main|sub)$"),
+    profile: Optional[str] = Query("main", pattern="^(main|sub)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
