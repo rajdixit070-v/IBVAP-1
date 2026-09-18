@@ -29,11 +29,19 @@ class CameraQualityAnalyzer:
                 "confidence_multiplier": 0.4
             }
 
-        # Convert to grayscale
-        if len(frame.shape) == 3:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Optimize performance: downsample high-res frames for fast metric calculation
+        h, w = frame.shape[:2]
+        if w > 320:
+            scale = 320.0 / w
+            small = cv2.resize(frame, (320, max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
         else:
-            gray = frame
+            small = frame
+
+        # Convert to grayscale
+        if len(small.shape) == 3:
+            gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = small
 
         # 1. Optical Blur (Laplacian variance: higher = sharper, < 80 = blurred)
         laplacian = cv2.Laplacian(gray, cv2.CV_64F)

@@ -189,26 +189,36 @@ class HealthMonitor:
         logger.info("Health Monitor service stopped.")
 
     async def _monitor_loop(self):
-        """Periodic audit loop checking frame staleness and database sync."""
+        """Periodic audit loop checking frame staleness and database sync without blocking event loop."""
         while self._running:
             try:
-                await self._audit_cameras()
+                all_statuses = await asyncio.to_thread(self._sync_audit_cameras)
+                if self._ws_subscribers and all_statuses:
+                    await self.broadcast_health_update({
+                        "event": "HEALTH_AUDIT",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "cameras": all_statuses
+                    })
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Health monitor loop error: {e}")
 
-            await asyncio.sleep(settings.HEALTH_CHECK_INTERVAL_SEC)
+            interval = max(10.0, float(getattr(settings, "HEALTH_CHECK_INTERVAL_SEC", 15.0)))
+            await asyncio.sleep(interval)
 
-    async def _audit_cameras(self):
-        """Audits all configured cameras against live stream state and evaluates quality."""
+    def _sync_audit_cameras(self) -> list:
+        """Audits all configured cameras against live stream state in a background worker thread."""
         db = SessionLocal()
+        all_statuses = []
         try:
             from app.services.health.system_health_service import system_health_service
-            system_health_service.evaluate_maintenance_expirations()
+            try:
+                system_health_service.evaluate_maintenance_expirations()
+            except Exception:
+                pass
 
             cameras = db.query(Camera).all()
-            all_statuses = []
             now = time.time()
 
             for cam in cameras:
@@ -250,9 +260,12 @@ class HealthMonitor:
                         # Analyze optical quality & tampering on latest frame
                         frame = streamer.get_latest_frame()
                         if frame is not None:
-                            q_metrics = camera_quality_analyzer.analyze_frame(frame)
-                            cam.image_quality_score = q_metrics["image_quality_score"]
-                            cam.tampering_detected = q_metrics["tampering_detected"]
+                            try:
+                                q_metrics = camera_quality_analyzer.analyze_frame(frame)
+                                cam.image_quality_score = q_metrics["image_quality_score"]
+                                cam.tampering_detected = q_metrics["tampering_detected"]
+                            except Exception:
+                                pass
 
                     all_statuses.append({
                         "camera_id": cam.camera_id,
@@ -271,7 +284,6 @@ class HealthMonitor:
                     stream_manager.stop_camera(cam.camera_id)
                     cam.status = "OFFLINE"
                     cam.fps = 0.0
-                    # Include disabled cameras in broadcast so frontend shows them OFFLINE
                     all_statuses.append({
                         "camera_id": cam.camera_id,
                         "camera_name": cam.camera_name,
@@ -286,19 +298,12 @@ class HealthMonitor:
                         "enabled": False
                     })
 
-
             db.commit()
-
-            # Broadcast updated statuses to WebSocket clients
-            if self._ws_subscribers:
-                await self.broadcast_health_update({
-                    "event": "HEALTH_AUDIT",
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "cameras": all_statuses
-                })
+            return all_statuses
 
         except Exception as e:
             logger.error(f"Error auditing cameras: {e}")
+            return all_statuses
         finally:
             db.close()
 
