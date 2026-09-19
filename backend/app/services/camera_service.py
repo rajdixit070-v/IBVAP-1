@@ -14,7 +14,32 @@ from app.core.security import encrypt_credential, decrypt_credential, mask_rtsp_
 from app.services.stream_manager import stream_manager
 
 def format_camera_response(cam: Camera) -> CameraResponse:
-    """Safely formats a Camera model into a sanitized CameraResponse (never leaking passwords)."""
+    """Safely formats a Camera model into a sanitized CameraResponse (never leaking passwords).
+    Overlays live streamer status on top of DB snapshot for real-time accuracy."""
+    # Overlay live streamer status so frontend always gets real-time status
+    live_status = cam.status
+    live_fps = cam.fps or 0.0
+    live_resolution = cam.resolution
+    live_last_seen = cam.last_seen_at
+
+    try:
+        streamer = stream_manager.get_streamer(cam.camera_id)
+        if not streamer and cam.enabled:
+            streamer = stream_manager.ensure_camera_running(cam.camera_id)
+
+        if streamer and getattr(streamer, "_running", False):
+            raw_st = streamer.status if streamer.status else cam.status
+            live_status = "ONLINE" if raw_st in ("HEALTHY", "ONLINE") else raw_st
+            live_fps = round(streamer.fps or 0.0, 1)
+            if streamer.resolution:
+                live_resolution = streamer.resolution
+            if streamer.last_seen_at:
+                live_last_seen = streamer.last_seen_at
+        elif not cam.enabled:
+            live_status = "OFFLINE"
+    except Exception:
+        pass  # Fallback to DB values if streamer not accessible
+
     return CameraResponse(
         id=cam.id,
         camera_id=cam.camera_id,
@@ -33,12 +58,12 @@ def format_camera_response(cam: Camera) -> CameraResponse:
         username=cam.username,
         has_password=bool(cam.encrypted_password),
         stream_type=cam.stream_type or "main",
-        resolution=cam.resolution,
-        fps=cam.fps or 0.0,
+        resolution=live_resolution,
+        fps=live_fps,
         codec=cam.codec or "H.264",
         enabled=cam.enabled,
-        status=cam.status,
-        last_seen_at=cam.last_seen_at,
+        status=live_status,
+        last_seen_at=live_last_seen,
         created_at=cam.created_at,
         updated_at=cam.updated_at
     )
@@ -113,7 +138,7 @@ def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
         encrypted_password=encrypted_pw,
         stream_type=camera_in.stream_type or "main",
         enabled=camera_in.enabled,
-        status="ONLINE" if camera_in.enabled else "OFFLINE"
+        status="CONNECTING" if camera_in.enabled else "OFFLINE"
     )
     db.add(db_camera)
     db.commit()
@@ -309,20 +334,34 @@ def delete_camera(db: Session, db_camera: Any):
     logger.info(f"Camera {cam_id} and all related configurations deleted successfully.")
 
 def get_overview_summary(db: Session) -> Dict[str, Any]:
-    """Aggregates high-level camera statistics grouped by BOP and health status."""
+    """Aggregates high-level camera statistics grouped by BOP and health status.
+    Uses live streamer status overlay for real-time accuracy."""
     cameras = db.query(Camera).all()
     total = len(cameras)
-    healthy = sum(1 for c in cameras if c.status == "HEALTHY")
-    degraded = sum(1 for c in cameras if c.status == "DEGRADED")
-    offline = sum(1 for c in cameras if c.status == "OFFLINE")
-    error = sum(1 for c in cameras if c.status in ("ERROR", "CONNECTING"))
+
+    def get_live_status(cam: Camera) -> str:
+        """Returns live streamer status if available, otherwise DB status."""
+        try:
+            streamer = stream_manager.get_streamer(cam.camera_id)
+            if streamer and getattr(streamer, "_running", False) and streamer.status:
+                return streamer.status
+        except Exception:
+            pass
+        return cam.status or "OFFLINE"
+
+    healthy = sum(1 for c in cameras if get_live_status(c) in ("HEALTHY", "ONLINE"))
+    degraded = sum(1 for c in cameras if get_live_status(c) == "DEGRADED")
+    offline = sum(1 for c in cameras if get_live_status(c) == "OFFLINE")
+    error = sum(1 for c in cameras if get_live_status(c) in ("ERROR", "CONNECTING"))
 
     bop_summary = {}
     for c in cameras:
         if c.bop_site not in bop_summary:
             bop_summary[c.bop_site] = {"total": 0, "healthy": 0, "degraded": 0, "offline": 0}
         bop_summary[c.bop_site]["total"] += 1
-        st = c.status.lower()
+        st = get_live_status(c).lower()
+        if st == "online":
+            st = "healthy"  # Normalize ONLINE -> healthy bucket
         if st in bop_summary[c.bop_site]:
             bop_summary[c.bop_site][st] += 1
 

@@ -607,9 +607,9 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
         try:
             cameras = db.query(Camera).filter(Camera.enabled == True).all()
             for cam in cameras:
-                # Restore any degraded/offline enabled camera back to ONLINE
-                if cam.status in ["OFFLINE", "CONNECTING"] and not cam.is_maintenance:
-                    cam.status = "ONLINE"
+                # On server start, mark enabled cameras as CONNECTING until streamer verifies live signal
+                if not cam.is_maintenance:
+                    cam.status = "CONNECTING"
 
                 config = db.query(CameraAIConfig).filter(CameraAIConfig.camera_id == cam.camera_id).first()
                 if not config:

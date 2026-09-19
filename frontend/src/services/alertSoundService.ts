@@ -202,10 +202,6 @@ class AlertSoundService {
     }
 
     try {
-      // Clean speech synthesis queue if a new alert arrives
-      window.speechSynthesis.cancel();
-
-      // Clean spoken phrase
       const cleanText = this.formatSpokenText(text);
       if (!cleanText) return;
 
@@ -221,7 +217,21 @@ class AlertSoundService {
         if (this.selectedVoice) utterance.voice = this.selectedVoice;
       }
 
-      window.speechSynthesis.speak(utterance);
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      window.speechSynthesis.cancel();
+
+      setTimeout(() => {
+        try {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+          window.speechSynthesis.speak(utterance);
+        } catch (err) {
+          console.warn('Voice speak error:', err);
+        }
+      }, 50);
     } catch (e) {
       console.warn('Voice alert synthesis failed:', e);
     }

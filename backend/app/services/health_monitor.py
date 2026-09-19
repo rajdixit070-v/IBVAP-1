@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import List, Set
+from typing import List, Optional, Set
 from fastapi import WebSocket
 from sqlalchemy.orm import Session
 
@@ -68,6 +68,13 @@ class HealthMonitor:
                         cam.status = "MAINTENANCE"
                         db.commit()
                         return
+
+                    # Grace period: newly registered cameras (< 60s old) should stay CONNECTING
+                    # rather than immediately flip to OFFLINE on first connection attempt failure
+                    if new_status == "OFFLINE" and cam.created_at:
+                        age_seconds = (datetime.utcnow() - cam.created_at).total_seconds()
+                        if age_seconds < 60:
+                            new_status = "CONNECTING"
 
                     old_status = cam.status
                     cam.status = new_status
@@ -146,7 +153,7 @@ class HealthMonitor:
                                 "camera_id": c.camera_id,
                                 "name": c.camera_name,
                                 "bop_site": c.bop_site,
-                                "status": c.status,
+                                "status": "ONLINE" if c.status in ("HEALTHY", "ONLINE") else c.status,
                                 "fps": round(c.fps or 0.0, 1),
                                 "resolution": c.resolution or "1920x1080",
                                 "last_seen": c.last_seen_at.isoformat() if c.last_seen_at else None,
@@ -273,7 +280,7 @@ class HealthMonitor:
                         "camera_id": cam.camera_id,
                         "camera_name": cam.camera_name,
                         "bop_site": cam.bop_site,
-                        "status": cam.status,
+                        "status": "ONLINE" if cam.status in ("HEALTHY", "ONLINE") else cam.status,
                         "priority": cam.priority or "NORMAL",
                         "fps": round(cam.fps, 1),
                         "resolution": cam.resolution,

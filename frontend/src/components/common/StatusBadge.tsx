@@ -16,7 +16,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, showDot = true
         return {
           bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
           dot: 'bg-emerald-400 animate-pulse',
-          label: 'HEALTHY'
+          label: 'ONLINE'
         };
       case 'DEGRADED':
         return {
@@ -35,6 +35,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, showDot = true
           bg: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
           dot: 'bg-rose-400',
           label: 'OFFLINE'
+        };
+      case 'MAINTENANCE':
+        return {
+          bg: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+          dot: 'bg-purple-400',
+          label: 'MAINTENANCE'
         };
       case 'ERROR':
       default:

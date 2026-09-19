@@ -43,19 +43,27 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
       return;
     }
 
-    // If notification has a camera_id, ensure it exists in currently active, enabled cameras
+    // If notification has a camera_id, ensure it exists in currently active, enabled cameras (case-insensitive)
     if (notif.camera_id) {
-      const match = currentCams.find(c => c.camera_id === notif.camera_id);
+      const targetId = notif.camera_id.trim().toUpperCase();
+      const match = currentCams.find(c => c.camera_id?.trim().toUpperCase() === targetId);
       if (!match || !match.enabled) {
         return;
       }
     } else {
       // Check if notification text references any registered camera
       const isRegisteredCamera = currentCams.some(
-        c => notif.title?.includes(c.camera_id) || notif.message?.includes(c.camera_id)
+        c => (c.camera_id && (
+          notif.title?.toUpperCase().includes(c.camera_id.toUpperCase()) ||
+          notif.message?.toUpperCase().includes(c.camera_id.toUpperCase())
+        ))
       );
       if (!isRegisteredCamera) {
-        return;
+        // Allow critical/high threats if cameras are registered in the sector
+        const isHighThreat = notif.priority === 'CRITICAL' || notif.severity === 'CRITICAL' || notif.priority === 'HIGH';
+        if (!isHighThreat) {
+          return;
+        }
       }
     }
 

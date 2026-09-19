@@ -102,7 +102,11 @@ class AlertEngine:
         try:
             # Verify camera actually exists and is enabled before generating any security alert
             from app.models.camera import Camera
-            cam = db.query(Camera).filter(Camera.camera_id == event.camera_id).first()
+            from sqlalchemy import func
+            cam = db.query(Camera).filter(
+                (Camera.camera_id == event.camera_id) |
+                (func.upper(Camera.camera_id) == func.upper(event.camera_id))
+            ).first()
             if not cam or not cam.enabled:
                 return None
 
