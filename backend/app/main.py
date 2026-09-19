@@ -582,6 +582,7 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
         else:
             # Production clean slate: Purge any legacy synthetic or dummy demo cameras and their alerts/incidents
             try:
+                from app.services.camera_service import delete_camera
                 legacy_cams = db.query(Camera).filter(
                     (Camera.camera_id.like("CAM-WAGAH%")) |
                     (Camera.camera_id.like("CAM-HUSSAINI%")) |
@@ -593,15 +594,11 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
                     (Camera.rtsp_url.like("webcam://%"))
                 ).all()
                 if legacy_cams:
-                    del_ids = [c.camera_id for c in legacy_cams]
-                    logger.info(f"Production clean slate: Purging legacy demo cameras: {del_ids}")
-                    db.query(Notification).filter(Notification.camera_id.in_(del_ids)).delete(synchronize_session=False)
-                    db.query(Alert).filter(Alert.camera_id.in_(del_ids)).delete(synchronize_session=False)
-                    db.query(Incident).filter(Incident.camera_id.in_(del_ids)).delete(synchronize_session=False)
-                    db.query(CameraAIConfig).filter(CameraAIConfig.camera_id.in_(del_ids)).delete(synchronize_session=False)
-                    db.query(CameraAIProfile).filter(CameraAIProfile.camera_id.in_(del_ids)).delete(synchronize_session=False)
-                    db.query(Camera).filter(Camera.camera_id.in_(del_ids)).delete(synchronize_session=False)
+                    logger.info(f"Production clean slate: Purging {len(legacy_cams)} legacy demo cameras via delete_camera cascade...")
+                    for cam in legacy_cams:
+                        delete_camera(db, cam)
                     db.commit()
+                    logger.info("Production clean slate completed: 0 demo cameras remaining.")
             except Exception as e_clean:
                 db.rollback()
                 logger.warning(f"Production camera clean notice: {e_clean}")

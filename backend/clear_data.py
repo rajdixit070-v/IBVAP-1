@@ -60,12 +60,16 @@ def clear_database():
     print("[-] Rebuilding clean database schema...")
     try:
         with engine.begin() as conn:
-            conn.execute(text("PRAGMA foreign_keys = OFF;"))
-            res = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"))
-            tables = [r[0] for r in res.fetchall()]
-            for t in tables:
-                conn.execute(text(f'DROP TABLE IF EXISTS "{t}";'))
-            conn.execute(text("PRAGMA foreign_keys = ON;"))
+            if engine.dialect.name == "sqlite":
+                conn.execute(text("PRAGMA foreign_keys = OFF;"))
+                res = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"))
+                tables = [r[0] for r in res.fetchall()]
+                for t in tables:
+                    conn.execute(text(f'DROP TABLE IF EXISTS "{t}";'))
+                conn.execute(text("PRAGMA foreign_keys = ON;"))
+            else:
+                # PostgreSQL: drop and recreate public schema to clean all tables cleanly
+                conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
     except Exception as e:
         print(f"    Notice resetting schema via SQL: {e}")
 
