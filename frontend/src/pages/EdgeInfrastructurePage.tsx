@@ -121,7 +121,7 @@ export const EdgeInfrastructurePage: React.FC<EdgeInfrastructurePageProps> = () 
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-[#112338] via-[#0f172a] to-[#0d131f] border border-[#1e3a5f] rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-2">

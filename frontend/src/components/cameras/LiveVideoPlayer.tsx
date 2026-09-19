@@ -260,7 +260,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
         )}
 
         {/* Main Video & Detection Overlay Surface */}
-        <div className="relative flex-1 flex items-center justify-center min-h-[220px] bg-slate-950 overflow-hidden">
+        <div className="relative flex-1 flex items-center justify-center min-h-[160px] sm:min-h-[220px] bg-slate-950 overflow-hidden">
           {camera.enabled ? (
             <>
               {frameSrc && streamProfile === 'main' ? (

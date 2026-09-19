@@ -28,14 +28,14 @@ export const CameraTable: React.FC<CameraTableProps> = ({
         <table className="w-full text-left text-xs font-sans">
           <thead className="bg-[#142038] text-slate-400 font-mono uppercase text-[11px] border-b border-[#1e293b] tracking-wider">
             <tr>
-              <th className="px-4 py-3">CAMERA</th>
-              <th className="px-4 py-3">BOP / SITE</th>
-              <th className="px-4 py-3">STATUS</th>
-              <th className="px-4 py-3">FPS</th>
-              <th className="px-4 py-3">RESOLUTION</th>
-              <th className="px-4 py-3">LAST SEEN</th>
-              <th className="px-4 py-3">AI STATUS</th>
-              <th className="px-4 py-3 text-right">ACTIONS</th>
+              <th className="px-3 sm:px-4 py-3">CAMERA</th>
+              <th className="px-3 sm:px-4 py-3 hidden sm:table-cell">BOP / SITE</th>
+              <th className="px-3 sm:px-4 py-3">STATUS</th>
+              <th className="px-3 sm:px-4 py-3 hidden md:table-cell">FPS</th>
+              <th className="px-3 sm:px-4 py-3 hidden md:table-cell">RESOLUTION</th>
+              <th className="px-3 sm:px-4 py-3 hidden lg:table-cell">LAST SEEN</th>
+              <th className="px-3 sm:px-4 py-3 hidden lg:table-cell">AI STATUS</th>
+              <th className="px-3 sm:px-4 py-3 text-right">ACTIONS</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 text-slate-200">
@@ -93,7 +93,7 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                   onClick={() => onView(camera)}
                 >
                   {/* Camera ID & Name */}
-                  <td className="px-4 py-3.5">
+                  <td className="px-3 sm:px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/80 flex items-center justify-center group-hover:border-sky-500 transition">
                         <SourceIcon className={`w-4 h-4 ${iconColor}`} />
@@ -115,42 +115,42 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                   </td>
 
                   {/* BOP / Site */}
-                  <td className="px-4 py-3.5">
+                  <td className="px-3 sm:px-4 py-3.5 hidden sm:table-cell">
                     <div className="font-medium text-slate-200">{camera.bop_site}</div>
                     <div className="text-[10px] text-slate-400">{camera.sector}</div>
                   </td>
 
                   {/* Status */}
-                  <td className="px-4 py-3.5">
+                  <td className="px-3 sm:px-4 py-3.5">
                     <StatusBadge status={camera.status} />
                   </td>
 
                   {/* FPS */}
-                  <td className="px-4 py-3.5 font-mono">
+                  <td className="px-3 sm:px-4 py-3.5 font-mono hidden md:table-cell">
                     <span className={camera.fps > 0 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
                       {camera.fps > 0 ? `${camera.fps} FPS` : '0 FPS'}
                     </span>
                   </td>
 
                   {/* Resolution */}
-                  <td className="px-4 py-3.5 font-mono text-slate-300">
+                  <td className="px-3 sm:px-4 py-3.5 font-mono text-slate-300 hidden md:table-cell">
                     {camera.resolution || '1920x1080'}
                   </td>
 
                   {/* Last Seen */}
-                  <td className="px-4 py-3.5 font-mono text-slate-400 text-[11px]">
+                  <td className="px-3 sm:px-4 py-3.5 font-mono text-slate-400 text-[11px] hidden lg:table-cell">
                     {camera.last_seen_at ? new Date(camera.last_seen_at).toLocaleTimeString() : 'N/A'}
                   </td>
 
                   {/* AI Status */}
-                  <td className="px-4 py-3.5 font-mono">
+                  <td className="px-3 sm:px-4 py-3.5 font-mono hidden lg:table-cell">
                     <span className="inline-flex items-center gap-1 text-[10px] bg-sky-950/40 text-sky-400 px-2 py-0.5 rounded border border-sky-500/20">
                       AI ACTIVE
                     </span>
                   </td>
 
                   {/* Actions */}
-                  <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-3 sm:px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">
                       {onLocate && (
                         <button

@@ -304,7 +304,7 @@ export const SituationalMapModal: React.FC<SituationalMapModalProps> = ({
             selectedCameraId={selectedCam?.camera_id}
             viewDimension={viewMode === '3d' ? '3d' : '2d'}
             onDimensionChange={(dim) => setViewMode(dim === '3d' ? '3d' : 'map')}
-            height="500px"
+            height="min(500px, 60vh)"
           />
         ) : (
           /* Main Interactive Tactical Grid Display */
