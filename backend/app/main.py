@@ -263,27 +263,6 @@ def ensure_default_border_cameras(db: Session):
             "priority": "HIGH",
             "enabled": True,
             "status": "HEALTHY"
-        },
-        {
-            "camera_id": "CAM-LOCAL",
-            "camera_name": "HQ Tactical Ops Local Webcam",
-            "description": "Live local command post hardware webcam video feed.",
-            "bop_site": "Attari-Wagah Joint Check Post",
-            "bop_id": "BOP-WAGAH",
-            "site_id": "SITE-BORDER-NORTH",
-            "sector": "Punjab Frontier",
-            "location": "Tactical Operations Center",
-            "latitude": 31.6048,
-            "longitude": 74.5731,
-            "edge_node_id": "EDGE-BOP-001",
-            "rtsp_url": "webcam://0",
-            "stream_type": "main",
-            "resolution": "1280x720",
-            "fps": 25.0,
-            "expected_fps": 25.0,
-            "priority": "NORMAL",
-            "enabled": True,
-            "status": "HEALTHY"
         }
     ]
     for c_dict in core_cameras:
@@ -600,6 +579,32 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             from app.services.demo.demo_seeder import seed_demo_data
             seed_demo_data(db)
             ensure_default_border_cameras(db)
+        else:
+            # Production clean slate: Purge any legacy synthetic or dummy demo cameras and their alerts/incidents
+            try:
+                legacy_cams = db.query(Camera).filter(
+                    (Camera.camera_id.like("CAM-WAGAH%")) |
+                    (Camera.camera_id.like("CAM-HUSSAINI%")) |
+                    (Camera.camera_id.like("CAM-SADQI%")) |
+                    (Camera.camera_id.like("CAM-LONGEWALA%")) |
+                    (Camera.camera_id.like("CAM-MUNABAO%")) |
+                    (Camera.camera_id == "CAM-LOCAL") |
+                    (Camera.rtsp_url.like("synthetic://%")) |
+                    (Camera.rtsp_url.like("webcam://%"))
+                ).all()
+                if legacy_cams:
+                    del_ids = [c.camera_id for c in legacy_cams]
+                    logger.info(f"Production clean slate: Purging legacy demo cameras: {del_ids}")
+                    db.query(Notification).filter(Notification.camera_id.in_(del_ids)).delete(synchronize_session=False)
+                    db.query(Alert).filter(Alert.camera_id.in_(del_ids)).delete(synchronize_session=False)
+                    db.query(Incident).filter(Incident.camera_id.in_(del_ids)).delete(synchronize_session=False)
+                    db.query(CameraAIConfig).filter(CameraAIConfig.camera_id.in_(del_ids)).delete(synchronize_session=False)
+                    db.query(CameraAIProfile).filter(CameraAIProfile.camera_id.in_(del_ids)).delete(synchronize_session=False)
+                    db.query(Camera).filter(Camera.camera_id.in_(del_ids)).delete(synchronize_session=False)
+                    db.commit()
+            except Exception as e_clean:
+                db.rollback()
+                logger.warning(f"Production camera clean notice: {e_clean}")
 
         # Initialize AI configs and ensure cameras are marked ONLINE
         try:
@@ -750,6 +755,8 @@ async def background_post_startup():
         db = SessionLocal()
         try:
             cameras = db.query(Camera).filter(Camera.enabled == True).all()
+            if not settings.DEMO_MODE:
+                cameras = [c for c in cameras if not (c.rtsp_url.startswith(("synthetic://", "webcam://")))]
             for cam in cameras:
                 try:
                     decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None

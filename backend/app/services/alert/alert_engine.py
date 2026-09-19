@@ -220,8 +220,13 @@ class AlertEngine:
 
             # Verify camera actually exists and is enabled before generating health alert
             from app.models.camera import Camera
+            from app.config import settings
             cam = db.query(Camera).filter(Camera.camera_id == camera_id).first()
-            if not cam or not cam.enabled:
+            if not cam or not cam.enabled or cam.is_maintenance:
+                return None
+
+            # Suppress health alerts for synthetic/webcam dummy cameras in production
+            if not settings.DEMO_MODE and (cam.rtsp_url.startswith(("synthetic://", "webcam://")) or cam.camera_id in ["CAM-LOCAL", "CAM-WAGAH-01", "CAM-WAGAH-02", "CAM-MUNABAO-01", "CAM-HUSSAINI-01", "CAM-SADQI-01", "CAM-LONGEWALA-01"]):
                 return None
 
             dedup_key = f"{camera_id}:HEALTH:OFFLINE"

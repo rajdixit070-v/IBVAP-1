@@ -214,6 +214,11 @@ class RTSPStreamer:
                 if url_str.startswith(("webcam://", "device://")) or url_str.isdigit():
                     idx_str = url_str.replace("webcam://", "").replace("device://", "").strip()
                     dev_idx = int(idx_str) if idx_str.isdigit() else 0
+
+                    # On Linux headless cloud environments, do not invoke OpenCV V4L2 if device does not exist
+                    if sys.platform.startswith("linux") and not os.path.exists(f"/dev/video{dev_idx}"):
+                        raise ConnectionError(f"Webcam hardware device /dev/video{dev_idx} not present (headless cloud container)")
+
                     try:
                         if sys.platform == "win32":
                             cap = cv2.VideoCapture(dev_idx, cv2.CAP_DSHOW)
