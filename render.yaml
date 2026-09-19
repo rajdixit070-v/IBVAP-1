@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ibvap-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: ENV_MODE
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        value: b3B2YaaAYm9yZGVyLWVuY3J5cHVpaW9uLWkuLTI0MjY=
+      - key: DEMO_MODE
+        value: false
