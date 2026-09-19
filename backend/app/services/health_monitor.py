@@ -1,6 +1,7 @@
 import time
 import uuid
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import List, Set
@@ -46,9 +47,10 @@ class HealthMonitor:
     async def broadcast_health_update(self, payload: dict):
         """Broadcasts JSON health payload to all connected clients."""
         dead_sockets = []
+        msg_text = json.dumps(payload, default=str)
         for ws in self._ws_subscribers:
             try:
-                await ws.send_json(payload)
+                await ws.send_text(msg_text)
             except Exception:
                 dead_sockets.append(ws)
         for dead in dead_sockets:

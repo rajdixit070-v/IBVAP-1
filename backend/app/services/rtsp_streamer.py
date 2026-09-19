@@ -144,8 +144,8 @@ class RTSPStreamer:
             "is_streaming": (self._running and self.status == "HEALTHY"),
             "fps": round(self.fps, 1),
             "resolution": self.resolution,
-            "latest_frame_time": datetime.utcfromtimestamp(self._latest_frame_time) if self._latest_frame_time else None,
-            "last_seen_at": self.last_seen_at,
+            "latest_frame_time": datetime.utcfromtimestamp(self._latest_frame_time).isoformat() if self._latest_frame_time else None,
+            "last_seen_at": self.last_seen_at.isoformat() if isinstance(self.last_seen_at, datetime) else (str(self.last_seen_at) if self.last_seen_at else None),
             "reconnect_attempts": self.reconnect_attempts,
             "latency_ms": round(self.latency_ms, 1),
             "error_message": self.last_error_message
@@ -365,9 +365,11 @@ class RTSPStreamer:
 
     def calculate_reconnect_delay(self, attempt: Optional[int] = None) -> float:
         """Calculates exponential backoff delay in seconds bounded by RECONNECT_MAX_DELAY_SEC."""
-        if self.rtsp_url.startswith(("webcam://", "device://")) or self.rtsp_url.isdigit():
-            return 0.3 # Instant reconnect for local webcams
         att = attempt if attempt is not None else self.reconnect_attempts
+        if self.rtsp_url.startswith(("webcam://", "device://")) or self.rtsp_url.isdigit():
+            if (att or 0) > 2:
+                return 10.0 # Gracefully back off on headless cloud servers without physical webcam
+            return 2.0
         return float(min(8.0, max(1.0, 1.5 ** min(att, 4))))
 
     def _try_http_stream(self, url: str) -> bool:

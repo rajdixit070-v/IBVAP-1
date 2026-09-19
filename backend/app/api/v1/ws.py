@@ -1,6 +1,7 @@
 import asyncio
+import json
 import logging
-from typing import Optional
+from typing import Optional, Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 from app.services.stream_manager import stream_manager
 from app.services.health_monitor import health_monitor
@@ -11,6 +12,10 @@ from app.services.security.ws_ticket_service import WSTicketService
 
 logger = logging.getLogger("ibvap.ws")
 router = APIRouter(prefix="/ws", tags=["WebSockets"])
+
+async def _send_safe_json(websocket: WebSocket, payload: Any):
+    """Safely serializes and sends payload over WebSocket, converting datetimes and non-primitives to JSON strings."""
+    await websocket.send_text(json.dumps(payload, default=str))
 
 async def _authenticate_and_accept(
     websocket: WebSocket,
@@ -117,7 +122,7 @@ async def camera_ai_telemetry_ws(
         # Send initial status
         initial_status = ai_pipeline_manager.get_camera_status(camera_id)
         tracks = ai_pipeline_manager.get_camera_tracks(camera_id)
-        await websocket.send_json({
+        await _send_safe_json(websocket, {
             "event": "INITIAL_AI_STATE",
             "camera_id": camera_id,
             "status": initial_status.status,
@@ -130,7 +135,7 @@ async def camera_ai_telemetry_ws(
         while True:
             # Wait for next telemetry frame or ping
             payload = await queue.get()
-            await websocket.send_json(payload)
+            await _send_safe_json(websocket, payload)
     except WebSocketDisconnect:
         ai_pipeline_manager.unregister_ws_subscriber(camera_id, sync_send_callback)
         logger.info(f"AI feed WebSocket disconnected for {camera_id}")
@@ -167,7 +172,7 @@ async def security_events_ws(
     try:
         while True:
             payload = await queue.get()
-            await websocket.send_json(payload)
+            await _send_safe_json(websocket, payload)
     except WebSocketDisconnect:
         security_event_manager.unregister_ws_client(sync_send_event)
         logger.info("Security events WebSocket client disconnected.")
@@ -193,7 +198,7 @@ async def camera_health_ws(
     try:
         # Send initial status immediately
         statuses = stream_manager.get_all_statuses()
-        await websocket.send_json({
+        await _send_safe_json(websocket, {
             "event": "INITIAL_HEALTH",
             "cameras": list(statuses.values())
         })
@@ -240,7 +245,7 @@ async def live_alerts_ws(
     try:
         while True:
             payload = await queue.get()
-            await websocket.send_json(payload)
+            await _send_safe_json(websocket, payload)
     except WebSocketDisconnect:
         alert_engine.unregister_ws_client(sync_send_alert)
         logger.info("Alerts WebSocket client disconnected.")
