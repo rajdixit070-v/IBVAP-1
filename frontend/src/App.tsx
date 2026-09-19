@@ -93,7 +93,7 @@ const MainLayout: React.FC = () => {
   const [globalMapOpen, setGlobalMapOpen] = useState(false);
   const [targetMapCamera, setTargetMapCamera] = useState<Camera | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
 
   const { cameras, refreshCameras } = useCameras();
 
@@ -136,7 +136,12 @@ const MainLayout: React.FC = () => {
         onOpenIncident={() => setActiveTab('incidents')}
       />
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={sidebarOpen} />
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
         <main className="flex-1 h-full overflow-y-auto min-h-0 bg-[#070b12]">
           {activeTab === 'dashboard' && (
             <DashboardPage
@@ -226,7 +231,7 @@ const MainLayout: React.FC = () => {
       {/* Floating Tactical AI Copilot Launcher (Shifted & Positioned on Right) */}
       <button
         onClick={() => setAssistantOpen(true)}
-        className="fixed bottom-7 right-7 z-40 bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-sky-500 text-white px-4 py-2.5 rounded-full shadow-2xl shadow-cyan-500/40 flex items-center gap-2.5 border border-cyan-400/40 group transition-all transform hover:scale-105 cursor-pointer ring-2 ring-cyan-500/20"
+        className="fixed bottom-4 right-4 sm:bottom-7 sm:right-7 z-40 bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-sky-500 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-full shadow-2xl shadow-cyan-500/40 flex items-center gap-2 sm:gap-2.5 border border-cyan-400/40 group transition-all transform hover:scale-105 cursor-pointer ring-2 ring-cyan-500/20"
         title="Open Tactical AI Copilot (Right Panel)"
       >
         <span className="relative flex h-2.5 w-2.5">

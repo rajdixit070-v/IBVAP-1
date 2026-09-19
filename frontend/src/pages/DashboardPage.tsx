@@ -339,7 +339,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* ========================================================================= */}
       {/* TOP HEADER: DYNAMIC DUTY STATION & ACTIONS */}
       {/* ========================================================================= */}
@@ -1101,7 +1101,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       {isSuperAdmin && (
         <div className="space-y-6 animate-fade-in">
           {/* Executive Summary Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-[#0d1322] border border-slate-800 p-5 rounded-xl space-y-2">
               <div className="flex items-center justify-between text-slate-400">
                 <span className="text-xs font-mono font-semibold">TOTAL FLEET</span>
@@ -1161,7 +1161,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <span className="text-xs font-mono text-slate-400">Level-5 Central Supreme Authority</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {onNavigateToSOC && (
                 <button
                   onClick={onNavigateToSOC}

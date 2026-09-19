@@ -534,7 +534,7 @@ export const MultiSiteCommandPage: React.FC<MultiSiteCommandPageProps> = ({ onBa
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#070b14] text-slate-100 p-6 space-y-6">
+    <div className="flex flex-col min-h-screen bg-[#070b14] text-slate-100 p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* ========================================================================= */}
       {/* TOP HEADER & SCOPE BAR (Role Differentiated) */}
       {/* ========================================================================= */}

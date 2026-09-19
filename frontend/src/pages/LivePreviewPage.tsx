@@ -528,8 +528,8 @@ export const LivePreviewPage: React.FC<LivePreviewPageProps> = ({ onLocateOnMap 
       ref={videoWallContainerRef}
       className={`space-y-4 transition-all duration-300 ${
         isTheaterFullscreen
-          ? 'fixed inset-0 z-50 bg-[#070b13] p-4 overflow-y-auto w-screen h-screen'
-          : 'p-6'
+          ? 'fixed inset-0 z-50 bg-[#070b13] p-2 sm:p-4 overflow-y-auto w-screen h-screen'
+          : 'p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden'
       }`}
     >
       {/* 1. ROLE-TAILORED HEADER & TELEMETRY */}
@@ -876,10 +876,10 @@ export const LivePreviewPage: React.FC<LivePreviewPageProps> = ({ onLocateOnMap 
       )}
 
       {/* 4. MAIN WORKSPACE: OPTIONAL DIRECTORY DRAWER + VIDEO MATRIX */}
-      <div className="flex gap-4 relative">
+      <div className="flex flex-col lg:flex-row gap-4 relative">
         {/* COLLAPSIBLE CHECKPOSTS & CAMERAS DIRECTORY DRAWER */}
         {isDirectoryOpen && (
-          <div className="w-80 shrink-0 bg-[#0a0f1d] border border-cyan-800/40 rounded-2xl p-3.5 flex flex-col gap-3 shadow-2xl max-h-[800px] overflow-y-auto">
+          <div className="w-full lg:w-80 shrink-0 bg-[#0a0f1d] border border-cyan-800/40 rounded-2xl p-3.5 flex flex-col gap-3 shadow-2xl max-h-[800px] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-cyan-400" />

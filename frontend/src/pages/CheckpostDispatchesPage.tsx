@@ -245,9 +245,9 @@ export const CheckpostDispatchesPage: React.FC = () => {
   const pendingCount = dispatches.filter((d) => d.status === 'SENT_TO_HQ').length;
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto text-slate-100 font-sans">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto text-slate-100 font-sans overflow-x-hidden">
       {/* Top Header Banner */}
-      <div className="bg-gradient-to-r from-[#0e1628] via-[#0b101c] to-[#070b14] border border-cyan-500/30 rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#0e1628] via-[#0b101c] to-[#070b14] border border-cyan-500/30 rounded-2xl p-4 sm:p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[11px] font-bold border border-cyan-500/30 flex items-center gap-1">

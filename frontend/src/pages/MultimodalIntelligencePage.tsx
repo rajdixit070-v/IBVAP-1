@@ -116,7 +116,7 @@ export const MultimodalIntelligencePage: React.FC = () => {
   });
 
   return (
-    <div className="p-6 space-y-6 bg-[#070b12] text-slate-100 min-h-full">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-[#070b12] text-slate-100 min-h-full max-w-full overflow-x-hidden">
       {/* Header & Breadcrumb */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>

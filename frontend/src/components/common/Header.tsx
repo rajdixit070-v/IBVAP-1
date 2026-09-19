@@ -96,13 +96,13 @@ export const Header: React.FC<HeaderProps> = ({
               <img src="/logo.png" alt="IBVAP Logo" className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
             </div>
             <div className="flex flex-col justify-center leading-none">
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-black text-base text-white tracking-widest group-hover:text-cyan-300 transition-colors">IBVAP</span>
-                <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30 font-bold tracking-wider">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-mono font-black text-sm sm:text-base text-white tracking-widest group-hover:text-cyan-300 transition-colors">IBVAP</span>
+                <span className="text-[9px] uppercase font-mono px-1 sm:px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30 font-bold tracking-wider hidden sm:inline-block">
                   C2 MATRIX
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 font-mono tracking-tight mt-0.5 hidden sm:inline">
+              <span className="text-[10px] text-slate-400 font-mono tracking-tight mt-0.5 hidden md:inline">
                 Intelligent Border Video Analytics
               </span>
             </div>

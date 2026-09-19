@@ -98,12 +98,12 @@ export const HomePage3D: React.FC<HomePage3DProps> = ({ onSuccess }) => {
       <TacticalBorderHUD currentTime={currentTime} />
 
       {/* 3. Foreground Content (pointer-events-none on backdrop, pointer-events-auto on interactive elements) */}
-      <div className="relative z-10 min-h-screen flex flex-col justify-between pt-16 pb-8 px-4 pointer-events-none">
+      <div className="relative z-10 min-h-screen flex flex-col justify-between pt-6 sm:pt-14 pb-4 sm:pb-8 px-3 sm:px-4 pointer-events-none">
         {/* Main Center Area: Sleek Cyber Login Card */}
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center py-4">
           <div className="w-full max-w-md pointer-events-auto">
             {/* Cyber Card Container */}
-            <div className="relative bg-[#091220]/90 backdrop-blur-xl border border-slate-700/80 shadow-2xl rounded-3xl p-6 sm:p-8 overflow-hidden transition-all duration-300 hover:border-cyan-500/50 group">
+            <div className="relative bg-[#091220]/90 backdrop-blur-xl border border-slate-700/80 shadow-2xl rounded-2xl sm:rounded-3xl p-4 sm:p-8 overflow-hidden transition-all duration-300 hover:border-cyan-500/50 group">
               {/* Top Accent Gradient Border Glow */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 via-sky-400 to-indigo-500" />
               <div className="absolute -top-12 -right-12 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />

@@ -175,7 +175,7 @@ export const SystemHealthCenterPage: React.FC<SystemHealthCenterPageProps> = () 
   }, [bops, bopSearch, selectedFrontier]);
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto overflow-x-hidden">
       {/* Toast Notice */}
       {notice && (
         <div className="fixed top-4 right-4 z-50 p-4 bg-emerald-950/90 border border-emerald-500/50 rounded-xl text-emerald-300 text-xs font-mono shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4">

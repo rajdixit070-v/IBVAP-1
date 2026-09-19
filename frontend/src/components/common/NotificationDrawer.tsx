@@ -67,7 +67,13 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-80 md:w-96 bg-[#090d16] border-l border-[#1e293b] shadow-2xl flex flex-col justify-between">
+    <>
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-80 md:w-96 bg-[#090d16] border-l border-[#1e293b] shadow-2xl flex flex-col justify-between animate-in fade-in">
       {/* Header */}
       <div className="p-4 border-b border-[#1e293b] flex items-center justify-between bg-[#0d131f]">
         <div className="flex items-center gap-2">
@@ -165,5 +171,6 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
         Connected to IBVAP Command Bus
       </div>
     </div>
+    </>
   );
 };

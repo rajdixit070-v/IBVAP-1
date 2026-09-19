@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="frontend/public/logo.png" width="150" alt="IBVAP Tactical Defense Emblem" />
-  <h1>IBVAP — Intelligent Border Vision Analytics Platform</h1>
+  <img src="frontend/public/logo.png" width="130" alt="IBVAP Tactical Defense Emblem" />
+  <h1>IBVAP — Intelligent Border Video Analytics Platform</h1>
   <p><strong>Next-Generation Autonomous Perimeter Defense, Dual-Spectrum Surveillance & 3D Tactical Terrain C2 Matrix</strong></p>
 
   [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
@@ -9,156 +9,156 @@
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![3D Terrain](https://img.shields.io/badge/3D_Terrain-MapLibre%20WebGL-06B6D4.svg)](https://maplibre.org/)
   [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4+-38B2AC.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-  [![License](https://img.shields.io/badge/Security-Zero--Trust%20Hardened-emerald.svg)](docs/SECURITY.md)
+  [![Security](https://img.shields.io/badge/Security-Zero--Trust%20Hardened-emerald.svg)](#-zero-trust-access-control--default-credentials)
 </div>
 
 ---
 
-## 📌 Overview
+## 🌐 Live Production Deployments
 
-**IBVAP (Intelligent Border Vision Analytics Platform)** is an enterprise-grade, mission-critical Command & Control (C2) situational awareness system engineered for national border defense operations.
-
-The platform autonomously ingests 4K optical, PTZ, and Long-Wave Infrared (LWIR) thermal video streams from forward **Border Outposts (BOPs)** across national frontiers (Punjab, Rajasthan, Jammu, Gujarat, Kashmir, Ladakh, Bengal, Assam, etc.). It combines **real-time 3D WebGL Mountain Terrain visualization**, **Edge AI object tracking (YOLOv8 + ByteTrack)**, strict **role-based outpost isolation**, and **instant sub-15ms threat alerts** to empower commanders and Quick Reaction Teams (QRT).
+| Component | Platform | Live URL |
+|:---|:---|:---|
+| **Frontend Command Center** | Vercel | [https://ibvap-1.vercel.app](https://ibvap-1.vercel.app) |
+| **Backend REST & WebSocket API** | Render | [https://ibvap-backend-illu.onrender.com](https://ibvap-backend-illu.onrender.com) |
+| **Interactive API Documentation** | Swagger UI | [https://ibvap-backend-illu.onrender.com/docs](https://ibvap-backend-illu.onrender.com/docs) |
 
 ---
 
-## 🌟 Key Features & Capabilities
+## 🔑 Zero-Trust Access Control & Default Credentials
+
+IBVAP implements strict, zero-trust role segregation between **Delhi Central HQ Supreme Command** and forward **Border Checkpost Commanders**.
+
+### 1. Default Access Matrix
+
+| Role | Officer Callsign | Access Cipher (Password) | Assigned Scope & Jurisdiction |
+|:---|:---|:---|:---|
+| **Central HQ Supreme Command** | `admin` | `Admin@IBVAP2026` | **Global National Grid**<br>• Full oversight across all 6 frontier sectors<br>• National SOC threat matrix & QRT alerts<br>• Officer appointment & Checkpost Commander governance<br>• Cryptographic Forensic Evidence Vault (SHA-256)<br>• System Health Center & server cluster telemetry |
+| **Checkpost Commander (Punjab Sector)** | `officer_alpha` | `Officer@IBVAP2026` | **Attari-Wagah Border Outpost (`BOP-WAGAH`)**<br>• Isolated local checkpost surveillance & IP camera feeds<br>• Ground tactical PTZ joystick & optical zoom controls<br>• Drone fleet (UAV) patrols & target handoff<br>• Direct encrypted SITREP dispatch to Delhi Central HQ<br>• Virtual perimeter tripwire rules & local siren triggers |
+
+> 💡 **Quick Login:** On the login screen, clicking the **"Central HQ"** or **"Checkpost Cmdr"** tab automatically fills the valid default credentials for testing.
+
+### 2. Checkpost Commander Governance (HQ Admin Only)
+- The Central HQ Admin can appoint new commanders and create checkposts directly inside the **"Checkpost Heads (Commanders)"** module (`#security`).
+- Each appointed officer receives a designated callsign, outpost jurisdiction (e.g., Wagah, Munabao, Tanot, Sir Creek), and isolated perimeter permissions.
+
+---
+
+## 🛡️ Core Tactical Capabilities
+
+### 1. 📹 Autonomous Video Ingestion & Multi-Camera Wall
+- **Protocol Flexibility**: Ingests IP cameras via RTSP, ONVIF, NVR/DVR multi-channel, WebRTC, USB tactical webcams, and drone RTSP/UDP streams.
+- **Dynamic Multi-Grid**: Seamless switching between 1x1 Focus, 2x2 Quad, 3x3 Tactical, and 4x4 High-Density 16-channel video walls.
+- **Offline Edge Resilience**: Local checkposts record continuous FIFO video loops locally; low-bandwidth alerts and snapshots transmit to Central HQ even over degraded SATCOM links.
+
+### 2. 🤖 Dual-Spectrum Edge AI (YOLOv8 + ByteTrack)
+- **Zero-Lux Threat Detection**: Real-time fusion of 4K optical day-feeds and Long-Wave Infrared (LWIR) thermal sensors.
+- **Persistent Object Tracking**: ByteTrack Kalman filtering maintains persistent IDs through foliage occlusions and temporary terrain masking.
+- **False Alarm Suppression**: Suppresses non-threat movement (wind-blown shrubs, dust storms, small fauna) while pinpointing perimeter breaches, unauthorized vehicles, and weapon silhouettes.
+
+### 3. ⛰️ 3D WebGL Mountain Terrain & Tactical GIS
+- **Physical Elevation DEM**: Real 3D topographical raster-DEM elevation modeling with MapLibre GL WebGL, rendering actual ridgelines, mountain valleys, and riverbeds.
+- **International Zero-Line Fencing**: Border security wire and camera FOV fan projections dynamically conform to 3D mountain slopes.
+- **Tactical Navigation Modes**: Switchable satellite orthophoto, topographical contour, tactical dark canvas, and road grid views with 1-click sector jumps (Punjab, Rajasthan, J&K, Ladakh, Gujarat).
+
+### 4. 🕹️ PTZ Optical Steering & Tactical Joystick
+- Real-time Pan/Tilt/Zoom velocity steering with optical zoom presets (Gate, Wire, Recon, Long-Range).
+- Automated ByteTrack target locking to steer motorized PTZ turrets following detected intrusion targets.
+
+### 5. 🛸 Autonomous Drone (UAV) Fleet Operations
+- Tactical aerial reconnaissance with waypoint mission planning (Patrol, Intercept, Recon).
+- Ground-to-Air Track Handoff: Seamless target telemetry transfer from ground sentry cameras to airborne drones.
+
+### 6. 🔒 Cryptographic Forensic Evidence Vault
+- Automated snapshot capture of all intrusion triggers with immutable SHA-256 cryptographic hashes.
+- Non-repudiation chain of custody logs, GPS metadata, and court-admissible audit reports.
+
+### 7. 📡 Real-Time SITREP Uplink to Delhi HQ
+- Instant checkpost Situation Reports (SITREPs) transmission from border outposts to Delhi Central HQ with live WebSocket synchronization.
+- Automated priority escalation (Normal, Elevated, Critical) and one-click QRT reinforcement broadcast.
+
+### 8. 🩺 System Health Center
+- Subsystem diagnostics covering database connectivity, Redis/WebSocket bus, OpenCV camera streamer threads, and AI inference latency.
+- Live telemetry stats with real-time refresh.
+
+---
+
+## 💻 Technology Architecture
 
 ```mermaid
 graph TD
-    A[Remote Border Cameras / NVR / PTZ / Drones] -->|RTSP / ONVIF / WebRTC| B[Edge Ingestion & Diagnostics]
-    B --> C[Dual-Spectrum AI Inference: YOLOv8 + ByteTrack]
-    C --> D[Tactical Fusion & False Alarm Filter]
-    D --> E[Sub-15ms WebSocket Telemetry Bus]
-    E --> F[React Tactical Command HUD & 3D WebGL Terrain Map]
-    E --> G[Automated QRT Sirens & Incident Playbooks]
+    A[Remote Border Cameras / NVR / PTZ / Drones] -->|RTSP / ONVIF / UDP| B[FastAPI Backend & OpenCV Ingestion]
+    B --> C[Edge AI Pipeline: YOLOv8 + ByteTrack]
+    C --> D[Tactical Alert & False Alarm Filter Engine]
+    D --> E[Sub-15ms WebSocket Event Bus]
+    E --> F[React Tactical Command HUD & 3D Terrain Map]
+    E --> G[Automated Sirens, QRT Dispatch & Central HQ SITREPs]
 ```
-
-### 1. ⛰️ Realistic 3D WebGL Mountain Terrain & Tactical GIS
-* **Physical Elevation**: Native WebGL 3D raster-DEM terrain powered by MapLibre GL JS with AWS Open Data Terrarium elevation tiles and `1.85x` vertical exaggeration. True ridgelines, peaks, valleys, and riverbeds render naturally.
-* **Keyless Multi-Style Overlays**: 100% public, high-speed tile layers with zero paid API key dependencies:
-  * 🛰️ **Satellite Mode**: High-resolution photorealistic aerial orthophotos (Esri World Imagery).
-  * ⛰️ **Topographic Mode**: Elevation relief and contour lines (Esri World Topo).
-  * 🛡️ **Dark Ops Mode**: High-contrast tactical night vision canvas (Esri Dark Canvas).
-  * 🛣️ **Navigation Mode**: Tactical road and checkpost network (OpenStreetMap).
-* **3D Border Wire & FOV Projections**: International zero-line perimeter fences and camera Field-of-View (FOV) fan cones dynamically conform to 3D mountain slopes.
-* **Interactive 3D Controls**: Dedicated 3D D-pad (North, South, East, West), tilt angle toggle (65° oblique horizon view vs. top-down 2D radar), 360° bearing compass, and autonomous drone orbit flythrough.
-
-### 2. 🎯 Multi-Tier Role Scoping & Outpost Perimeter Isolation
-* **Super Admin Command Mode**:
-  * Nationwide frontier navigation ribbon (Punjab, Rajasthan, Jammu, Gujarat, Kashmir, Ladakh, South Bengal, North Bengal, Tripura, Meghalaya, Mizoram, Assam).
-  * Selecting any Frontier dynamically restricts the map and sensor feeds to **only the BOPs belonging to that Frontier** and **only the cameras attached to those BOPs**.
-  * "All Frontiers" view unlocks national defense grid monitoring.
-* **BOP Commander Mode**:
-  * Strict outpost perimeter isolation: Commander sees **only their assigned Frontier**, **only their assigned BOP**, and **only cameras attached to their post**.
-  * All foreign checkposts and unauthorized cameras across other borders are completely filtered out.
-
-### 3. 📹 Dual-Spectrum Optical & Thermal Vision
-* **Nocturnal Stealth Detection**: Seamlessly switches to LWIR thermal telemetry during zero-lux darkness, blizzard, or dense alpine fog.
-* **False Alarm Suppression**: Filters out over 95% of false alarms caused by desert dust plumes, flowing river ripples, and stray wildlife.
-* **Camera Lens Tamper & Blur Telemetry**: Evaluates Laplacian variance to detect lens occlusion, physical tampering, or fog build-up.
-
-### 4. 🤖 Edge AI, ByteTrack & Movement Intelligence
-* **Multi-Object Tracking**: ByteTrack Kalman filters assign persistent tracking IDs across occlusions, tree canopies, and temporary obstacles.
-* **Geometric Virtual Fencing**: Arbitrary polygon intrusion zones, directional tripwires, and buffer exclusion zones.
-* **Cross-Camera Handover (Re-ID)**: Re-identifies suspicious personnel or rogue vehicles across adjacent observation towers.
-
-### 5. 🚨 Tactical Incident Command & QRT Dispatch
-* **Instant Threat Broadcasting**: Sub-15ms automated audio sirens and visual alert broadcasts to on-duty commanders and QRT dispatchers.
-* **Evidence Logging**: Forensic image snapshot logging with SHA-256 cryptographic hashes and GPS coordinates.
-* **Tactical SOP Playbooks**: Automated response workflows mobilization for immediate border threat containment.
-
----
-
-## 💻 Tech Stack
 
 | Layer | Technologies |
 |:---|:---|
-| **Frontend** | React 18, TypeScript, Tailwind CSS, MapLibre GL JS, Leaflet, Lucide Icons, Vite |
-| **Backend** | FastAPI (Python 3.10+), Uvicorn ASGI Server, Pydantic, WebSockets |
-| **AI & Computer Vision** | OpenCV, YOLOv8, ByteTrack, PyTorch |
-| **Database & ORM** | PostgreSQL / SQLite, SQLAlchemy 2.0 |
-| **Security** | Zero-Trust JWT Authentication, AES-256 Fernet Encryption, Strict CORS |
-| **Deployment** | Vercel (Frontend SPA) + Render (Backend Web Service) / Docker Compose |
+| **Frontend UI** | React 18, TypeScript, TailwindCSS, MapLibre GL JS (3D WebGL), Leaflet, Lucide Icons, Vite |
+| **Backend Service** | FastAPI (Python 3.10+), Uvicorn ASGI, Pydantic v2, WebSockets, Starlette |
+| **Vision & AI Engine** | OpenCV (cv2), Ultralytics YOLOv8, ByteTrack, PyTorch, NumPy |
+| **Database & ORM** | PostgreSQL (Render Live) / SQLite (Local fallback), SQLAlchemy 2.0 |
+| **Security Architecture** | Zero-Trust JWT Authentication, bcrypt password hashing, CORS protection |
+| **Cloud Deployment** | Vercel (Frontend SPA) + Render (Cloud Web Service) |
 
 ---
 
-## 🚀 Quick Start (Local Setup)
+## 🚀 Local Development Setup
 
-### 1. Backend Launch
+### 1. Prerequisites
+- **Python**: 3.10 or higher
+- **Node.js**: 18 or higher (with npm)
+- **Git**
+
+### 2. Backend Setup
 ```bash
+# Navigate to backend directory
 cd backend
-python -m venv venv
 
-# Activate Virtual Environment (Windows: .\venv\Scripts\Activate.ps1 | Linux/macOS: source venv/bin/activate)
+# Create and activate Python virtual environment
+# On Windows:
+python -m venv venv
 .\venv\Scripts\Activate.ps1
 
-pip install -r requirements.txt
-cp .env.example .env
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-*Backend API will be live at `http://localhost:8000` with Swagger Docs at `http://localhost:8000/docs`.*
+# On Linux / macOS:
+# python3 -m venv venv
+# source venv/bin/activate
 
-### 2. Frontend Launch
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the FastAPI server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+*Backend API will run at `http://localhost:8000` with Swagger docs at `http://localhost:8000/docs`.*
+
+### 3. Frontend Setup
 ```bash
+# Navigate to frontend directory
 cd frontend
+
+# Install Node dependencies
 npm install
+
+# Start the development server
 npm run dev
 ```
-*Frontend Command Center will be live at `http://localhost:5173`.*
+*Frontend will run at `http://localhost:5173`.*
 
 ---
 
-## 🐳 Docker Deployment
+## 📱 Multi-Device & Mobile Responsiveness
 
-Run the entire full-stack platform with a single command:
-
-```bash
-docker compose up -d --build
-```
-
-- **Frontend Portal**: `http://localhost:80`
-- **Backend API**: `http://localhost:8000`
+IBVAP is optimized for all operational environments:
+- **Large Video Walls & War Rooms**: 4K / 8K ultra-wide SOC displays.
+- **Desktop & Laptop Workstations**: Checkpost command consoles.
+- **Tablets & Field Terminals**: Mobile tactical field tablets with touch-friendly joystick and map navigation.
+- **Mobile Handhelds**: Sentry mobile devices with a slide-out navigation drawer, touch backdrops, and compact HUD telemetry.
 
 ---
 
-## 🔑 Default Login Credentials
+## 🇮🇳 Dedicated to the Sentinels of the Frontier
 
-| Role | Callsign / Username | Password | Operational Access Level |
-|:---|:---|:---|:---|
-| **Super Admin / National HQ** | `admin` | `AdminSecure@IBVAP2026!` | Full Multi-Frontier C2, All BOPs, Camera Management, System Health |
-| **BOP Commander** | `officer_alpha` | `OfficerSecure@IBVAP2026!` | Assigned Outpost Perimeter, Outpost Cameras, Incident Response, QRT Dispatch |
-
----
-
-## 📁 Project Directory Structure
-
-```text
-IBVAP-1/
-├── backend/
-│   ├── app/
-│   │   ├── api/             # REST Endpoints (Cameras, Alerts, GIS, Drones, Health)
-│   │   ├── core/            # Security, JWT, Encryption, Config
-│   │   ├── models/          # Database Schemas & Pydantic Data Models
-│   │   ├── services/        # Video Ingestion, YOLOv8, ByteTrack, WebSocket Bus
-│   │   └── main.py          # FastAPI Application Gateway
-│   ├── requirements.txt     # Python Dependencies
-│   └── Dockerfile           # Backend Container Specification
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # 3D Map (MapLibre), Leaflet Map, Camera Modals, HUD
-│   │   ├── pages/           # GIS Intelligence, Command Center, Health, Dispatches
-│   │   ├── services/        # API Clients & Real-Time WebSocket Handlers
-│   │   └── App.tsx          # Main React Application Router
-│   ├── package.json         # Frontend Dependencies & Build Scripts
-│   ├── vercel.json          # Production SPA Client-Side Routing
-│   └── Dockerfile           # Multi-Stage Nginx Container Specification
-├── docker-compose.yml       # Production Multi-Container Orchestration
-└── README.md                # Master Documentation
-```
-
----
-
-## 🛡️ License & Defense Inspection Compliance
-
-Built strictly in compliance with enterprise zero-trust security architectures, non-repudiation cryptographic audit logs, and defense-grade situational awareness standards.
+IBVAP is dedicated to the brave soldiers and sentinels of the **Border Security Force (BSF)**, **Indo-Tibetan Border Police (ITBP)**, and **Indian Armed Forces** guarding the frontiers 24/7.

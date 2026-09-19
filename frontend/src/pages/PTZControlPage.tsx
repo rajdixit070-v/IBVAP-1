@@ -377,9 +377,9 @@ export const PTZControlPage: React.FC<PTZControlPageProps> = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* Header with Return to Home Dashboard */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 rounded-xl backdrop-blur-sm shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 sm:p-6 rounded-xl backdrop-blur-sm shadow-xl">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30 shrink-0">
             <Crosshair className="w-6 h-6 animate-pulse" />

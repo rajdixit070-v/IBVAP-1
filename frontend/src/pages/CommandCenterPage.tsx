@@ -414,7 +414,7 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
   const containmentRate = totalAlerts > 0 ? Math.round(((totalAlerts - activeAlerts.length) / totalAlerts) * 100) : 98;
 
   return (
-    <div className="p-6 space-y-6 bg-[#070b12] text-slate-100 min-h-full">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-[#070b12] text-slate-100 min-h-full max-w-full overflow-x-hidden">
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-[#1c131d] via-[#0f172a] to-[#0d131f] border border-[#3b1928] rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">

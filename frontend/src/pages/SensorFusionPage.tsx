@@ -131,9 +131,9 @@ export const SensorFusionPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 rounded-xl backdrop-blur-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 sm:p-6 rounded-xl backdrop-blur-sm">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-cyan-600/20 text-cyan-400 rounded-lg border border-cyan-500/30">
