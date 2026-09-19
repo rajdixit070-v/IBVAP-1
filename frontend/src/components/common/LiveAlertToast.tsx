@@ -4,6 +4,7 @@ import { alertSoundService } from '../../services/alertSoundService';
 import { formatEvidenceUrl } from '../../services/evidenceService';
 import { AlertsWebSocket } from '../../services/websocket';
 import { Notification } from '../../types/incident';
+import { useCameras } from '../../context/CameraContext';
 import { ShieldAlert, User, Car, PawPrint, Plane, X, ExternalLink, MapPin, Volume2 } from 'lucide-react';
 
 interface LiveAlertToastProps {
@@ -13,10 +14,51 @@ interface LiveAlertToastProps {
 
 export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpenIncident }) => {
   const [activeAlert, setActiveAlert] = useState<Notification | null>(null);
+  const { cameras } = useCameras();
   const shownIds = useRef<Set<string | number>>(new Set());
+  const activeCamerasRef = useRef(cameras);
 
-  // Trigger alert, tactical siren and spoken voice alert
+  useEffect(() => {
+    activeCamerasRef.current = cameras;
+    // If cameras list was cleared (0 cameras), immediately clear any active toast and silence sirens
+    if (!cameras || cameras.length === 0) {
+      setActiveAlert(null);
+    }
+  }, [cameras]);
+
+  // Trigger alert, tactical siren and spoken voice alert ONLY if an authentic registered camera exists
   const triggerAlertDisplay = (notif: Notification) => {
+    const currentCams = activeCamerasRef.current;
+    
+    // STRICT RULE: If no cameras are added in system, suppress ALL alerts completely
+    if (!currentCams || currentCams.length === 0) {
+      return;
+    }
+
+    const titleLower = (notif.title || '').toLowerCase();
+    const msgLower = (notif.message || '').toLowerCase();
+
+    // Ignore benign system camera offline transitions from triggering the full intruder siren
+    if (titleLower.includes('offline') || msgLower.includes('signal lost') || titleLower.includes('recovered')) {
+      return;
+    }
+
+    // If notification has a camera_id, ensure it exists in currently active, enabled cameras
+    if (notif.camera_id) {
+      const match = currentCams.find(c => c.camera_id === notif.camera_id);
+      if (!match || !match.enabled) {
+        return;
+      }
+    } else {
+      // Check if notification text references any registered camera
+      const isRegisteredCamera = currentCams.some(
+        c => notif.title?.includes(c.camera_id) || notif.message?.includes(c.camera_id)
+      );
+      if (!isRegisteredCamera) {
+        return;
+      }
+    }
+
     const key = notif.notification_id || notif.alert_id || notif.id;
     if (shownIds.current.has(key)) return;
     shownIds.current.add(key);
@@ -55,7 +97,7 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
       }
     });
 
-    // Also listen to internal browser event for instant testing
+    // Also listen to internal browser event for manual testing
     const handleCustomTrigger = (e: any) => {
       if (e.detail) {
         triggerAlertDisplay(e.detail);
@@ -69,9 +111,12 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
     };
   }, []);
 
-  // Polling fallback every 2 seconds for any new unread notification
+  // Polling fallback every 3 seconds for new unread notifications (only active when real cameras exist)
   useEffect(() => {
     const checkAlerts = async () => {
+      if (!activeCamerasRef.current || activeCamerasRef.current.length === 0) {
+        return;
+      }
       try {
         const notifs = await incidentService.getNotifications({ unread_only: true, limit: 10 });
         if (notifs && notifs.length > 0) {
@@ -89,7 +134,7 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
     };
 
     checkAlerts();
-    const interval = setInterval(checkAlerts, 2000);
+    const interval = setInterval(checkAlerts, 3000);
     return () => clearInterval(interval);
   }, []);
 

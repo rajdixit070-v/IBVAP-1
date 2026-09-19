@@ -81,6 +81,12 @@ class SecurityEventManager:
 
         db: Session = SessionLocal()
         try:
+            # Drop events if camera does not exist in registry or is disabled
+            from app.models.camera import Camera
+            cam = db.query(Camera).filter(Camera.camera_id == camera_id).first()
+            if not cam or not cam.enabled:
+                return None
+
             with self._lock:
                 existing_entry = self._active_incident_map.get(key)
                 

@@ -247,6 +247,8 @@ def delete_camera(db: Session, db_camera: Any):
         ("app.models.multimodal_models", "AIOperatorFeedback", "camera_id"),
         ("app.models.zone", "SecurityZone", "camera_id"),
         ("app.models.health_log", "CameraHealthLog", "camera_id"),
+        ("app.models.health_event", "HealthEvent", "source_id"),
+        ("app.models.incident", "Incident", "camera_id"),
         ("app.models.gis_models", "CameraFOV", "camera_id"),
         ("app.models.ptz_models", "PTZDevice", "camera_id"),
         ("app.models.ptz_models", "PTZPreset", "camera_id"),
@@ -271,6 +273,17 @@ def delete_camera(db: Session, db_camera: Any):
                     db.query(cls_obj).filter(col == cam_id).delete(synchronize_session=False)
         except Exception as err:
             logger.debug(f"Could not cascade delete from {cls_name}: {err}")
+
+    # Also clean any notifications mentioning this camera by name or ID in title or message
+    try:
+        from app.models.notification import Notification
+        db.query(Notification).filter(
+            (Notification.camera_id == cam_id) |
+            (Notification.title.like(f"%{cam_id}%")) |
+            (Notification.message.like(f"%{cam_id}%"))
+        ).delete(synchronize_session=False)
+    except Exception:
+        pass
 
     # Clean camera pairs (thermal + RGB)
     try:

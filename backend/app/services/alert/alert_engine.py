@@ -100,6 +100,12 @@ class AlertEngine:
         """
         db: Session = SessionLocal()
         try:
+            # Verify camera actually exists and is enabled before generating any security alert
+            from app.models.camera import Camera
+            cam = db.query(Camera).filter(Camera.camera_id == event.camera_id).first()
+            if not cam or not cam.enabled:
+                return None
+
             # Drop only zero or negative risk trivialities
             if event.risk_score < 10:
                 return None
@@ -134,9 +140,6 @@ class AlertEngine:
                 else:
                     deadline = now + timedelta(seconds=600)
 
-                # Query camera for precise outpost / GPS location & BOP site
-                from app.models.camera import Camera
-                cam = db.query(Camera).filter(Camera.camera_id == event.camera_id).first()
                 cam_bop = cam.bop_site if cam and cam.bop_site else "HQ Central"
 
                 # Generate new Alert
@@ -214,6 +217,13 @@ class AlertEngine:
         try:
             now = datetime.utcnow()
             camera_id = health_event.source_id
+
+            # Verify camera actually exists and is enabled before generating health alert
+            from app.models.camera import Camera
+            cam = db.query(Camera).filter(Camera.camera_id == camera_id).first()
+            if not cam or not cam.enabled:
+                return None
+
             dedup_key = f"{camera_id}:HEALTH:OFFLINE"
 
             with self._lock:
@@ -251,7 +261,7 @@ class AlertEngine:
                     alert_id=new_alert_id,
                     event_id=health_event.event_id,
                     camera_id=camera_id,
-                    bop_site="BOP Alpha",
+                    bop_site=cam.bop_site if cam and cam.bop_site else "BOP Alpha",
                     title=title,
                     priority=priority,
                     risk_score=75 if priority == "HIGH" else 90 if priority == "CRITICAL" else 40,
@@ -264,6 +274,7 @@ class AlertEngine:
 
                 notification = Notification(
                     alert_id=new_alert_id,
+                    camera_id=camera_id,
                     title=title,
                     message=health_event.description or f"Camera {camera_id} signal lost.",
                     priority=priority,

@@ -99,6 +99,14 @@ export const LivePreviewPage: React.FC<LivePreviewPageProps> = ({ onLocateOnMap 
   const [recentEvents, setRecentEvents] = useState<SecurityEvent[]>([]);
   const [qrtToast, setQrtToast] = useState<string | null>(null);
 
+  const camerasRef = useRef(cameras);
+  useEffect(() => {
+    camerasRef.current = cameras;
+    if (!cameras || cameras.length === 0) {
+      setRecentEvents([]);
+    }
+  }, [cameras]);
+
   // PTZ Popover active camera ID
   const [activePtzCameraId, setActivePtzCameraId] = useState<string | null>(null);
 
@@ -112,7 +120,15 @@ export const LivePreviewPage: React.FC<LivePreviewPageProps> = ({ onLocateOnMap 
     eventService
       .getEvents({ limit: 12, status: 'ACTIVE' })
       .then((evts) => {
-        if (isMounted) setRecentEvents(evts);
+        if (isMounted) {
+          const currentCams = camerasRef.current;
+          if (!currentCams || currentCams.length === 0) {
+            setRecentEvents([]);
+          } else {
+            const filtered = evts.filter(e => currentCams.some(c => c.camera_id === e.camera_id));
+            setRecentEvents(filtered);
+          }
+        }
       })
       .catch(() => {});
 
@@ -121,6 +137,11 @@ export const LivePreviewPage: React.FC<LivePreviewPageProps> = ({ onLocateOnMap 
       ws = new SecurityEventsWebSocket((payload) => {
         if (!isMounted || !payload?.data) return;
         const newEvt = payload.data;
+        const currentCams = camerasRef.current;
+        // Suppress alarms and events if no cameras exist or event is for unknown camera
+        if (!currentCams || currentCams.length === 0) return;
+        if (newEvt.camera_id && !currentCams.some(c => c.camera_id === newEvt.camera_id && c.enabled)) return;
+
         setRecentEvents((prev) => [newEvt, ...prev.slice(0, 15)]);
 
         if (newEvt.severity === 'CRITICAL' || newEvt.severity === 'HIGH') {
