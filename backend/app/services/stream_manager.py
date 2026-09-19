@@ -249,56 +249,60 @@ class StreamManager:
         frame_interval = 1.0 / max(1.0, effective_fps)
         self.ensure_camera_running(camera_id)
         
-        while True:
-            streamer = self.get_streamer(camera_id)
-            if not streamer or not getattr(streamer, "_running", False):
-                streamer = self.ensure_camera_running(camera_id)
+        try:
+            while True:
+                streamer = self.get_streamer(camera_id)
+                if not streamer or not getattr(streamer, "_running", False):
+                    streamer = self.ensure_camera_running(camera_id)
 
-            if not streamer or not getattr(streamer, "_running", False) or streamer.status == "OFFLINE":
-                offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n"
-                    b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
-                    offline_jpeg + b"\r\n"
-                )
-                await asyncio.sleep(0.08)
-                continue
+                if not streamer or not getattr(streamer, "_running", False) or streamer.status == "OFFLINE":
+                    offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
+                        offline_jpeg + b"\r\n"
+                    )
+                    await asyncio.sleep(0.08)
+                    continue
 
-            jpeg_bytes = None
-            if stream_profile == "sub":
-                # Low-bandwidth optimized frame
-                raw_frame = streamer.get_latest_frame()
-                if raw_frame is not None:
-                    h, w = raw_frame.shape[:2]
-                    target_w = 640
-                    target_h = int(h * (target_w / max(1, w)))
-                    small_frame = cv2.resize(raw_frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
-                    _, encoded = cv2.imencode('.jpg', small_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 55])
-                    jpeg_bytes = encoded.tobytes()
+                jpeg_bytes = None
+                if stream_profile == "sub":
+                    # Low-bandwidth optimized frame
+                    raw_frame = streamer.get_latest_frame()
+                    if raw_frame is not None:
+                        h, w = raw_frame.shape[:2]
+                        target_w = 640
+                        target_h = int(h * (target_w / max(1, w)))
+                        small_frame = cv2.resize(raw_frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                        _, encoded = cv2.imencode('.jpg', small_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 55])
+                        jpeg_bytes = encoded.tobytes()
+                    else:
+                        jpeg_bytes = streamer.get_latest_jpeg()
                 else:
                     jpeg_bytes = streamer.get_latest_jpeg()
-            else:
-                jpeg_bytes = streamer.get_latest_jpeg()
 
-            if jpeg_bytes:
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n"
-                    b"Content-Length: " + str(len(jpeg_bytes)).encode('utf-8') + b"\r\n\r\n" +
-                    jpeg_bytes + b"\r\n"
-                )
-            else:
-                offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n"
-                    b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
-                    offline_jpeg + b"\r\n"
-                )
-                await asyncio.sleep(0.05)
-                continue
-            await asyncio.sleep(frame_interval)
+                if jpeg_bytes:
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        b"Content-Length: " + str(len(jpeg_bytes)).encode('utf-8') + b"\r\n\r\n" +
+                        jpeg_bytes + b"\r\n"
+                    )
+                else:
+                    offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
+                        offline_jpeg + b"\r\n"
+                    )
+                    await asyncio.sleep(0.05)
+                    continue
+                await asyncio.sleep(frame_interval)
+        except (asyncio.CancelledError, GeneratorExit):
+            logger.debug(f"[{camera_id}] Client disconnected from stream.")
+            return
 
 
     def shutdown_all(self):

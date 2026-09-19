@@ -214,11 +214,11 @@ class YOLOObjectDetector:
         if thresholds:
             active_thresholds.update(thresholds)
 
-        # 0. High-efficiency synthetic target handling for simulated/edge demo cameras
+        # 0. Synthetic target handling strictly for explicit demo streams (synthetic:// or test://)
         try:
             from app.services.stream_manager import stream_manager
             streamer = stream_manager.get_streamer(camera_id)
-            if streamer and (getattr(streamer, "is_synthetic", False) or getattr(streamer, "_in_tactical_fallback", False)):
+            if streamer and getattr(streamer, "is_synthetic", False) and streamer.base_rtsp_url.startswith(("synthetic://", "test://")):
                 sim_targets = streamer.get_synthetic_targets()
                 for t in sim_targets:
                     cat = t.get("category", "other")

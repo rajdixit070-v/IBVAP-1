@@ -130,7 +130,9 @@ logging.basicConfig(
 logger = logging.getLogger("ibvap.main")
 
 def ensure_default_border_cameras(db: Session):
-    """Guarantees authentic frontier checkpost surveillance cameras exist in database."""
+    """Guarantees baseline border cameras exist only when DEMO_MODE or SEED_DEMO is explicitly enabled."""
+    if not (settings.DEMO_MODE or os.getenv("SEED_DEMO", "false").lower() in ("true", "1")):
+        return
     if db.query(Camera).count() >= 4:
         return
     core_cameras = [
@@ -591,12 +593,8 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             db.commit()
             logger.info("Seeded initial behaviour detection rules.")
 
-        # Ensure baseline border cameras exist if camera table is empty
-        if db.query(Camera).count() == 0:
-            ensure_default_border_cameras(db)
-
-        # Seed operational/demo data only if explicitly requested
-        if seed_demo:
+        # Seed operational/demo data only if explicitly requested or in DEMO_MODE
+        if seed_demo or settings.DEMO_MODE:
             from app.services.demo.demo_seeder import seed_demo_data
             seed_demo_data(db)
             ensure_default_border_cameras(db)

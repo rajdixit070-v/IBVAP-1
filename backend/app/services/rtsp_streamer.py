@@ -76,18 +76,23 @@ class RTSPStreamer:
         # FPS calculation window
         self._fps_timestamps = []
 
-        # Pre-seed initial frame and targets so buffer is immediately available
+        # Pre-seed initial frame (clean standby for real cameras, tactical demo frame only if synthetic)
         try:
-            init_frame, init_targets = self._create_tactical_frame()
+            if self.is_synthetic:
+                init_frame, init_targets = self._create_tactical_frame()
+                self._synthetic_targets = init_targets
+            else:
+                init_frame = self._create_standby_frame("STANDBY // CONNECTING TO CAMERA STREAM...")
+                self._synthetic_targets = []
+
             self._latest_raw_frame = init_frame
-            self._synthetic_targets = init_targets
             ret, buf = cv2.imencode(".jpg", init_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
             if ret:
                 self._latest_jpeg = buf.tobytes()
             self._latest_frame_time = time.time()
             self.last_seen_at = datetime.utcnow()
         except Exception as init_err:
-            logger.debug(f"Pre-seed tactical buffer note: {init_err}")
+            logger.debug(f"Pre-seed buffer note: {init_err}")
 
     def start(self):
         """Starts background frame grabber thread."""
@@ -294,11 +299,8 @@ class RTSPStreamer:
                                 s.settimeout(0.6)
                                 s.connect((target_host, target_port))
                     except Exception as sock_err:
-                        logger.info(f"[{self.camera_id}] Physical host {target_host}:{target_port} unreachable ({sock_err}). Engaging tactical edge stream immediately.")
-                        self._in_tactical_fallback = True
-                        self.is_synthetic = True
-                        self._synthetic_stream_loop()
-                        return
+                        logger.info(f"[{self.camera_id}] Physical host {target_host}:{target_port} unreachable ({sock_err}).")
+                        raise ConnectionError(f"Target host {target_host}:{target_port} unreachable.")
 
                     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;2000000|max_delay;100000|buffer_size;102400|fflags;nobuffer|flags;low_delay"
                     cap = cv2.VideoCapture(url_str, cv2.CAP_FFMPEG)
@@ -338,11 +340,15 @@ class RTSPStreamer:
 
             except Exception as e:
                 err_msg = str(e)
-                logger.info(f"[{self.camera_id}] Physical camera stream note: {err_msg}. Transitioning to Tactical Edge Ingestion for equipment '{self.stream_type}'.")
-                self._in_tactical_fallback = True
-                self.is_synthetic = True
-                self._synthetic_stream_loop()
-                break
+                self.reconnect_attempts += 1
+                logger.info(f"[{self.camera_id}] Video feed notice: {err_msg}. Retrying in background...")
+                self._update_status("CONNECTING" if self.reconnect_attempts <= 3 else "OFFLINE", err_msg)
+                
+                # Render clean CCTV standby frame
+                standby = self._create_standby_frame(f"NO SIGNAL // {err_msg[:40]}")
+                with self._lock:
+                    self._synthetic_targets = []
+                self._process_new_frame(standby, time.time(), is_standby=True)
             finally:
                 if cap is not None:
                     cap.release()
@@ -460,7 +466,7 @@ class RTSPStreamer:
             logger.debug(f"[{self.camera_id}] HTTP stream attempt for {url}: {e}")
             return False
 
-    def _process_new_frame(self, frame: np.ndarray, timestamp: float):
+    def _process_new_frame(self, frame: np.ndarray, timestamp: float, is_standby: bool = False):
         """Processes received frame, computes FPS, and updates JPEG buffer."""
         # Update resolution if needed
         if not self.resolution:
@@ -492,16 +498,58 @@ class RTSPStreamer:
             self._frame_count += 1
 
         self.last_seen_at = datetime.utcnow()
-        if self.status != "HEALTHY":
+        if not is_standby and self.status != "HEALTHY":
             self._update_status("HEALTHY", None)
 
     def _handle_disconnect(self, err_msg: str):
-        """Handles stream failure, switches to tactical failover instead of shutting down to OFFLINE."""
+        """Handles stream failure, renders clean standby frame and schedules retry."""
         self.reconnect_attempts += 1
-        logger.info(f"[{self.camera_id}] Stream notice: {err_msg}. Engaging tactical fallback feed.")
-        self._in_tactical_fallback = True
-        self.is_synthetic = True
-        self._synthetic_stream_loop()
+        logger.info(f"[{self.camera_id}] Stream notice: {err_msg}")
+        if self.base_rtsp_url.startswith(("synthetic://", "test://")):
+            self._in_tactical_fallback = True
+            self.is_synthetic = True
+            self._synthetic_stream_loop()
+            return
+
+        self._update_status("CONNECTING" if self.reconnect_attempts <= 3 else "OFFLINE", err_msg)
+        standby = self._create_standby_frame(f"NO SIGNAL // {err_msg[:40]}")
+        with self._lock:
+            self._synthetic_targets = []
+        self._process_new_frame(standby, time.time(), is_standby=True)
+
+    def _create_standby_frame(self, message: str = "NO SIGNAL // RECONNECTING..."):
+        """Generates clean CCTV standby frame when physical stream is unreachable/disconnected."""
+        width, height = 1280, 720
+        frame = np.zeros((height, width, 3), dtype=np.uint8)
+        frame[:] = (18, 20, 26)
+
+        # Subtle grid
+        for y in range(0, height, 60):
+            cv2.line(frame, (0, y), (width, y), (26, 30, 38), 1)
+        for x in range(0, width, 80):
+            cv2.line(frame, (x, 0), (x, height), (26, 30, 38), 1)
+
+        # Top Bar
+        cv2.rectangle(frame, (0, 0), (width, 50), (10, 12, 16), -1)
+        cv2.putText(frame, f"IBVAP // {self.camera_name} [{self.camera_id}]", (20, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 230), 2)
+        now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        cv2.putText(frame, now_str, (width - 280, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (140, 160, 180), 1)
+
+        # Center Status Warning Box
+        cx, cy = width // 2, height // 2
+        cv2.rectangle(frame, (cx - 280, cy - 65), (cx + 280, cy + 65), (14, 16, 22), -1)
+        cv2.rectangle(frame, (cx - 280, cy - 65), (cx + 280, cy + 65), (45, 55, 75), 1)
+        
+        cv2.putText(frame, message, (cx - 250, cy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (80, 140, 255), 2)
+        bop_info = f"BOP: {self.bop_site} | TYPE: {(self.stream_type or 'RTSP').upper()}"
+        cv2.putText(frame, bop_info, (cx - 230, cy + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 170, 190), 1)
+        attempt_info = f"STATUS: RECONNECTING (ATTEMPT #{self.reconnect_attempts})" if self.reconnect_attempts > 0 else "STATUS: INITIALIZING CONNECTION..."
+        cv2.putText(frame, attempt_info, (cx - 200, cy + 45), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (120, 140, 160), 1)
+
+        # Bottom Bar
+        cv2.rectangle(frame, (0, height - 35), (width, height), (10, 12, 16), -1)
+        cv2.putText(frame, f"TARGET STREAM: {self.rtsp_url}", (20, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 120, 140), 1)
+        return frame
 
     def _create_tactical_frame(self, x_pos: float = 220.0, p_offset: float = 0.0, now_dt: Optional[datetime] = None):
         """Creates a high-fidelity synthetic tactical border frame and targets for this equipment type."""
