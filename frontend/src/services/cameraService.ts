@@ -111,5 +111,11 @@ export const cameraService = {
     link.download = `${cameraId}_snapshot_${Date.now()}.jpg`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+
+  async ingestDirectFrame(cameraId: string, frameBlob: Blob): Promise<void> {
+    await api.post(`/cameras/${cameraId}/ingest-frame`, frameBlob, {
+      headers: { 'Content-Type': 'image/jpeg' }
+    });
   }
 };

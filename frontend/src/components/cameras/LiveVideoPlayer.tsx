@@ -14,7 +14,8 @@ import {
   Eye,
   EyeOff,
   Sliders,
-  ShieldCheck
+  ShieldCheck,
+  Smartphone
 } from 'lucide-react';
 import { cameraService } from '../../services/cameraService';
 import { zoneService } from '../../services/zoneService';
@@ -68,6 +69,67 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const wsVideoRef = useRef<LiveFeedWebSocket | null>(null);
   const wsAiRef = useRef<AIFeedWebSocket | null>(null);
+
+  const [isBroadcastingLocalCam, setIsBroadcastingLocalCam] = useState(false);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const broadcastIntervalRef = useRef<any>(null);
+
+  const startLocalCamBroadcast = async () => {
+    try {
+      if (isBroadcastingLocalCam) {
+        stopLocalCamBroadcast();
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' },
+        audio: false
+      });
+      localStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play();
+      }
+      setIsBroadcastingLocalCam(true);
+
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = 640;
+      offscreenCanvas.height = 360;
+      const ctx = offscreenCanvas.getContext('2d');
+
+      broadcastIntervalRef.current = setInterval(() => {
+        if (!localVideoRef.current || localVideoRef.current.readyState < 2) return;
+        if (ctx) {
+          ctx.drawImage(localVideoRef.current, 0, 0, 640, 360);
+          offscreenCanvas.toBlob((blob) => {
+            if (blob) {
+              cameraService.ingestDirectFrame(camera.camera_id, blob).catch(() => {});
+            }
+          }, 'image/jpeg', 0.65);
+        }
+      }, 150);
+    } catch (err: any) {
+      alert(`Camera access notice: ${err.message || 'Permission denied or no camera device found.'}`);
+    }
+  };
+
+  const stopLocalCamBroadcast = () => {
+    if (broadcastIntervalRef.current) {
+      clearInterval(broadcastIntervalRef.current);
+      broadcastIntervalRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+    setIsBroadcastingLocalCam(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopLocalCamBroadcast();
+    };
+  }, []);
 
   // Measure local render FPS
   const frameCountRef = useRef(0);
@@ -233,7 +295,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
         </div>
 
         {/* Real-Time Live Object Counters Bar */}
-        {camera.enabled && camera.status === 'HEALTHY' && showAiOverlay && (
+        {camera.enabled && (camera.status === 'HEALTHY' || camera.status === 'ONLINE') && showAiOverlay && (
           <div className="absolute top-11 left-3 z-20 flex items-center gap-2 pointer-events-none">
             <div className="bg-slate-950/80 border border-slate-800/80 backdrop-blur-md rounded-lg px-2.5 py-1 flex items-center gap-3 text-[11px] font-mono shadow-lg">
               <span className="text-sky-400 font-bold">
@@ -289,6 +351,9 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                   showZones={true}
                 />
               )}
+
+              {/* Hidden local video capture source */}
+              <video ref={localVideoRef} playsInline muted className="hidden" />
             </>
           ) : (
             /* Offline or Disabled State */
@@ -358,6 +423,20 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                 title="Capture Snapshot"
               >
                 <CameraIcon className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Device / Phone Camera Broadcaster Button */}
+              <button
+                onClick={startLocalCamBroadcast}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold border transition cursor-pointer ${
+                  isBroadcastingLocalCam
+                    ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-900/40 animate-pulse'
+                    : 'bg-slate-900/80 text-slate-300 hover:text-emerald-400 hover:bg-slate-800 border-slate-700/60'
+                }`}
+                title={isBroadcastingLocalCam ? 'Stop Broadcasting Phone/Device Camera' : 'Stream Phone/Device Camera Directly into this Node'}
+              >
+                <Smartphone className="w-3 h-3 text-emerald-400" />
+                <span className="hidden sm:inline">{isBroadcastingLocalCam ? 'BROADCASTING' : 'PHONE CAM'}</span>
               </button>
 
               {/* Fullscreen Button */}

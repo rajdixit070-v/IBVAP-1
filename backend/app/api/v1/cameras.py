@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -319,6 +319,41 @@ def get_camera_snapshot(
                         headers={"X-Camera-Status": cam.status or "OFFLINE"})
     except Exception:
         raise HTTPException(status_code=503, detail="No video frame available. Stream offline or initializing.")
+
+
+@router.post("/{camera_id}/ingest-frame")
+async def ingest_direct_camera_frame(
+    camera_id: str,
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    resolution: Optional[str] = Query(None),
+    fps: Optional[float] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Direct browser/mobile reverse frame ingestion.
+    Allows phones, laptops, and field edge nodes to stream live video directly into Central Command.
+    """
+    cam = camera_service.get_camera_by_id(db, camera_id)
+    if not cam:
+        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
+
+    if file:
+        frame_bytes = await file.read()
+    else:
+        frame_bytes = await request.body()
+
+    if not frame_bytes:
+        raise HTTPException(status_code=400, detail="Empty frame payload.")
+
+    stream_manager.ingest_edge_frame(
+        camera_id=cam.camera_id,
+        frame_bytes=frame_bytes,
+        resolution=resolution or "1280x720",
+        fps=fps or 25.0
+    )
+    return {"success": True, "camera_id": cam.camera_id, "size_bytes": len(frame_bytes)}
+
 
 
 @router.get("/{camera_id}/logs", response_model=List[CameraDiagnosticLogResponse])
