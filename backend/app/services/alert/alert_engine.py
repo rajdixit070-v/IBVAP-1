@@ -53,10 +53,14 @@ class AlertEngine:
                     if ev and ev.evidence_id:
                         evd_id = ev.evidence_id
                         evd_url = f"/api/v1/evidence/{ev.evidence_id}/file"
+                    elif alert.camera_id:
+                        evd_url = f"/api/v1/cameras/{alert.camera_id}/snapshot"
                 finally:
                     db_local.close()
             except Exception:
                 pass
+        elif not evd_url and alert.camera_id:
+            evd_url = f"/api/v1/cameras/{alert.camera_id}/snapshot"
 
         payload = {
             "type": "alert.event",

@@ -34,7 +34,29 @@ class StreamManager:
                 self._status_listeners.append(callback)
 
     def _on_camera_status_change(self, camera_id: str, new_status: str, meta: dict):
-        """Dispatches status updates to all registered listeners."""
+        """Dispatches status updates to all registered listeners and syncs DB record."""
+        try:
+            from app.database import SessionLocal
+            from app.models.camera import Camera
+            db = SessionLocal()
+            try:
+                cam = db.query(Camera).filter(Camera.camera_id == camera_id).first()
+                if cam:
+                    db_status = "ONLINE" if new_status in ("HEALTHY", "ONLINE") else ("CONNECTING" if new_status == "CONNECTING" else "OFFLINE")
+                    if cam.status != db_status:
+                        cam.status = db_status
+                        if new_status in ("HEALTHY", "ONLINE"):
+                            cam.last_seen_at = datetime.utcnow()
+                        if meta.get("fps") is not None:
+                            cam.fps = meta["fps"]
+                        if meta.get("resolution"):
+                            cam.resolution = meta["resolution"]
+                        db.commit()
+            finally:
+                db.close()
+        except Exception as db_err:
+            logger.debug(f"DB status sync note for {camera_id}: {db_err}")
+
         with self._lock:
             listeners = list(self._status_listeners)
         for listener in listeners:

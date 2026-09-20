@@ -66,8 +66,8 @@ class RTSPStreamer:
         self._synthetic_targets: List[dict] = []
 
         # Health & Stream Metrics
-        self.status = "HEALTHY"  # HEALTHY, DEGRADED, OFFLINE, ERROR, CONNECTING
-        self.fps = 25.0
+        self.status = "HEALTHY" if self.is_synthetic else "CONNECTING"  # HEALTHY, DEGRADED, OFFLINE, ERROR, CONNECTING
+        self.fps = 25.0 if self.is_synthetic else 0.0
         self.resolution: Optional[str] = "1920x1080"
         self.codec = "H.264"
         self.reconnect_attempts = 0
@@ -368,18 +368,9 @@ class RTSPStreamer:
 
             except Exception as e:
                 err_msg = str(e)
-                self.reconnect_attempts += 1
-                logger.info(f"[{self.camera_id}] Physical video feed notice: {err_msg}. Activating Tactical Edge Ingestion...")
-                
-                # Seamlessly transition into Tactical Edge Ingestion so camera is immediately ONLINE,
-                # streaming live high-definition video in Central Command and detecting operational threats.
-                self.is_synthetic = True
-                self._in_tactical_fallback = True
-                self.resolution = "1920x1080"
-                self.fps = 25.0
-                self._update_status("HEALTHY", None)
-                self._synthetic_stream_loop()
-                return
+                self._handle_disconnect(err_msg)
+                delay = self.calculate_reconnect_delay()
+                time.sleep(delay)
 
     def calculate_reconnect_delay(self, attempt: Optional[int] = None) -> float:
         """Calculates exponential backoff delay in seconds bounded by RECONNECT_MAX_DELAY_SEC."""

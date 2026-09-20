@@ -34,6 +34,8 @@ def format_camera_response(cam: Camera) -> CameraResponse:
                 live_last_seen = streamer.last_seen_at
         elif not cam.enabled:
             live_status = "OFFLINE"
+        else:
+            live_status = "OFFLINE"
     except Exception:
         pass  # Fallback to DB values if streamer not accessible
 

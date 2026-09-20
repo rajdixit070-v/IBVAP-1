@@ -3,19 +3,29 @@ import { Evidence } from '../types/incident';
 
 export const getEvidenceFileUrl = (evidenceId: string): string => {
   const base = getApiBaseUrl();
-  return `${base}/evidence/${encodeURIComponent(evidenceId)}/file`;
+  const token = localStorage.getItem('token');
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+  return `${base}/evidence/${encodeURIComponent(evidenceId)}/file${tokenParam}`;
 };
 
 export const formatEvidenceUrl = (urlOrId?: string | null): string | null => {
   if (!urlOrId) return null;
-  if (urlOrId.startsWith('http://') || urlOrId.startsWith('https://')) return urlOrId;
+  const token = localStorage.getItem('token');
+  if (urlOrId.startsWith('http://') || urlOrId.startsWith('https://')) {
+    if (token && !urlOrId.includes('token=')) {
+      const sep = urlOrId.includes('?') ? '&' : '?';
+      return `${urlOrId}${sep}token=${encodeURIComponent(token)}`;
+    }
+    return urlOrId;
+  }
   const base = getApiBaseUrl();
   const cleanId = urlOrId
     .replace(/^\/?api\/v1\/evidence\//, '')
     .replace(/^\/?evidence\//, '')
     .replace(/\/file$/, '')
     .replace(/\/download$/, '');
-  return `${base}/evidence/${encodeURIComponent(cleanId)}/file`;
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+  return `${base}/evidence/${encodeURIComponent(cleanId)}/file${tokenParam}`;
 };
 
 export const evidenceService = {

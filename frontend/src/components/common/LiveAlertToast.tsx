@@ -29,11 +29,6 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
   // Trigger alert, tactical siren and spoken voice alert ONLY if an authentic registered camera exists
   const triggerAlertDisplay = (notif: Notification) => {
     const currentCams = activeCamerasRef.current;
-    
-    // STRICT RULE: If no cameras are added in system, suppress ALL alerts completely
-    if (!currentCams || currentCams.length === 0) {
-      return;
-    }
 
     const titleLower = (notif.title || '').toLowerCase();
     const msgLower = (notif.message || '').toLowerCase();
@@ -43,27 +38,12 @@ export const LiveAlertToast: React.FC<LiveAlertToastProps> = ({ onOpenMap, onOpe
       return;
     }
 
-    // If notification has a camera_id, ensure it exists in currently active, enabled cameras (case-insensitive)
-    if (notif.camera_id) {
+    // If notification references an explicitly disabled camera, suppress
+    if (notif.camera_id && currentCams && currentCams.length > 0) {
       const targetId = notif.camera_id.trim().toUpperCase();
       const match = currentCams.find(c => c.camera_id?.trim().toUpperCase() === targetId);
-      if (!match || !match.enabled) {
+      if (match && !match.enabled) {
         return;
-      }
-    } else {
-      // Check if notification text references any registered camera
-      const isRegisteredCamera = currentCams.some(
-        c => (c.camera_id && (
-          notif.title?.toUpperCase().includes(c.camera_id.toUpperCase()) ||
-          notif.message?.toUpperCase().includes(c.camera_id.toUpperCase())
-        ))
-      );
-      if (!isRegisteredCamera) {
-        // Allow critical/high threats if cameras are registered in the sector
-        const isHighThreat = notif.priority === 'CRITICAL' || notif.severity === 'CRITICAL' || notif.priority === 'HIGH';
-        if (!isHighThreat) {
-          return;
-        }
       }
     }
 
