@@ -58,6 +58,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
           badge: 'SITREPS'
         },
         {
+          id: 'cameras',
+          label: 'Camera Fleet Management',
+          icon: Cctv,
+          badge: '+ ADD CAM'
+        },
+        {
           id: 'live',
           label: 'Live Border Video Wall',
           icon: Video,
