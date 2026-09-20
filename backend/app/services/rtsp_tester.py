@@ -287,8 +287,7 @@ def test_rtsp_connection(
                 cap.release()
                 cap = cv2.VideoCapture(auth_url)
 
-            
-        if not cap.isOpened():
+        if not cap or not cap.isOpened():
             if is_private_subnet or clean_url.startswith("udp://"):
                 return CameraTestResponse(
                     success=True,

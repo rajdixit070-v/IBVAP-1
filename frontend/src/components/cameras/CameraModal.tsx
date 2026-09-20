@@ -3,8 +3,32 @@ import { Modal } from '../common/Modal';
 import { Camera, CameraCreateInput, CameraUpdateInput, CameraTestResponse } from '../../types/camera';
 import { cameraService } from '../../services/cameraService';
 import { RTSPTestModal } from './RTSPTestModal';
-import { Activity, Cctv, Radio, Eye, EyeOff, Save } from 'lucide-react';
+import { Activity, Cctv, Radio, Eye, EyeOff, Save, MapPin, Navigation } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+
+const BOP_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'bop wagah': { lat: 31.6048, lng: 74.5721 },
+  'bop-wagah': { lat: 31.6048, lng: 74.5721 },
+  'wagah': { lat: 31.6048, lng: 74.5721 },
+  'bop munabao': { lat: 25.7197, lng: 70.2520 },
+  'bop-munabao': { lat: 25.7197, lng: 70.2520 },
+  'munabao': { lat: 25.7197, lng: 70.2520 },
+  'bop longewala': { lat: 27.5255, lng: 70.1558 },
+  'bop-longewala': { lat: 27.5255, lng: 70.1558 },
+  'longewala': { lat: 27.5255, lng: 70.1558 },
+  'bop sadqi': { lat: 30.9328, lng: 74.2825 },
+  'bop-sadqi': { lat: 30.9328, lng: 74.2825 },
+  'sadqi': { lat: 30.9328, lng: 74.2825 },
+  'bop hussainiwala': { lat: 30.9328, lng: 74.6048 },
+  'bop-hussaini': { lat: 30.9328, lng: 74.6048 },
+  'hussainiwala': { lat: 30.9328, lng: 74.6048 },
+  'bop uri': { lat: 34.0886, lng: 74.0416 },
+  'bop-uri': { lat: 34.0886, lng: 74.0416 },
+  'uri': { lat: 34.0886, lng: 74.0416 },
+  'bop kupwara': { lat: 34.7578, lng: 74.2541 },
+  'bop-kupwara': { lat: 34.7578, lng: 74.2541 },
+  'kupwara': { lat: 34.7578, lng: 74.2541 }
+};
 
 interface CameraModalProps {
   isOpen: boolean;
@@ -32,8 +56,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     bop_site: defaultBop,
     sector: defaultSector,
     location: '',
-    latitude: undefined,
-    longitude: undefined,
+    latitude: 31.6048,
+    longitude: 74.5721,
     rtsp_url: '',
     username: '',
     password: '',
@@ -44,6 +68,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // GPS state
+  const [detectingGps, setDetectingGps] = useState(false);
+  const [gpsMessage, setGpsMessage] = useState<string | null>(null);
 
   // RTSP Testing state
   const [testing, setTesting] = useState(false);
@@ -69,6 +97,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       });
     } else {
       const randomSuffix = Math.floor(100 + Math.random() * 900);
+      const bopKey = (defaultBop || '').trim().toLowerCase();
+      const defaultCoords = BOP_COORDINATES[bopKey] || { lat: 31.6048, lng: 74.5721 };
       setFormData({
         camera_id: `CAM-${randomSuffix}`,
         camera_name: 'Perimeter Sentry Camera',
@@ -76,8 +106,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         bop_site: defaultBop,
         sector: defaultSector,
         location: 'Tower 1',
-        latitude: undefined,
-        longitude: undefined,
+        latitude: defaultCoords.lat,
+        longitude: defaultCoords.lng,
         rtsp_url: 'rtsp://192.168.1.100:554/live',
         username: 'admin',
         password: '',
@@ -86,7 +116,75 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       });
     }
     setError(null);
+    setGpsMessage(null);
   }, [cameraToEdit, isOpen, defaultBop, defaultSector]);
+
+  const handleBopChange = (newBop: string) => {
+    const bopKey = newBop.trim().toLowerCase();
+    const coords = BOP_COORDINATES[bopKey];
+    setFormData(prev => ({
+      ...prev,
+      bop_site: newBop,
+      latitude: coords ? coords.lat : prev.latitude,
+      longitude: coords ? coords.lng : prev.longitude
+    }));
+  };
+
+  const handleDetectGps = () => {
+    if (!navigator.geolocation) {
+      setGpsMessage('Geolocation is not supported by your browser.');
+      setTimeout(() => setGpsMessage(null), 4000);
+      return;
+    }
+    setDetectingGps(true);
+    setGpsMessage(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+        setDetectingGps(false);
+        setGpsMessage(`Device GPS Locked: ${lat}°N, ${lng}°E (Accuracy ±${Math.round(pos.coords.accuracy)}m)`);
+        setTimeout(() => setGpsMessage(null), 4000);
+      },
+      (err) => {
+        setDetectingGps(false);
+        setGpsMessage('GPS Detection failed: ' + err.message);
+        setTimeout(() => setGpsMessage(null), 4000);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  const handleStreamTypeChange = (newType: string) => {
+    let suggestedUrl = formData.rtsp_url;
+    const isDefaultUrl = !formData.rtsp_url || 
+      formData.rtsp_url.startsWith('rtsp://192.168.1.100') ||
+      formData.rtsp_url.startsWith('http://192.168.1.50') ||
+      formData.rtsp_url.startsWith('webcam://') ||
+      formData.rtsp_url.startsWith('rtsp://192.168.1.200') ||
+      formData.rtsp_url.startsWith('rtsp://192.168.1.120');
+
+    if (isDefaultUrl && !isEditing) {
+      if (newType === 'phone') {
+        suggestedUrl = 'http://192.168.1.50:8080/video';
+      } else if (newType === 'webcam') {
+        suggestedUrl = 'webcam://0';
+      } else if (newType === 'drone') {
+        suggestedUrl = 'rtsp://192.168.1.200:8554/live';
+      } else if (newType === 'thermal') {
+        suggestedUrl = 'rtsp://192.168.1.120:554/Streaming/Channels/201';
+      } else {
+        suggestedUrl = 'rtsp://192.168.1.100:554/live';
+      }
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      stream_type: newType,
+      rtsp_url: suggestedUrl
+    }));
+  };
 
   const handleTestConnection = async () => {
     if (!formData.rtsp_url.trim()) {
@@ -175,13 +273,30 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }
   };
 
+  let streamPlaceholder = 'rtsp://192.168.1.100:554/live';
+  let streamHelpText = 'Enter RTSP stream address. Hikvision, CP Plus, Dahua, PTZ, FLIR Thermal, and Drone feeds are fully supported.';
+
+  if (formData.stream_type === 'phone') {
+    streamPlaceholder = 'http://192.168.1.50:8080/video';
+    streamHelpText = '📱 Mobile / Phone IP Camera: Run an app like "IP Webcam" on Android/iOS (on same Wi-Fi). Use format http://<phone-ip>:8080/video or rtsp://<phone-ip>:8080/h264_pcm.sdp';
+  } else if (formData.stream_type === 'webcam') {
+    streamPlaceholder = 'webcam://0';
+    streamHelpText = '💻 Web / USB Webcam: Enter "webcam://0" for built-in camera, or "webcam://1" for external USB camera.';
+  } else if (formData.stream_type === 'drone') {
+    streamPlaceholder = 'rtsp://192.168.1.200:8554/live';
+    streamHelpText = '🚁 Drone / UAV Stream: Supports DJI RTSP (rtsp://...) or QGroundControl video UDP (udp://0.0.0.0:5600).';
+  } else if (formData.stream_type === 'thermal') {
+    streamPlaceholder = 'rtsp://192.168.1.120:554/Streaming/Channels/201';
+    streamHelpText = '🔥 Thermal IR Sensor: FLIR or dual-spectrum thermal RTSP channel.';
+  }
+
   return (
     <>
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={isEditing ? `Edit Camera [${cameraToEdit?.camera_id}]` : 'Register New IP Camera'}
-        subtitle="Configure RTSP connection parameters and deployment sector details"
+        title={isEditing ? `Edit Camera [${cameraToEdit?.camera_id}]` : 'Register New Surveillance Camera'}
+        subtitle="Configure stream connection parameters, geospatial coordinates, and sector deployment"
         maxWidth="3xl"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -237,7 +352,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   type="text"
                   required
                   value={formData.bop_site}
-                  onChange={(e) => setFormData({ ...formData, bop_site: e.target.value })}
+                  onChange={(e) => handleBopChange(e.target.value)}
                   placeholder="e.g. BOP Wagah"
                   className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
                 />
@@ -271,19 +386,84 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               </div>
             </div>
 
+            {/* GPS Geospatial Coordinates Box */}
+            <div className="bg-[#0b1220] border border-[#1e2c44] rounded-lg p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-sky-400" />
+                  <span className="text-xs font-mono font-bold text-sky-300 uppercase tracking-wider">
+                    GEOSPATIAL COORDINATES (GPS)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDetectGps}
+                  disabled={detectingGps}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 rounded border border-sky-500/30 text-[11px] font-mono font-medium transition cursor-pointer disabled:opacity-50"
+                  title="Auto-detect current device GPS coordinates"
+                >
+                  <Navigation className={`w-3 h-3 ${detectingGps ? 'animate-spin' : ''}`} />
+                  {detectingGps ? 'LOCATING...' : 'AUTO-DETECT DEVICE GPS'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Latitude (°N) <span className="text-slate-500 font-normal font-mono">(Decimal e.g. 31.6048)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.latitude ?? ''}
+                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value !== '' ? parseFloat(e.target.value) : undefined })}
+                    placeholder="e.g. 31.6048"
+                    className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Longitude (°E) <span className="text-slate-500 font-normal font-mono">(Decimal e.g. 74.5721)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.longitude ?? ''}
+                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value !== '' ? parseFloat(e.target.value) : undefined })}
+                    placeholder="e.g. 74.5721"
+                    className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              {gpsMessage && (
+                <div className="text-[11px] font-mono text-sky-300 bg-sky-950/40 px-2.5 py-1 rounded border border-sky-800/40 flex items-center gap-1.5">
+                  <Navigation className="w-3 h-3 shrink-0 text-sky-400" />
+                  <span>{gpsMessage}</span>
+                </div>
+              )}
+
+              <p className="text-[10px] text-slate-500 font-mono">
+                Used to plot this camera on the 2D Tactical Map, 3D Terrain Geospatial HUD, and Radar overlays.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Stream Sensor Type</label>
                 <select
                   value={formData.stream_type}
-                  onChange={(e) => setFormData({ ...formData, stream_type: e.target.value })}
+                  onChange={(e) => handleStreamTypeChange(e.target.value)}
                   className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
                 >
-                  <option value="main">Main Stream (HD Optical Sentry)</option>
+                  <option value="main">Main Stream (HD Optical RTSP)</option>
                   <option value="sub">Sub Stream (Low Bitrate SD)</option>
                   <option value="thermal">Thermal Sensor Feed (FLIR IR)</option>
                   <option value="ptz">PTZ Surveillance Turret</option>
                   <option value="drone">Drone / UAV Aerial Feed</option>
+                  <option value="phone">Phone / Mobile IP Camera (HTTP / RTSP)</option>
+                  <option value="webcam">Web / USB Webcam (webcam://0)</option>
                   <option value="nvr">NVR / DVR Multi-Channel</option>
                 </select>
               </div>
@@ -305,11 +485,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: RTSP Ingestion Config */}
+          {/* Section 2: Stream Ingestion Config */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <h4 className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Radio className="w-4 h-4" /> 2. RTSP CONNECTION & CREDENTIALS
+                <Radio className="w-4 h-4" /> 2. STREAM CONNECTION & CREDENTIALS
               </h4>
               <button
                 type="button"
@@ -318,24 +498,24 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded border border-sky-500/40 text-xs font-mono font-semibold transition cursor-pointer disabled:opacity-50"
               >
                 <Activity className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
-                {testing ? 'TESTING...' : 'TEST RTSP CONNECTION'}
+                {testing ? 'TESTING...' : 'TEST STREAM CONNECTION'}
               </button>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                RTSP Stream URL <span className="text-rose-400">*</span>
+                Stream URL (RTSP / HTTP / Web) <span className="text-rose-400">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={formData.rtsp_url}
                 onChange={(e) => setFormData({ ...formData, rtsp_url: e.target.value })}
-                placeholder="rtsp://192.168.1.100:554/live"
+                placeholder={streamPlaceholder}
                 className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-sky-300 placeholder-slate-500 focus:outline-none focus:border-sky-500"
               />
-              <p className="text-[11px] text-slate-500 mt-1">
-                Enter RTSP stream address. Hikvision, CP Plus, Dahua, PTZ, FLIR Thermal, and Drone feeds are fully supported.
+              <p className="text-[11px] text-slate-400 mt-1">
+                {streamHelpText}
               </p>
             </div>
 

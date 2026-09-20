@@ -54,9 +54,9 @@ export const CameraCard: React.FC<CameraCardProps> = ({
     sourceBadge = 'PTZ';
     sourceClass = 'bg-blue-950/60 border-blue-500/30 text-blue-300';
     iconColor = 'text-blue-400';
-  } else if (st === 'android' || url.includes(':8080') || url.includes(':4747')) {
+  } else if (st === 'phone' || st === 'android' || url.includes(':8080') || url.includes(':4747')) {
     SourceIcon = Smartphone;
-    sourceBadge = 'ANDROID';
+    sourceBadge = 'PHONE';
     sourceClass = 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300';
     iconColor = 'text-emerald-400';
   }
@@ -120,6 +120,13 @@ export const CameraCard: React.FC<CameraCardProps> = ({
             {camera.rtsp_url}
           </span>
         </div>
+
+        {camera.latitude !== undefined && camera.latitude !== null && camera.longitude !== undefined && camera.longitude !== null && (
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-cyan-400 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
+            <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+            <span>GPS: {Number(camera.latitude).toFixed(4)}°N, {Number(camera.longitude).toFixed(4)}°E</span>
+          </div>
+        )}
       </div>
 
       {/* Footer Actions */}
