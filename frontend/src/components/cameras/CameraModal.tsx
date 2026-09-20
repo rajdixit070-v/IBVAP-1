@@ -278,10 +278,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
   if (formData.stream_type === 'phone') {
     streamPlaceholder = 'https://xxxx.ngrok-free.app/video  (or http://192.168.1.50:8080/video)';
-    streamHelpText = '📱 Mobile / Phone IP Camera: Run "IP Webcam" app. If deployed on Render cloud, expose port 8080 via ngrok ("ngrok http 8080") or click "USE CLOUD LIVE STREAM".';
+    streamHelpText = '📱 Mobile / Phone IP Camera: Run "IP Webcam" app. If backend is on Render cloud, expose your local phone port with ngrok ("ngrok http 8080") to get a public HTTPS video URL.';
   } else if (formData.stream_type === 'webcam') {
     streamPlaceholder = 'webcam://0';
-    streamHelpText = '💻 Web / USB Webcam: Enter "webcam://0" if running backend locally. If deployed on Render cloud, click "USE CLOUD LIVE STREAM" or tunnel via OBS/Ngrok.';
+    streamHelpText = '💻 Web / USB Webcam: Enter "webcam://0" for built-in camera, or "webcam://1" for external USB webcam (when backend runs locally).';
   } else if (formData.stream_type === 'drone') {
     streamPlaceholder = 'rtsp://192.168.1.200:8554/live  (or udp://0.0.0.0:5600)';
     streamHelpText = '🚁 Drone / UAV Stream: Supports DJI RTSP (rtsp://...), RTMP ground station, or QGroundControl UDP.';
@@ -515,32 +515,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Stream URL (RTSP / HTTP / Web) <span className="text-rose-400">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const testMap: Record<string, string> = {
-                      main: 'test://optical_hd_main',
-                      sub: 'test://optical_sd_sub',
-                      thermal: 'test://flir_thermal_sensor',
-                      ptz: 'test://ptz_speed_dome',
-                      drone: 'test://uav_drone_patrol',
-                      phone: 'test://mobile_patrol_phone',
-                      webcam: 'test://command_webcam',
-                      nvr: 'test://nvr_checkpoint_ch1'
-                    };
-                    const targetUrl = testMap[formData.stream_type || 'main'] || 'test://live_stream';
-                    setFormData(prev => ({ ...prev, rtsp_url: targetUrl }));
-                  }}
-                  className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 bg-emerald-950/70 hover:bg-emerald-900/70 px-2 py-0.5 rounded border border-emerald-500/40 transition cursor-pointer flex items-center gap-1"
-                  title="Auto-fills a working 25 FPS live operational feed for Render & Vercel deployment"
-                >
-                  ⚡ AUTO-FILL CLOUD LIVE STREAM (test://)
-                </button>
-              </div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Stream URL (RTSP / HTTP / Web) <span className="text-rose-400">*</span>
+              </label>
               <input
                 type="text"
                 required
