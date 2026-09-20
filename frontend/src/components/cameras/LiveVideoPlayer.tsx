@@ -442,13 +442,11 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                     />
                   )}
 
-                  {/* Central 1-Click Interactive Activation Overlay for Phone / Webcam / Standby streams */}
-                  {(camera.stream_type === 'android' ||
-                    camera.stream_type === 'webcam' ||
-                    camera.rtsp_url?.startsWith('edge://') ||
-                    camera.rtsp_url?.includes(':8080') ||
-                    streamError) && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-[2px] p-4 text-center">
+                  {/* Central 1-Click Interactive Activation Overlay ONLY for direct browser phone/webcam edge nodes */}
+                  {(camera.rtsp_url?.startsWith('edge://') || (camera.stream_type === 'android' && !camera.rtsp_url?.startsWith('http'))) &&
+                    !frameSrc &&
+                    !isBroadcastingLocalCam && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-[2px] p-4 text-center">
                       <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/60 flex items-center justify-center mb-2.5 shadow-lg shadow-emerald-950/60 animate-bounce">
                         <Smartphone className="w-6 h-6 text-emerald-400" />
                       </div>

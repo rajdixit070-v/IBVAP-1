@@ -24,9 +24,6 @@ def format_camera_response(cam: Camera) -> CameraResponse:
 
     try:
         streamer = stream_manager.get_streamer(cam.camera_id)
-        if not streamer and cam.enabled:
-            streamer = stream_manager.ensure_camera_running(cam.camera_id)
-
         if streamer and getattr(streamer, "_running", False):
             raw_st = streamer.status if streamer.status else cam.status
             live_status = "ONLINE" if raw_st in ("HEALTHY", "ONLINE") else raw_st

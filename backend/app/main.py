@@ -132,10 +132,8 @@ logging.basicConfig(
 logger = logging.getLogger("ibvap.main")
 
 def ensure_default_border_cameras(db: Session):
-    """Guarantees baseline border cameras exist only when DEMO_MODE or SEED_DEMO is explicitly enabled."""
-    if not (settings.DEMO_MODE or os.getenv("SEED_DEMO", "false").lower() in ("true", "1")):
-        return
-    if db.query(Camera).count() >= 4:
+    """Guarantees baseline border cameras exist when database is initialized or empty."""
+    if db.query(Camera).count() >= 3:
         return
     core_cameras = [
         {
@@ -580,28 +578,8 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
             seed_demo_data(db)
             ensure_default_border_cameras(db)
         else:
-            # Production clean slate: Purge any legacy synthetic or dummy demo cameras and their alerts/incidents
-            try:
-                from app.services.camera_service import delete_camera
-                legacy_cams = db.query(Camera).filter(
-                    (Camera.camera_id.like("CAM-WAGAH%")) |
-                    (Camera.camera_id.like("CAM-HUSSAINI%")) |
-                    (Camera.camera_id.like("CAM-SADQI%")) |
-                    (Camera.camera_id.like("CAM-LONGEWALA%")) |
-                    (Camera.camera_id.like("CAM-MUNABAO%")) |
-                    (Camera.camera_id == "CAM-LOCAL") |
-                    (Camera.rtsp_url.like("synthetic://%")) |
-                    (Camera.rtsp_url.like("webcam://%"))
-                ).all()
-                if legacy_cams:
-                    logger.info(f"Production clean slate: Purging {len(legacy_cams)} legacy demo cameras via delete_camera cascade...")
-                    for cam in legacy_cams:
-                        delete_camera(db, cam)
-                    db.commit()
-                    logger.info("Production clean slate completed: 0 demo cameras remaining.")
-            except Exception as e_clean:
-                db.rollback()
-                logger.warning(f"Production camera clean notice: {e_clean}")
+            # Guarantee baseline operational border cameras exist if database is currently empty
+            ensure_default_border_cameras(db)
 
         # Initialize AI configs and ensure cameras are marked ONLINE
         try:
