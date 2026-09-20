@@ -228,6 +228,11 @@ class RTSPStreamer:
             return
 
         while self._running:
+            # Yield to reverse edge frames pushed from browser/laptop webcam
+            if self._last_edge_frame_time and (time.time() - self._last_edge_frame_time < 5.0):
+                time.sleep(0.5)
+                continue
+
             cap = None
             try:
                 self._update_status("CONNECTING", "Connecting to camera stream...")

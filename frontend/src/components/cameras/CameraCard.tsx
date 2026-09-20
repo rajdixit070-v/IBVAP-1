@@ -11,6 +11,7 @@ interface CameraCardProps {
   onTest: (camera: Camera) => void;
   onLocate?: (camera: Camera) => void;
   onConfigureAI?: (camera: Camera) => void;
+  onBroadcastWebcam?: (camera: Camera) => void;
 }
 
 export const CameraCard: React.FC<CameraCardProps> = ({
@@ -20,7 +21,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   onDelete,
   onTest,
   onLocate,
-  onConfigureAI
+  onConfigureAI,
+  onBroadcastWebcam
 }) => {
   const url = camera.rtsp_url || '';
   const st = camera.stream_type || '';
@@ -158,6 +160,16 @@ export const CameraCard: React.FC<CameraCardProps> = ({
             >
               <MapPin className="w-3.5 h-3.5" />
               <span>MAP</span>
+            </button>
+          )}
+          {onBroadcastWebcam && (st === 'webcam' || url.startsWith('webcam://') || url.startsWith('edge://') || st === 'phone') && (
+            <button
+              onClick={() => onBroadcastWebcam(camera)}
+              className="flex items-center gap-1 text-xs font-mono text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-500/40 transition cursor-pointer"
+              title="Broadcast your Laptop/Device Webcam live to Cloud"
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>BROADCAST</span>
             </button>
           )}
         </div>

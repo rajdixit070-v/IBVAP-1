@@ -256,10 +256,14 @@ class StreamManager:
                 streamer.resolution = resolution
             if fps is not None:
                 streamer.fps = fps
+            prev_status = streamer.status
             streamer.status = "HEALTHY"
             streamer.last_seen_at = datetime.utcnow()
             streamer.reconnect_attempts = 0
             streamer.last_error_message = None
+
+        if prev_status != "HEALTHY":
+            self._on_camera_status_change(camera_id, "HEALTHY", {"fps": streamer.fps, "resolution": streamer.resolution})
 
         return True
 
