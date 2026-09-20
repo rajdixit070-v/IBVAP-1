@@ -275,12 +275,7 @@ def get_live_video_stream(
     from urllib.parse import unquote
     clean_id = unquote(str(camera_id)).strip()
 
-    try:
-        verify_camera_access(clean_id, current_user, db)
-    except HTTPException as e:
-        if e.status_code == 404:
-            raise e
-        logger.info(f"Oversight preview permitted for user '{current_user.username}' on camera '{clean_id}'")
+    verify_camera_access(clean_id, current_user, db)
 
     cam = camera_service.get_camera_by_id(db, clean_id)
     if not cam:
@@ -308,12 +303,7 @@ def get_camera_snapshot(
     from urllib.parse import unquote
     clean_id = unquote(str(camera_id)).strip()
 
-    try:
-        verify_camera_access(clean_id, current_user, db)
-    except HTTPException as e:
-        if e.status_code == 404:
-            raise e
-        logger.info(f"Oversight snapshot permitted for user '{current_user.username}' on camera '{clean_id}'")
+    verify_camera_access(clean_id, current_user, db)
 
     cam = camera_service.get_camera_by_id(db, clean_id)
     if not cam:

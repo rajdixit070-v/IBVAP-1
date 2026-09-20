@@ -43,27 +43,12 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
     user?.role === 'SUPER_ADMIN' || 
     user?.role === 'superadmin' ||
     user?.scope_type === 'GLOBAL';
-  const commanderScope = (user?.scope_id && user?.scope_id !== '*') ? user.scope_id : 'BOP-WAGAH';
 
-  // Commander Cameras: Scoped strictly to the commander's assigned outpost & attached sensors
-  const scopedCameras = useMemo(() => {
-    if (isSuperAdmin) return cameras;
-    const term = commanderScope.toLowerCase().replace('bop-', '').replace('bop_', '').trim();
-    const postName = (user?.post_name || '').toLowerCase().trim();
-    const sectorName = (user?.sector || '').toLowerCase().trim();
+  // Unified Camera Visibility: Central HQ Admin and Border Outpost Commanders share full operational oversight
+  const scopedCameras = cameras;
 
-    return cameras.filter((c) => {
-      const bop = (c.bop_site || '').toLowerCase();
-      const sec = (c.sector || '').toLowerCase();
-      const cid = (c.camera_id || '').toLowerCase();
-      const bopId = ((c as any).bop_id || '').toLowerCase();
-      return (
-        (term && (bop.includes(term) || cid.includes(term) || bopId.includes(term))) ||
-        (postName && (bop.includes(postName) || postName.includes(bop) || cid.includes(postName))) ||
-        (sectorName && sec.includes(sectorName))
-      );
-    });
-  }, [cameras, isSuperAdmin, commanderScope, user?.post_name, user?.sector]);
+
+
 
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 

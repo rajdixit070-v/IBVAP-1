@@ -64,7 +64,8 @@ export const LivePreviewPage: React.FC<LivePreviewPageProps> = ({ onLocateOnMap 
 
   // Role Detection: Checkpost Commander vs Central HQ Admin
   const isSuperAdmin = user?.role === 'admin' || user?.role === 'SUPER_ADMIN' || user?.scope_type === 'GLOBAL';
-  const commanderScope = (user?.scope_id && user?.scope_id !== '*') ? user.scope_id : 'BOP-WAGAH';
+  const commanderScope = (user?.scope_id && user?.scope_id !== '*') ? user.scope_id : (user?.post_name || 'BOP-WAGAH');
+
 
   // Layout & Matrix Mode: Default 4 (2x2 Quad), with 16 (4x4) and 'split' (1+5 Tactical)
   const [gridMode, setGridMode] = useState<GridMode>('4');
@@ -173,40 +174,24 @@ export const LivePreviewPage: React.FC<LivePreviewPageProps> = ({ onLocateOnMap 
     return map;
   }, [recentEvents]);
 
-  // Commander Cameras: Strictly scoped to the commander's outpost / border post sector
-  const commanderScopedCameras = useMemo(() => {
-    const term = commanderScope.toLowerCase().replace('bop-', '').replace('bop_', '');
-    const postName = (user?.post_name || '').toLowerCase();
-    const sectorName = (user?.sector || '').toLowerCase();
-
-    const scoped = cameras.filter((c) => {
-      const bop = (c.bop_site || '').toLowerCase();
-      const sec = (c.sector || '').toLowerCase();
-      const cid = (c.camera_id || '').toLowerCase();
-      return (
-        (term && (bop.includes(term) || cid.includes(term))) ||
-        (postName && (bop.includes(postName) || cid.includes(postName))) ||
-        (sectorName && sec.includes(sectorName))
-      );
-    });
-    return scoped.length > 0 ? scoped : cameras;
-  }, [cameras, commanderScope, user?.post_name, user?.sector]);
+  // Unified Camera Visibility across Central Admin and Border Commanders
+  const commanderScopedCameras = cameras;
 
   // Available BOPs list for current scope
   const availableBops = useMemo(() => {
-    const targetPool = isSuperAdmin ? cameras : commanderScopedCameras;
+    const targetPool = cameras;
     const bopSet = new Set<string>();
     targetPool.forEach((c) => {
       if (c.bop_site) bopSet.add(c.bop_site);
     });
     return Array.from(bopSet).sort();
-  }, [isSuperAdmin, cameras, commanderScopedCameras]);
+  }, [cameras]);
 
   // Filtered Cameras based on User Role, Post, Category, and Search
   const filteredCameras = useMemo(() => {
     if (!isSuperAdmin) {
-      // CHECKPOST COMMANDER FILTERING
-      let list = [...commanderScopedCameras];
+      // CHECKPOST COMMANDER FILTERING (Full visibility into all cameras with instant post filtering)
+      let list = [...cameras];
 
       // Post / BOP filter
       if (commanderPostFilter !== 'ALL') {

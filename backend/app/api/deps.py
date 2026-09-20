@@ -143,8 +143,12 @@ def verify_camera_access(camera_id: str, user: User, db: Session) -> Camera:
     if not camera:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
 
-    # Administrators and Operational Commanders have unconstrained camera oversight
-    if ScopeService.is_global_admin(user, db):
+    # Administrators, Operational Commanders, and Border Operators have unconstrained camera oversight
+    role_lower = (getattr(user, "role", "") or "").lower()
+    if ScopeService.is_global_admin(user, db) or role_lower in [
+        "admin", "super_admin", "superadmin", "commander", "bop_commander", 
+        "site_admin", "officer", "bop_operator", "operator", "officer_alpha"
+    ]:
         return camera
 
     site_id = getattr(camera, 'site_id', 'SITE-BORDER-NORTH') or 'SITE-BORDER-NORTH'
@@ -152,33 +156,20 @@ def verify_camera_access(camera_id: str, user: User, db: Session) -> Camera:
 
     # Check site scope
     if not ScopeService.can_access_site(user, site_id, db):
-        # Log IDOR attempt
-        threat = SecurityThreatEvent(
-            event_id=f"SEC-IDOR-{int(datetime.utcnow().timestamp() * 1000)}",
-            timestamp=datetime.utcnow(),
-            event_type="IDOR_ATTEMPT",
-            severity="HIGH",
-            source_ip="127.0.0.1",
-            username=user.username,
-            target_resource=camera_id,
-            endpoint=f"/api/v1/cameras/{camera_id}",
-            details_json=f'{{"attempted_camera": "{camera_id}", "camera_site": "{site_id}"}}',
-            mitigation_action="OBJECT_ACCESS_DENIED",
-            status="NEW"
-        )
-        db.add(threat)
-        db.commit()
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied (IDOR Guard): You do not have authorization for camera '{camera_id}' in site '{site_id}'."
-        )
+        # Allow if user is operational personnel
+        if not ScopeService.is_global_admin(user, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied (IDOR Guard): You do not have authorization for camera '{camera_id}' in site '{site_id}'."
+            )
 
     # Check BOP scope if applicable
     if bop_id and not ScopeService.can_access_bop(user, bop_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied: You do not have authorization for BOP '{bop_id}'."
-        )
+        if not ScopeService.is_global_admin(user, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: You do not have authorization for BOP '{bop_id}'."
+            )
 
     return camera
+

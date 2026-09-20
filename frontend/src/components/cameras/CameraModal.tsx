@@ -214,11 +214,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         enabled: cameraToEdit.enabled
       });
     } else {
-      const randomSuffix = Math.floor(10 + Math.random() * 89);
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
       const postPrefix = (matchedCommanderPost?.code)
         ? matchedCommanderPost.code.replace('BOP-', '')
         : 'WAGAH';
-      const initialCamId = `CAM-${postPrefix}-${randomSuffix}`;
+      const initialCamId = `CAM-${postPrefix}-IP-${randomSuffix}`;
 
       setEquipmentType('rtsp');
       setShowSubStreamField(false);
@@ -254,9 +254,22 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const handleTypeChange = (type: BorderEquipmentType) => {
     setEquipmentType(type);
 
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const postPrefix = (matchedCommanderPost?.code) ? matchedCommanderPost.code.replace('BOP-', '') : 'WAGAH';
+    let typePrefix = 'IP';
+    if (type === 'nvr') typePrefix = `NVR-CH${nvrChannel}`;
+    else if (type === 'ptz') typePrefix = 'PTZ';
+    else if (type === 'thermal') typePrefix = 'FLIR';
+    else if (type === 'drone') typePrefix = 'UAV';
+    else if (type === 'phone') typePrefix = 'PHONE';
+    else if (type === 'webcam') typePrefix = 'WEBCAM';
+
+    const newAutoCamId = !isEditing ? `CAM-${postPrefix}-${typePrefix}-${randomSuffix}` : (formData.camera_id || 'CAM-01');
+
     if (type === 'rtsp') {
       setFormData(prev => ({
         ...prev,
+        camera_id: !isEditing ? newAutoCamId : prev.camera_id,
         stream_type: 'main',
         camera_name: prev.camera_name || 'Perimeter Sentry Camera',
         rtsp_url: prev.rtsp_url && !prev.rtsp_url.startsWith('webcam://') && !prev.rtsp_url.startsWith('edge://') && !prev.rtsp_url.startsWith('udp://') && !prev.rtsp_url.includes(':8080')
@@ -267,6 +280,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       const { mainUrl, subUrl } = computeNvrUrls(nvrBrand, nvrIp, nvrPort, nvrChannel);
       setFormData(prev => ({
         ...prev,
+        camera_id: !isEditing ? newAutoCamId : prev.camera_id,
         stream_type: nvrDeviceType,
         rtsp_url: mainUrl,
         sub_stream_url: subUrl,
@@ -277,6 +291,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     } else if (type === 'ptz') {
       setFormData(prev => ({
         ...prev,
+        camera_id: !isEditing ? newAutoCamId : prev.camera_id,
         stream_type: 'ptz',
         camera_name: prev.camera_name === 'Perimeter Sentry Camera' ? 'PTZ Speed Dome Turret' : prev.camera_name,
         rtsp_url: prev.rtsp_url && !prev.rtsp_url.startsWith('webcam://') && !prev.rtsp_url.startsWith('edge://') && !prev.rtsp_url.startsWith('udp://') && !prev.rtsp_url.includes(':8080')
@@ -286,6 +301,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     } else if (type === 'thermal') {
       setFormData(prev => ({
         ...prev,
+        camera_id: !isEditing ? newAutoCamId : prev.camera_id,
         stream_type: 'thermal',
         camera_name: prev.camera_name === 'Perimeter Sentry Camera' ? 'FLIR Thermal Night-Vision' : prev.camera_name,
         rtsp_url: prev.rtsp_url && !prev.rtsp_url.startsWith('webcam://') && !prev.rtsp_url.startsWith('edge://') && !prev.rtsp_url.startsWith('udp://') && !prev.rtsp_url.includes(':8080')
@@ -299,32 +315,38 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       else if (droneProtocol === 'dji_rtmp') defaultDroneUrl = 'rtmp://192.168.1.100:1935/live/drone';
       setFormData(prev => ({
         ...prev,
+        camera_id: !isEditing ? newAutoCamId : prev.camera_id,
         stream_type: 'drone',
         camera_name: prev.camera_name === 'Perimeter Sentry Camera' ? 'Border Patrol UAV Recon' : prev.camera_name,
         rtsp_url: defaultDroneUrl
       }));
     } else if (type === 'phone') {
+      const phoneId = !isEditing ? newAutoCamId : (formData.camera_id || 'CAM-PHONE');
       const url = phoneMode === 'browser'
-        ? `edge://${(formData.camera_id || 'CAM-PHONE').toLowerCase()}`
+        ? `edge://${phoneId.toLowerCase()}`
         : `http://${phoneIp.trim() || '192.168.1.15'}:${phonePort.trim() || '8080'}/video`;
       setFormData(prev => ({
         ...prev,
+        camera_id: phoneId,
         stream_type: 'android',
         camera_name: prev.camera_name === 'Perimeter Sentry Camera' ? 'Mobile Patrol Phone Feed' : prev.camera_name,
         rtsp_url: url
       }));
     } else if (type === 'webcam') {
+      const webcamId = !isEditing ? newAutoCamId : (formData.camera_id || 'CAM-WEBCAM');
       const url = webcamMode === 'browser'
-        ? `edge://${(formData.camera_id || 'CAM-WEBCAM').toLowerCase()}`
+        ? `edge://${webcamId.toLowerCase()}`
         : `webcam://${webcamIndex}`;
       setFormData(prev => ({
         ...prev,
+        camera_id: webcamId,
         stream_type: 'webcam',
         camera_name: prev.camera_name === 'Perimeter Sentry Camera' ? 'HQ Operations Desk Webcam' : prev.camera_name,
         rtsp_url: url
       }));
     }
   };
+
 
   // Handle NVR / DVR updates
   const updateNvrState = (

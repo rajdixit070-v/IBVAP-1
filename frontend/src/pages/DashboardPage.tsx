@@ -131,24 +131,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const commanderLat = currentBop?.latitude ?? matchedCommanderPost.latitude ?? 31.6048;
   const commanderLng = currentBop?.longitude ?? matchedCommanderPost.longitude ?? 74.5731;
 
-  // Dynamically filter cameras for the logged-in Commander's post (strictly scoped)
-  const scopedCameras = useMemo(() => {
-    if (isSuperAdmin) return cameras;
-    const postLower = (commanderPostName || '').toLowerCase().trim();
-    const scopeLower = (commanderScope || '').toLowerCase().trim();
-    const postCode = (matchedCommanderPost?.code || '').toLowerCase().trim();
+  // Unified Camera Visibility: Central Admin and Commander share real-time feeds
+  const scopedCameras = cameras;
 
-    return cameras.filter(c => {
-      const bopSite = (c.bop_site || '').toLowerCase().trim();
-      const camId = (c.camera_id || '').toLowerCase().trim();
-      const bopId = ((c as any).bop_id || '').toLowerCase().trim();
-      return (
-        (postLower && (bopSite.includes(postLower) || postLower.includes(bopSite))) ||
-        (scopeLower && (bopSite.includes(scopeLower) || scopeLower.includes(bopSite) || bopId.includes(scopeLower))) ||
-        (postCode && (camId.includes(postCode) || bopSite.includes(postCode)))
-      );
-    });
-  }, [cameras, isSuperAdmin, commanderPostName, commanderScope, matchedCommanderPost]);
 
   // Dynamically filter alerts for the logged-in Commander's post
   const scopedAlerts = useMemo(() => {
