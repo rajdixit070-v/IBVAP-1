@@ -219,14 +219,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
         },
         {
           id: 'evidence',
-          label: 'Dispatch Evidence to Delhi HQ',
+          label: 'Forensic Evidence Vault',
           icon: FolderLock,
-          badge: 'SEND TO HQ'
+          badge: 'SHA-256'
+        },
+        {
+          id: 'dispatches',
+          label: 'Dispatches to Delhi HQ',
+          icon: FileCheck,
+          badge: 'SITREP'
         },
         {
           id: 'incidents',
           label: 'Checkpost SOP Checklist',
-          icon: FileCheck,
+          icon: ShieldAlert,
           badge: 'SOP'
         }
       ]

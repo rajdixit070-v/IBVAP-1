@@ -185,7 +185,8 @@ const MainLayout: React.FC = () => {
           {activeTab === 'face' && <FaceIntelligencePage />}
           {activeTab === 'edge' && <SystemHealthCenterPage />}
           {activeTab === 'events' && <SecurityEventsPage />}
-          {activeTab === 'evidence' && (isSuperAdmin ? <ForensicEvidencePage /> : <CheckpostDispatchesPage />)}
+          {activeTab === 'evidence' && <ForensicEvidencePage />}
+          {activeTab === 'dispatches' && <CheckpostDispatchesPage />}
           {activeTab === 'sensor-fusion' && <SensorFusionPage />}
           {activeTab === 'thermal-fusion' && <ThermalFusionPage />}
           {activeTab === 'ptz-control' && <PTZControlPage />}
