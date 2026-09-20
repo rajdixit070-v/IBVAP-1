@@ -84,6 +84,18 @@ def test_rtsp_connection(
             details={"mode": "Tactical Edge Stream Ingestion", "status": "Ready", "signal": "Optimal"}
         )
 
+    # 2.5 Support for browser edge nodes (Phone Camera / Laptop WebRTC)
+    if clean_url.startswith("edge://"):
+        return CameraTestResponse(
+            success=True,
+            connected=True,
+            resolution="1920x1080",
+            fps=30.0,
+            codec="WebRTC / Direct MediaStream",
+            latency_ms=10.0,
+            details={"mode": "Browser / Mobile Direct Edge Node", "status": "Ready", "signal": "Optimal"}
+        )
+
     # 3. Support for local Webcam / USB Cameras (DirectShow / V4L2)
     if clean_url.startswith(("webcam://", "device://")) or clean_url.isdigit():
         idx_str = clean_url.replace("webcam://", "").replace("device://", "").strip()
@@ -137,13 +149,13 @@ def test_rtsp_connection(
             if cap is not None:
                 cap.release()
 
-    valid_prefixes = ("rtsp://", "http://", "https://", "rtmp://", "rtmps://", "udp://")
+    valid_prefixes = ("rtsp://", "http://", "https://", "rtmp://", "rtmps://", "udp://", "edge://")
     if not any(clean_url.startswith(prefix) for prefix in valid_prefixes):
         return CameraTestResponse(
             success=False,
             connected=False,
             error_type="INVALID_RTSP_URL",
-            error_message="Stream URL must begin with 'rtsp://', 'http://', 'https://', 'rtmp://', 'udp://', or 'webcam://0'."
+            error_message="Stream URL must begin with 'rtsp://', 'http://', 'https://', 'rtmp://', 'udp://', 'edge://', or 'webcam://0'."
         )
 
     # 4. Socket check to prevent long blocking on dead IPs (skip for UDP)

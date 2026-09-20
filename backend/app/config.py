@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "IBVAP - Integrated Border Surveillance Platform"
     VERSION: str = "15.2.0-ONLINE"
     ENV_MODE: str = os.getenv("ENV_MODE", "development")  # production, development, test
-    DEMO_MODE: bool = os.getenv("DEMO_MODE", "true").lower() in ("true", "1", "yes")
+    DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() in ("true", "1", "yes")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
     API_V1_STR: str = "/api/v1"

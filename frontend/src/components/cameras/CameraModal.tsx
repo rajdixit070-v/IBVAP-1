@@ -231,7 +231,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         location: 'Tower 1',
         latitude: commanderLat,
         longitude: commanderLng,
-        rtsp_url: `synthetic://${initialCamId.toLowerCase()}/main`,
+        rtsp_url: 'rtsp://192.168.1.100:554/live',
         sub_stream_url: '',
         username: 'admin',
         password: '',
@@ -253,7 +253,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   // Handle Equipment Type Change
   const handleTypeChange = (type: BorderEquipmentType) => {
     setEquipmentType(type);
-    const idClean = (formData.camera_id || 'cam').toLowerCase();
 
     if (type === 'rtsp') {
       setFormData(prev => ({
@@ -262,7 +261,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         camera_name: prev.camera_name || 'Perimeter Sentry Camera',
         rtsp_url: prev.rtsp_url && !prev.rtsp_url.startsWith('webcam://') && !prev.rtsp_url.startsWith('edge://') && !prev.rtsp_url.startsWith('udp://') && !prev.rtsp_url.includes(':8080')
           ? prev.rtsp_url
-          : `synthetic://${idClean}/main`
+          : 'rtsp://192.168.1.100:554/live'
       }));
     } else if (type === 'nvr') {
       const { mainUrl, subUrl } = computeNvrUrls(nvrBrand, nvrIp, nvrPort, nvrChannel);
@@ -282,7 +281,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         camera_name: prev.camera_name === 'Perimeter Sentry Camera' ? 'PTZ Speed Dome Turret' : prev.camera_name,
         rtsp_url: prev.rtsp_url && !prev.rtsp_url.startsWith('webcam://') && !prev.rtsp_url.startsWith('edge://') && !prev.rtsp_url.startsWith('udp://') && !prev.rtsp_url.includes(':8080')
           ? prev.rtsp_url
-          : `synthetic://ptz-${idClean}/main`
+          : 'rtsp://192.168.1.100:554/Streaming/Channels/101'
       }));
     } else if (type === 'thermal') {
       setFormData(prev => ({
@@ -291,10 +290,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         camera_name: prev.camera_name === 'Perimeter Sentry Camera' ? 'FLIR Thermal Night-Vision' : prev.camera_name,
         rtsp_url: prev.rtsp_url && !prev.rtsp_url.startsWith('webcam://') && !prev.rtsp_url.startsWith('edge://') && !prev.rtsp_url.startsWith('udp://') && !prev.rtsp_url.includes(':8080')
           ? prev.rtsp_url
-          : `synthetic://thermal-${idClean}/main`
+          : 'rtsp://192.168.1.120:554/Streaming/Channels/201'
       }));
     } else if (type === 'drone') {
-      let defaultDroneUrl = `synthetic://drone-${idClean}/main`;
+      let defaultDroneUrl = 'rtsp://192.168.1.200:8554/live';
       if (droneProtocol === 'dji_rtsp') defaultDroneUrl = 'rtsp://192.168.1.200:8554/live';
       else if (droneProtocol === 'qgc_udp') defaultDroneUrl = 'udp://0.0.0.0:5600';
       else if (droneProtocol === 'dji_rtmp') defaultDroneUrl = 'rtmp://192.168.1.100:1935/live/drone';
@@ -306,7 +305,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       }));
     } else if (type === 'phone') {
       const url = phoneMode === 'browser'
-        ? `edge://${formData.camera_id || 'CAM-PHONE'}`
+        ? `edge://${(formData.camera_id || 'CAM-PHONE').toLowerCase()}`
         : `http://${phoneIp.trim() || '192.168.1.15'}:${phonePort.trim() || '8080'}/video`;
       setFormData(prev => ({
         ...prev,
@@ -316,7 +315,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       }));
     } else if (type === 'webcam') {
       const url = webcamMode === 'browser'
-        ? `edge://${formData.camera_id || 'CAM-WEBCAM'}`
+        ? `edge://${(formData.camera_id || 'CAM-WEBCAM').toLowerCase()}`
         : `webcam://${webcamIndex}`;
       setFormData(prev => ({
         ...prev,
@@ -356,12 +355,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   // Handle Drone Protocol Change
   const handleDroneProtocolChange = (protocol: string) => {
     setDroneProtocol(protocol);
-    const idClean = (formData.camera_id || 'uav').toLowerCase();
-    let url = `synthetic://drone-${idClean}/main`;
+    let url = 'rtsp://192.168.1.200:8554/live';
     if (protocol === 'dji_rtsp') url = 'rtsp://192.168.1.200:8554/live';
     else if (protocol === 'qgc_udp') url = 'udp://0.0.0.0:5600';
     else if (protocol === 'dji_rtmp') url = 'rtmp://192.168.1.100:1935/live/drone';
-    else if (protocol === 'tactical_sim') url = `synthetic://drone-${idClean}/main`;
     else if (protocol === 'custom') url = '';
     setFormData(prev => ({
       ...prev,
@@ -751,33 +748,19 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          const id = (formData.camera_id || 'cam').toLowerCase();
-                          setFormData(prev => ({
-                            ...prev,
-                            rtsp_url: `synthetic://${equipmentType}-${id}/main`
-                          }));
-                        }}
-                        className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-600 transition cursor-pointer"
-                        title="Instant 1080p military tactical HUD simulation feed"
-                      >
-                        ⚡ Tactical HUD Preset (Instant)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
                           setFormData(prev => ({
                             ...prev,
                             rtsp_url: equipmentType === 'thermal'
                               ? 'rtsp://192.168.1.120:554/Streaming/Channels/201'
                               : equipmentType === 'ptz'
-                              ? 'rtsp://192.168.1.110:554/live/ptz'
-                              : 'rtsp://192.168.1.100:554/live/ch1'
+                              ? 'rtsp://192.168.1.100:554/Streaming/Channels/101'
+                              : 'rtsp://192.168.1.100:554/live'
                           }));
                         }}
                         className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 transition cursor-pointer"
-                        title="Physical IP Camera RTSP Stream"
+                        title="Fill standard IP Camera RTSP Template"
                       >
-                        🔌 Physical RTSP
+                        Reset to Default RTSP
                       </button>
                     </div>
                   </div>
@@ -1031,7 +1014,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                       onChange={(e) => handleDroneProtocolChange(e.target.value)}
                       className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-purple-500"
                     >
-                      <option value="tactical_sim">Tactical UAV Patrol HUD (Instant Simulation)</option>
                       <option value="dji_rtsp">DJI Enterprise / Pilot 2 (RTSP Stream)</option>
                       <option value="qgc_udp">QGroundControl / MAVLink (UDP 5600)</option>
                       <option value="dji_rtmp">DJI RTMP Live Broadcast</option>

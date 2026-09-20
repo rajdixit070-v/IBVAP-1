@@ -19,7 +19,7 @@ class SSRFValidator:
         "::1"
     ]
 
-    ALLOWED_SCHEMES = ["rtsp", "rtsps", "http", "https", "synthetic", "test", "webcam", "device", "rtmp", "rtmps", "udp"]
+    ALLOWED_SCHEMES = ["rtsp", "rtsps", "http", "https", "synthetic", "test", "webcam", "device", "rtmp", "rtmps", "udp", "edge"]
 
     @classmethod
     def validate_destination_url(
@@ -35,8 +35,8 @@ class SSRFValidator:
             return False, "Target URL cannot be empty."
 
         clean_url = url.strip()
-        # Local webcams and synthetic testing streams bypass remote network SSRF checks
-        if clean_url.startswith(("webcam://", "device://")) or clean_url.isdigit():
+        # Local webcams, browser edge nodes, and testing streams bypass remote network SSRF checks
+        if clean_url.startswith(("webcam://", "device://", "edge://")) or clean_url.isdigit():
             return True, None
 
         if clean_url.startswith(("synthetic://", "test://")):
