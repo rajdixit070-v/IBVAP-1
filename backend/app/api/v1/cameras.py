@@ -1,7 +1,10 @@
+import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.user import User
@@ -257,7 +260,7 @@ def get_live_camera_status(
 @router.get("/{camera_id}/live")
 @router.get("/{camera_id}/preview")
 @router.get("/{camera_id}/stream")
-async def get_live_video_stream(
+def get_live_video_stream(
     camera_id: str,
     fps: Optional[float] = Query(25.0, ge=1.0, le=60.0),
     profile: Optional[str] = Query("main", pattern="^(main|sub)$"),
@@ -296,7 +299,7 @@ async def get_live_video_stream(
     )
 
 @router.get("/{camera_id}/snapshot")
-async def get_camera_snapshot(
+def get_camera_snapshot(
     camera_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
