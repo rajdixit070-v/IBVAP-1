@@ -43,13 +43,15 @@ class RTSPStreamer:
 
         self.auth_url = build_authenticated_rtsp_url(rtsp_url, username, password)
         u_low = (rtsp_url or "").lower()
-        is_known_protocol = any(u_low.startswith(p) for p in ("rtsp://", "http://", "https://", "udp://", "webcam://", "device://", "rtmp://"))
+        self.is_edge_camera = u_low.startswith("edge://")
+        is_known_protocol = any(u_low.startswith(p) for p in ("rtsp://", "http://", "https://", "udp://", "webcam://", "device://", "rtmp://", "edge://"))
         self.is_synthetic = (
-            u_low.startswith("synthetic://") or 
+            (u_low.startswith("synthetic://") or 
             u_low.startswith("test://") or 
-            not is_known_protocol
+            not is_known_protocol) and not self.is_edge_camera
         )
         self._in_tactical_fallback = False
+        self._last_edge_frame_time: Optional[float] = None
 
         # Worker control
         self._running = False
@@ -198,8 +200,29 @@ class RTSPStreamer:
 
         return urllib.request.Request(clean_url, headers=headers)
 
+    def _edge_camera_loop(self):
+        """Dedicated non-blocking loop for browser/mobile edge pushed camera frames."""
+        self._update_status("CONNECTING", "Awaiting browser/device camera feed...")
+        logger.info(f"[{self.camera_id}] Direct Device/Browser Camera Ingestion Engine Active.")
+        while self._running:
+            now = time.time()
+            if self._last_edge_frame_time and (now - self._last_edge_frame_time < 3.5):
+                if self.status != "HEALTHY":
+                    self._update_status("HEALTHY", None)
+                time.sleep(0.05)
+            else:
+                if self.status != "CONNECTING":
+                    self._update_status("CONNECTING", "Awaiting browser/device camera feed...")
+                standby = self._create_standby_frame("STANDBY // Click 'START LIVE CAMERA' on your phone/PC")
+                self._process_new_frame(standby, time.time(), is_standby=True)
+                time.sleep(0.8)
+
     def _worker_loop(self):
         """Main worker ingestion loop with auto-reconnection."""
+        if self.is_edge_camera:
+            self._edge_camera_loop()
+            return
+
         if self.is_synthetic:
             self._synthetic_stream_loop()
             return
@@ -875,6 +898,11 @@ class RTSPStreamer:
         p_offset = 0.0
 
         while self._running:
+            # Yield to real edge camera frames if camera is edge or received frames recently
+            if getattr(self, 'is_edge_camera', False) or (self._last_edge_frame_time and (time.time() - self._last_edge_frame_time < 3.5)):
+                time.sleep(0.1)
+                continue
+
             loop_start = time.time()
             now_dt = datetime.now()
 

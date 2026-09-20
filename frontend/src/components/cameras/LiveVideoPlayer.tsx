@@ -15,7 +15,9 @@ import {
   EyeOff,
   Sliders,
   ShieldCheck,
-  Smartphone
+  Smartphone,
+  RefreshCw,
+  Square
 } from 'lucide-react';
 import { cameraService } from '../../services/cameraService';
 import { zoneService } from '../../services/zoneService';
@@ -80,26 +82,34 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   const wsAiRef = useRef<AIFeedWebSocket | null>(null);
 
   const [isBroadcastingLocalCam, setIsBroadcastingLocalCam] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const broadcastIntervalRef = useRef<any>(null);
 
-  const startLocalCamBroadcast = async () => {
+  const startLocalCamBroadcast = async (requestedFacing?: 'environment' | 'user') => {
     try {
-      if (isBroadcastingLocalCam) {
+      if (isBroadcastingLocalCam && !requestedFacing) {
         stopLocalCamBroadcast();
         return;
       }
+      if (isBroadcastingLocalCam && requestedFacing) {
+        stopLocalCamBroadcast();
+      }
+
+      const targetFacing = requestedFacing || facingMode;
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' },
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: targetFacing },
         audio: false
       });
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play();
+        localVideoRef.current.play().catch(() => {});
       }
       setIsBroadcastingLocalCam(true);
+      setFacingMode(targetFacing);
+      setStreamError(false);
 
       const offscreenCanvas = document.createElement('canvas');
       offscreenCanvas.width = 640;
@@ -116,10 +126,15 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
             }
           }, 'image/jpeg', 0.65);
         }
-      }, 150);
+      }, 125);
     } catch (err: any) {
       alert(`Camera access notice: ${err.message || 'Permission denied or no camera device found.'}`);
     }
+  };
+
+  const flipCamera = () => {
+    const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
+    startLocalCamBroadcast(nextFacing);
   };
 
   const stopLocalCamBroadcast = () => {
@@ -130,6 +145,9 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
       localStreamRef.current = null;
+    }
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
     }
     setIsBroadcastingLocalCam(false);
   };
@@ -361,29 +379,99 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
         <div className="relative flex-1 flex items-center justify-center min-h-[160px] sm:min-h-[220px] bg-slate-950 overflow-hidden">
           {camera.enabled !== false ? (
             <>
-              {frameSrc ? (
-                <img
-                  src={frameSrc}
-                  alt={camera.camera_name}
-                  className="w-full h-full object-contain select-none"
-                />
-              ) : !useFallbackMjpeg && !streamError ? (
-                <img
-                  src={cameraService.getLiveStreamUrl(camera.camera_id, streamProfile === 'sub' ? 15 : 25, streamProfile)}
-                  alt={camera.camera_name}
-                  className="w-full h-full object-contain select-none"
-                  onError={() => {
-                    setUseFallbackMjpeg(true);
-                    setStreamError(true);
-                  }}
-                />
+              {isBroadcastingLocalCam ? (
+                <>
+                  {/* Direct Local Video preview: Instant 60 FPS zero-latency */}
+                  <video
+                    ref={localVideoRef}
+                    playsInline
+                    muted
+                    autoPlay
+                    className="w-full h-full object-contain select-none bg-black"
+                  />
+                  {/* Top Active Broadcast Overlay Banner */}
+                  <div className="absolute top-2.5 right-2.5 z-30 flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-950/90 border border-emerald-500/80 text-emerald-300 rounded-md text-[10px] font-mono font-bold shadow-lg animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>LIVE FROM THIS DEVICE</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={flipCamera}
+                      className="p-1.5 bg-slate-900/90 hover:bg-slate-800 text-sky-400 border border-slate-700 rounded-md text-[10px] font-mono transition flex items-center gap-1 cursor-pointer"
+                      title="Flip Front / Rear Camera"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span className="hidden sm:inline">Flip</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopLocalCamBroadcast}
+                      className="p-1.5 bg-rose-950/90 hover:bg-rose-900 text-rose-300 border border-rose-600 rounded-md text-[10px] font-mono transition flex items-center gap-1 cursor-pointer"
+                      title="Stop Camera Stream"
+                    >
+                      <Square className="w-3 h-3" />
+                      <span className="hidden sm:inline">Stop</span>
+                    </button>
+                  </div>
+                </>
               ) : (
-                <img
-                  src={snapshotSrc || cameraService.getSnapshotUrl(camera.camera_id)}
-                  alt={camera.camera_name}
-                  className="w-full h-full object-contain select-none"
-                  onError={() => {}}
-                />
+                <>
+                  {frameSrc ? (
+                    <img
+                      src={frameSrc}
+                      alt={camera.camera_name}
+                      className="w-full h-full object-contain select-none"
+                    />
+                  ) : !useFallbackMjpeg && !streamError ? (
+                    <img
+                      src={cameraService.getLiveStreamUrl(camera.camera_id, streamProfile === 'sub' ? 15 : 25, streamProfile)}
+                      alt={camera.camera_name}
+                      className="w-full h-full object-contain select-none"
+                      onError={() => {
+                        setUseFallbackMjpeg(true);
+                        setStreamError(true);
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src={snapshotSrc || cameraService.getSnapshotUrl(camera.camera_id)}
+                      alt={camera.camera_name}
+                      className="w-full h-full object-contain select-none"
+                      onError={() => {}}
+                    />
+                  )}
+
+                  {/* Central 1-Click Interactive Activation Overlay for Phone / Webcam / Standby streams */}
+                  {(camera.stream_type === 'android' ||
+                    camera.stream_type === 'webcam' ||
+                    camera.rtsp_url?.startsWith('edge://') ||
+                    camera.rtsp_url?.includes(':8080') ||
+                    streamError) && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-[2px] p-4 text-center">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/60 flex items-center justify-center mb-2.5 shadow-lg shadow-emerald-950/60 animate-bounce">
+                        <Smartphone className="w-6 h-6 text-emerald-400" />
+                      </div>
+                      <h4 className="text-xs font-bold font-mono text-white tracking-wider mb-1 uppercase">
+                        {camera.stream_type === 'webcam' ? 'Laptop / USB Webcam Node' : 'Phone / Mobile Camera Node'}
+                      </h4>
+                      <p className="text-[11px] text-slate-300 max-w-xs mb-3 font-sans leading-tight">
+                        Turn on this phone or laptop's camera to stream real-time video directly into this outpost.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => startLocalCamBroadcast()}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-mono font-bold text-xs rounded-lg shadow-lg shadow-emerald-900/50 border border-emerald-400 flex items-center gap-1.5 cursor-pointer transition"
+                      >
+                        <CameraIcon className="w-3.5 h-3.5" />
+                        <span>START LIVE CAMERA STREAM</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Hidden local video capture source when inactive */}
+                  <video ref={localVideoRef} playsInline muted className="hidden" />
+                </>
               )}
 
               {/* Tactical Bounding Boxes & Virtual Zones Overlay */}
@@ -395,9 +483,6 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                   showZones={true}
                 />
               )}
-
-              {/* Hidden local video capture source */}
-              <video ref={localVideoRef} playsInline muted className="hidden" />
             </>
           ) : (
             /* Offline or Disabled State */
@@ -469,7 +554,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
 
               {/* Device / Phone Camera Broadcaster Button */}
               <button
-                onClick={startLocalCamBroadcast}
+                onClick={() => startLocalCamBroadcast()}
                 className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold border transition cursor-pointer ${
                   isBroadcastingLocalCam
                     ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-900/40 animate-pulse'

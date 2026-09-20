@@ -22,7 +22,8 @@ import {
   Sliders,
   Server,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wifi
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -67,11 +68,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [nvrPort, setNvrPort] = useState<string>('554');
   const [nvrChannel, setNvrChannel] = useState<number>(1);
 
-  // Phone Camera inputs
+  // Phone Camera inputs & Mode
+  const [phoneMode, setPhoneMode] = useState<'browser' | 'ipwebcam'>('browser');
   const [phoneIp, setPhoneIp] = useState<string>('192.168.1.15');
   const [phonePort, setPhonePort] = useState<string>('8080');
 
-  // PC Webcam input
+  // PC Webcam input & Mode
+  const [webcamMode, setWebcamMode] = useState<'browser' | 'device'>('browser');
   const [webcamIndex, setWebcamIndex] = useState<string>('0');
 
   // Drone Preset
@@ -153,8 +156,17 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       const url = cameraToEdit.rtsp_url || '';
       const st = cameraToEdit.stream_type || 'main';
 
-      if (url.startsWith('webcam://') || st === 'webcam') {
+      if (url.startsWith('edge://')) {
+        if (st === 'android' || st === 'phone' || cameraToEdit.camera_name.toLowerCase().includes('phone')) {
+          setEquipmentType('phone');
+          setPhoneMode('browser');
+        } else {
+          setEquipmentType('webcam');
+          setWebcamMode('browser');
+        }
+      } else if (url.startsWith('webcam://') || st === 'webcam') {
         setEquipmentType('webcam');
+        setWebcamMode('device');
         setWebcamIndex(url.replace('webcam://', '').replace('device://', '').trim() || '0');
       } else if (st === 'nvr' || st === 'dvr' || url.includes('/Streaming/Channels/') || url.includes('channel=') || url.includes('/cam/realmonitor')) {
         setEquipmentType('nvr');
@@ -176,6 +188,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         setEquipmentType('ptz');
       } else if (url.includes(':8080') || url.includes('/video') || st === 'android') {
         setEquipmentType('phone');
+        setPhoneMode('ipwebcam');
       } else {
         setEquipmentType('rtsp');
       }
@@ -278,17 +291,22 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         rtsp_url: defaultDroneUrl
       }));
     } else if (type === 'phone') {
-      const url = `http://${phoneIp.trim() || '192.168.1.15'}:${phonePort.trim() || '8080'}/video`;
+      const url = phoneMode === 'browser'
+        ? `edge://${formData.camera_id || 'CAM-PHONE'}`
+        : `http://${phoneIp.trim() || '192.168.1.15'}:${phonePort.trim() || '8080'}/video`;
       setFormData(prev => ({
         ...prev,
         stream_type: 'android',
         rtsp_url: url
       }));
     } else if (type === 'webcam') {
+      const url = webcamMode === 'browser'
+        ? `edge://${formData.camera_id || 'CAM-WEBCAM'}`
+        : `webcam://${webcamIndex}`;
       setFormData(prev => ({
         ...prev,
         stream_type: 'webcam',
-        rtsp_url: `webcam://${webcamIndex}`
+        rtsp_url: url
       }));
     }
   };
@@ -983,73 +1001,190 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               </div>
             )}
 
-            {/* CASE 5: Phone Camera (IP Webcam) */}
+            {/* CASE 5: Phone Camera (Direct Browser vs IP Webcam App) */}
             {equipmentType === 'phone' && (
               <div className="p-3.5 bg-[#0e1626] border border-emerald-900/40 rounded-xl space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Phone Wi-Fi IP Address</label>
-                    <input
-                      type="text"
-                      value={phoneIp}
-                      onChange={(e) => handlePhoneChange(e.target.value, phonePort)}
-                      placeholder="192.168.1.15"
-                      className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
+                {/* Mode Selector */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhoneMode('browser');
+                      setFormData(prev => ({ ...prev, rtsp_url: `edge://${prev.camera_id || 'CAM-PHONE'}`, stream_type: 'android' }));
+                    }}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition cursor-pointer ${
+                      phoneMode === 'browser'
+                        ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow'
+                        : 'bg-[#080d1a] border-[#22324d] text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-white mb-1">
+                      <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Direct Mobile / Browser Cam</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      Recommended for Cloud & Mobile. Zero setup, no IP or 3rd-party app needed.
+                    </p>
+                  </button>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Port</label>
-                    <input
-                      type="text"
-                      value={phonePort}
-                      onChange={(e) => handlePhoneChange(phoneIp, e.target.value)}
-                      placeholder="8080"
-                      className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhoneMode('ipwebcam');
+                      const cleanIp = phoneIp.trim() || '192.168.1.15';
+                      const cleanPort = phonePort.trim() || '8080';
+                      setFormData(prev => ({ ...prev, rtsp_url: `http://${cleanIp}:${cleanPort}/video`, stream_type: 'android' }));
+                    }}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition cursor-pointer ${
+                      phoneMode === 'ipwebcam'
+                        ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow'
+                        : 'bg-[#080d1a] border-[#22324d] text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-white mb-1">
+                      <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>IP Webcam Android App</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      For local Wi-Fi IP (192.168.x.x). Requires running START_IBVAP.bat on laptop.
+                    </p>
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Stream URL</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.rtsp_url}
-                    onChange={(e) => setFormData({ ...formData, rtsp_url: e.target.value })}
-                    className="w-full bg-[#080d1a] border border-emerald-600/40 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
+                {phoneMode === 'browser' ? (
+                  <div className="p-3 bg-emerald-950/30 border border-emerald-800/40 rounded-lg text-xs space-y-1.5">
+                    <div className="font-mono font-semibold text-emerald-300 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Direct Browser Camera Mode (Cloud & Mobile Compatible)
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Aapke phone ya laptop ke camera se seedha live video stream hoga. Camera save karne ke baad video player par <strong>"START LIVE CAMERA STREAM"</strong> click karein!
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Phone Wi-Fi IP Address</label>
+                        <input
+                          type="text"
+                          value={phoneIp}
+                          onChange={(e) => handlePhoneChange(e.target.value, phonePort)}
+                          placeholder="192.168.1.15"
+                          className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Port</label>
+                        <input
+                          type="text"
+                          value={phonePort}
+                          onChange={(e) => handlePhoneChange(phoneIp, e.target.value)}
+                          placeholder="8080"
+                          className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Stream URL</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.rtsp_url}
+                        onChange={(e) => setFormData({ ...formData, rtsp_url: e.target.value })}
+                        className="w-full bg-[#080d1a] border border-emerald-600/40 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
             {/* CASE 6: Laptop / PC Webcam */}
             {equipmentType === 'webcam' && (
               <div className="p-3.5 bg-[#0e1626] border border-cyan-900/40 rounded-xl space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Select Camera Device</label>
-                    <select
-                      value={webcamIndex}
-                      onChange={(e) => handleWebcamChange(e.target.value)}
-                      className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500"
-                    >
-                      <option value="0">Default Built-in Webcam (webcam://0)</option>
-                      <option value="1">Secondary / USB Webcam (webcam://1)</option>
-                      <option value="2">External Video Device (webcam://2)</option>
-                    </select>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWebcamMode('browser');
+                      setFormData(prev => ({ ...prev, rtsp_url: `edge://${prev.camera_id || 'CAM-WEBCAM'}`, stream_type: 'webcam' }));
+                    }}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition cursor-pointer ${
+                      webcamMode === 'browser'
+                        ? 'bg-cyan-950/90 border-cyan-500 text-cyan-300 shadow'
+                        : 'bg-[#080d1a] border-[#22324d] text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-white mb-1">
+                      <Laptop className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Direct Browser Webcam</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      Recommended. Streams laptop webcam directly from browser.
+                    </p>
+                  </button>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Stream URL</label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={formData.rtsp_url}
-                      className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWebcamMode('device');
+                      setFormData(prev => ({ ...prev, rtsp_url: `webcam://${webcamIndex}`, stream_type: 'webcam' }));
+                    }}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition cursor-pointer ${
+                      webcamMode === 'device'
+                        ? 'bg-cyan-950/90 border-cyan-500 text-cyan-300 shadow'
+                        : 'bg-[#080d1a] border-[#22324d] text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-white mb-1">
+                      <Video className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Direct Hardware Device</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      For backend running locally on laptop via START_IBVAP.bat.
+                    </p>
+                  </button>
                 </div>
+
+                {webcamMode === 'browser' ? (
+                  <div className="p-3 bg-cyan-950/30 border border-cyan-800/40 rounded-lg text-xs space-y-1.5">
+                    <div className="font-mono font-semibold text-cyan-300 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                      Direct Browser Webcam Mode (Cloud & Local Compatible)
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Camera save hone ke baad player par <strong>"START LIVE CAMERA STREAM"</strong> click karein. Aapka laptop webcam seedha Central Command me stream hone lagega!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Select Camera Device</label>
+                      <select
+                        value={webcamIndex}
+                        onChange={(e) => handleWebcamChange(e.target.value)}
+                        className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="0">Default Built-in Webcam (webcam://0)</option>
+                        <option value="1">Secondary / USB Webcam (webcam://1)</option>
+                        <option value="2">External Video Device (webcam://2)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Stream URL</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={formData.rtsp_url}
+                        className="w-full bg-[#080d1a] border border-[#22324d] rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

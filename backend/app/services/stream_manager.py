@@ -218,11 +218,19 @@ class StreamManager:
             )
 
         now = time.time()
+        raw_frame = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
         with streamer._lock:
             streamer._latest_jpeg = frame_bytes
+            if raw_frame is not None:
+                streamer._latest_raw_frame = raw_frame
+                h, w = raw_frame.shape[:2]
+                streamer.resolution = f"{w}x{h}"
             streamer._latest_frame_time = now
+            streamer._last_edge_frame_time = now
             streamer._frame_count += 1
-            if resolution:
+            streamer.is_synthetic = False
+            streamer._in_tactical_fallback = False
+            if resolution and raw_frame is None:
                 streamer.resolution = resolution
             if fps is not None:
                 streamer.fps = fps
