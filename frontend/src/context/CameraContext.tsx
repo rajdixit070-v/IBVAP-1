@@ -128,8 +128,11 @@ export const CameraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const deleteCamera = async (cameraId: string): Promise<void> => {
-    await cameraService.deleteCamera(cameraId);
+    const targetId = String(cameraId).trim();
+    await cameraService.deleteCamera(targetId);
+    setCameras(prev => prev.filter(c => c.camera_id !== targetId && String(c.id) !== targetId));
     await refreshCameras();
+    await refreshSummary();
   };
 
   return (

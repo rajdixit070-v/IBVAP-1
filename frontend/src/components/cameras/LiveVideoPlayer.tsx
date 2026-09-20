@@ -56,7 +56,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     setStreamError(false);
     setUseFallbackMjpeg(false);
     setFrameSrc(null);
-    setSnapshotSrc(null);
+    setSnapshotSrc(cameraService.getSnapshotUrl(camera.camera_id));
   }, [camera.camera_id]);
   
   // AI Telemetry State
@@ -154,14 +154,14 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   // Video Streaming WebSocket
 
   useEffect(() => {
-    if (!autoPlay || !camera.enabled) {
+    if (!autoPlay || camera.enabled === false) {
       return;
     }
 
     let isSubscribed = true;
     let ws: LiveFeedWebSocket | null = null;
-
     let retryTimer: any = null;
+
     if (!useFallbackMjpeg) {
       try {
         ws = new LiveFeedWebSocket(
@@ -180,10 +180,9 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
             }
           },
           (err) => {
-            console.warn(`WebSocket stream issue for ${camera.camera_id}, switching to MJPEG:`, err);
+            console.warn(`WebSocket stream notice for ${camera.camera_id}, fallback active:`, err);
             if (isSubscribed) {
               setUseFallbackMjpeg(true);
-              setFrameSrc(null);
             }
           }
         );
@@ -191,16 +190,15 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
       } catch (e) {
         if (isSubscribed) {
           setUseFallbackMjpeg(true);
-          setFrameSrc(null);
         }
       }
     } else {
-      // Gracefully retry reconnecting WebSocket stream after 12s
+      // Gracefully retry reconnecting WebSocket stream after 10s
       retryTimer = setTimeout(() => {
         if (isSubscribed) {
           setUseFallbackMjpeg(false);
         }
-      }, 12000);
+      }, 10000);
     }
 
     return () => {
@@ -214,27 +212,26 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
 
   // Layer 3: Automated Rapid Snapshot Polling Fallback
   useEffect(() => {
-    if (!autoPlay || !camera.enabled) return;
+    if (!autoPlay || camera.enabled === false) return;
 
     let timer: any = null;
-    if (streamError && !frameSrc) {
+    if (useFallbackMjpeg || streamError || !frameSrc) {
       const pollSnapshot = () => {
-        setSnapshotSrc(cameraService.getSnapshotUrl(camera.camera_id));
+        if (!frameSrc) {
+          setSnapshotSrc(cameraService.getSnapshotUrl(camera.camera_id));
+        }
       };
-      pollSnapshot();
-      timer = setInterval(pollSnapshot, 350);
-    } else {
-      setSnapshotSrc(null);
+      timer = setInterval(pollSnapshot, 800);
     }
 
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [streamError, frameSrc, camera.camera_id, camera.enabled, autoPlay]);
+  }, [useFallbackMjpeg, streamError, frameSrc, camera.camera_id, camera.enabled, autoPlay]);
 
   // AI Telemetry WebSocket
   useEffect(() => {
-    if (!autoPlay || !camera.enabled) return;
+    if (!autoPlay || camera.enabled === false) return;
 
     try {
       const aiWs = new AIFeedWebSocket(camera.camera_id, (msg) => {
@@ -362,29 +359,30 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
 
         {/* Main Video & Detection Overlay Surface */}
         <div className="relative flex-1 flex items-center justify-center min-h-[160px] sm:min-h-[220px] bg-slate-950 overflow-hidden">
-          {camera.enabled ? (
+          {camera.enabled !== false ? (
             <>
-              {frameSrc && !useFallbackMjpeg ? (
+              {frameSrc ? (
                 <img
                   src={frameSrc}
                   alt={camera.camera_name}
                   className="w-full h-full object-contain select-none"
                 />
-              ) : streamError ? (
-                <img
-                  src={snapshotSrc || cameraService.getSnapshotUrl(camera.camera_id)}
-                  alt={camera.camera_name}
-                  className="w-full h-full object-contain select-none"
-                  onError={() => {}}
-                />
-              ) : (
+              ) : !useFallbackMjpeg && !streamError ? (
                 <img
                   src={cameraService.getLiveStreamUrl(camera.camera_id, streamProfile === 'sub' ? 15 : 25, streamProfile)}
                   alt={camera.camera_name}
                   className="w-full h-full object-contain select-none"
                   onError={() => {
+                    setUseFallbackMjpeg(true);
                     setStreamError(true);
                   }}
+                />
+              ) : (
+                <img
+                  src={snapshotSrc || cameraService.getSnapshotUrl(camera.camera_id)}
+                  alt={camera.camera_name}
+                  className="w-full h-full object-contain select-none"
+                  onError={() => {}}
                 />
               )}
 
@@ -408,12 +406,10 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                 <AlertTriangle className="w-6 h-6 text-amber-400/80" />
               </div>
               <div className="font-mono text-sm font-semibold text-slate-300 uppercase">
-                {!camera.enabled ? 'CAMERA DISABLED' : 'STREAM OFFLINE'}
+                CAMERA DISABLED
               </div>
               <p className="text-xs text-slate-500 max-w-xs">
-                {!camera.enabled
-                  ? 'Camera feed is disabled by administrator policy.'
-                  : 'Camera stream disconnected. Backend automatic exponential backoff is actively retrying.'}
+                Camera feed is disabled by administrator policy.
               </p>
             </div>
           )}

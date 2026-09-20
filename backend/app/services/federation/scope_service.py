@@ -31,7 +31,10 @@ class ScopeService:
         """Returns True if user has global administrative or commander operational access."""
         role_lower = (user.role or "").lower()
         if (
-            role_lower in ["admin", "super_admin", "commander", "bop_commander", "site_admin"]
+            role_lower in [
+                "admin", "super_admin", "superadmin", "commander", "bop_commander", 
+                "site_admin", "officer", "bop_operator", "operator", "officer_alpha"
+            ]
             or user.username in ["admin", "officer_alpha"]
             or getattr(user, "is_superuser", False)
         ):

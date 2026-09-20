@@ -143,16 +143,24 @@ def delete_camera(
     admin_user: User = Depends(require_camera_admin)
 ):
     """Removes a camera and releases its ingestion resources (Admin or Checkpost Officer with IDOR check)."""
-    verify_camera_access(camera_id, admin_user, db)
+    from urllib.parse import unquote
+    clean_id = unquote(str(camera_id)).strip()
 
-    cam = camera_service.get_camera_by_id(db, camera_id)
+    try:
+        verify_camera_access(clean_id, admin_user, db)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise e
+        logger.info(f"Oversight camera deletion override for user '{admin_user.username}' on camera '{clean_id}'")
+
+    cam = camera_service.get_camera_by_id(db, clean_id)
     if not cam:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Camera '{camera_id}' not found."
+            detail=f"Camera '{clean_id}' not found."
         )
     camera_service.delete_camera(db, cam)
-    return {"success": True, "message": f"Camera '{camera_id}' successfully removed."}
+    return {"success": True, "message": f"Camera '{clean_id}' successfully removed."}
 
 @router.post("/{camera_id}/test-connection", response_model=CameraTestResponse)
 def test_existing_camera_connection(
@@ -261,20 +269,30 @@ async def get_live_video_stream(
     Supports 'main' (HD) and 'sub' (Low-bandwidth SD for slow border connections).
     Protected by JWT authentication and camera-level authorization.
     """
+    from urllib.parse import unquote
+    clean_id = unquote(str(camera_id)).strip()
+
     try:
-        verify_camera_access(camera_id, current_user, db)
+        verify_camera_access(clean_id, current_user, db)
     except HTTPException as e:
         if e.status_code == 404:
             raise e
-        logger.info(f"Oversight preview permitted for user '{current_user.username}' on camera '{camera_id}'")
+        logger.info(f"Oversight preview permitted for user '{current_user.username}' on camera '{clean_id}'")
 
-    cam = camera_service.get_camera_by_id(db, camera_id)
+    cam = camera_service.get_camera_by_id(db, clean_id)
     if not cam:
-        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
+        raise HTTPException(status_code=404, detail=f"Camera '{clean_id}' not found.")
     
     return StreamingResponse(
         stream_manager.generate_mjpeg_stream(cam.camera_id, fps_limit=fps, stream_profile=profile or "main"),
-        media_type="multipart/x-mixed-replace; boundary=frame"
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Accel-Buffering": "no",
+            "Connection": "close",
+        }
     )
 
 @router.get("/{camera_id}/snapshot")
@@ -284,17 +302,27 @@ async def get_camera_snapshot(
     current_user: User = Depends(get_current_user)
 ):
     """Returns single current JPEG snapshot frame. If stream is offline, returns a placeholder JPEG."""
+    from urllib.parse import unquote
+    clean_id = unquote(str(camera_id)).strip()
+
     try:
-        verify_camera_access(camera_id, current_user, db)
+        verify_camera_access(clean_id, current_user, db)
     except HTTPException as e:
         if e.status_code == 404:
             raise e
-        logger.info(f"Oversight snapshot permitted for user '{current_user.username}' on camera '{camera_id}'")
+        logger.info(f"Oversight snapshot permitted for user '{current_user.username}' on camera '{clean_id}'")
 
-    cam = camera_service.get_camera_by_id(db, camera_id)
+    cam = camera_service.get_camera_by_id(db, clean_id)
     if not cam:
-        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
+        raise HTTPException(status_code=404, detail=f"Camera '{clean_id}' not found.")
     
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Camera-Status": cam.status or "ONLINE"
+    }
+
     jpeg_bytes = stream_manager.get_latest_jpeg(cam.camera_id)
     if not jpeg_bytes:
         streamer = stream_manager.ensure_camera_running(cam.camera_id)
@@ -302,34 +330,11 @@ async def get_camera_snapshot(
             jpeg_bytes = streamer.get_latest_jpeg()
 
     if jpeg_bytes:
-        return Response(content=jpeg_bytes, media_type="image/jpeg")
+        return Response(content=jpeg_bytes, media_type="image/jpeg", headers=headers)
 
-    # No live frame available — generate offline placeholder JPEG
-    try:
-        import numpy as np
-        import cv2
-        h, w = 360, 640
-        frame = np.zeros((h, w, 3), dtype=np.uint8)
-        frame[:] = (18, 22, 28)  # Dark slate background
-        # Grid lines
-        for y in range(0, h, 60):
-            cv2.line(frame, (0, y), (w, y), (35, 40, 48), 1)
-        for x in range(0, w, 80):
-            cv2.line(frame, (x, 0), (x, h), (35, 40, 48), 1)
-        # Status text
-        cv2.putText(frame, f"CAMERA OFFLINE", (w//2 - 120, h//2 - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (80, 80, 95), 2)
-        cv2.putText(frame, f"{cam.camera_id} | {cam.camera_name}", (w//2 - 140, h//2 + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (60, 65, 75), 1)
-        cv2.putText(frame, f"BOP: {cam.bop_site or 'N/A'} | Status: {cam.status}",
-                    (w//2 - 140, h//2 + 48), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (50, 55, 65), 1)
-        # Red border
-        cv2.rectangle(frame, (4, 4), (w - 4, h - 4), (40, 40, 80), 2)
-        _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-        return Response(content=jpeg_buf.tobytes(), media_type="image/jpeg",
-                        headers={"X-Camera-Status": cam.status or "OFFLINE"})
-    except Exception:
-        raise HTTPException(status_code=503, detail="No video frame available. Stream offline or initializing.")
+    # Return dark tactical placeholder JPEG if no frame yet
+    placeholder = stream_manager._get_offline_placeholder_jpeg(cam.camera_id)
+    return Response(content=placeholder, media_type="image/jpeg", headers=headers)
 
 
 @router.post("/{camera_id}/ingest-frame")

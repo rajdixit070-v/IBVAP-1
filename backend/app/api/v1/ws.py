@@ -53,28 +53,34 @@ async def live_video_feed_ws(
     Ultra low-latency WebSocket video frame broadcaster.
     Streams binary JPEG frames directly into client Canvas/Image player.
     """
-    if not await _authenticate_and_accept(websocket, ticket, token, "live_feed", camera_id):
+    from urllib.parse import unquote
+    clean_camera_id = unquote(str(camera_id)).strip()
+
+    if not await _authenticate_and_accept(websocket, ticket, token, "live_feed", clean_camera_id):
         return
     
     try:
         frame_interval = 1.0 / 30.0  # Smooth 30 FPS over WebSocket
         last_frame_count = -1
         # Ensure camera streamer is actively started from DB
-        stream_manager.ensure_camera_running(camera_id)
+        stream_manager.ensure_camera_running(clean_camera_id)
 
         while True:
-            streamer = stream_manager.get_streamer(camera_id)
+            streamer = stream_manager.get_streamer(clean_camera_id)
             if not streamer or not getattr(streamer, "_running", False):
-                streamer = stream_manager.ensure_camera_running(camera_id)
+                streamer = stream_manager.ensure_camera_running(clean_camera_id)
 
             if streamer and streamer._running and streamer.status != "OFFLINE":
-                if streamer._frame_count != last_frame_count:
-                    jpeg_bytes = streamer.get_latest_jpeg()
-                    if jpeg_bytes:
+                jpeg_bytes = streamer.get_latest_jpeg()
+                if jpeg_bytes:
+                    if streamer._frame_count != last_frame_count or last_frame_count == -1:
                         await websocket.send_bytes(jpeg_bytes)
                         last_frame_count = streamer._frame_count
+                else:
+                    placeholder = stream_manager._get_offline_placeholder_jpeg(clean_camera_id)
+                    await websocket.send_bytes(placeholder)
             else:
-                placeholder = stream_manager._get_offline_placeholder_jpeg(camera_id)
+                placeholder = stream_manager._get_offline_placeholder_jpeg(clean_camera_id)
                 await websocket.send_bytes(placeholder)
                 await asyncio.sleep(0.08)
                 continue

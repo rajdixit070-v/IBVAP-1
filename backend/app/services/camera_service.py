@@ -106,14 +106,18 @@ def list_cameras(
     return [format_camera_response(c) for c in cameras], total
 
 def get_camera_by_id(db: Session, camera_id: str) -> Optional[Camera]:
-    """Finds camera by unique identifier (CAM-001) or database integer ID."""
-    if str(camera_id).isdigit():
-        cam = db.query(Camera).filter(Camera.id == int(camera_id)).first()
+    """Finds camera by unique identifier (CAM-001) or database integer ID with decoding."""
+    from urllib.parse import unquote
+    clean_id = unquote(str(camera_id)).strip()
+    if clean_id.isdigit():
+        cam = db.query(Camera).filter(Camera.id == int(clean_id)).first()
         if cam:
             return cam
-    cam = db.query(Camera).filter(Camera.camera_id == str(camera_id).strip()).first()
+    cam = db.query(Camera).filter(Camera.camera_id == clean_id).first()
     if not cam:
-        cam = db.query(Camera).filter(Camera.camera_id == str(camera_id).strip().upper()).first()
+        cam = db.query(Camera).filter(Camera.camera_id == clean_id.upper()).first()
+    if not cam:
+        cam = db.query(Camera).filter(Camera.camera_id.ilike(clean_id)).first()
     return cam
 
 def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
@@ -244,27 +248,40 @@ def update_camera(db: Session, db_camera: Camera, camera_in: CameraUpdate) -> Ca
 
 def delete_camera(db: Session, db_camera: Any):
     """Stops streamer, unregisters AI worker, cleans up all dependent records across all modules, and deletes camera record."""
+    from urllib.parse import unquote
+    from sqlalchemy import text
+
     if isinstance(db_camera, str):
-        cam_id = db_camera
-        db_camera = db.query(Camera).filter(Camera.camera_id == cam_id).first()
+        cam_id = unquote(db_camera).strip()
+        db_camera = db.query(Camera).filter(
+            (Camera.camera_id == cam_id) | (Camera.camera_id.ilike(cam_id))
+        ).first()
     elif hasattr(db_camera, "camera_id") and not hasattr(db_camera, "_sa_instance_state"):
-        cam_id = db_camera.camera_id
-        db_camera = db.query(Camera).filter(Camera.camera_id == cam_id).first()
+        cam_id = str(db_camera.camera_id).strip()
+        db_camera = db.query(Camera).filter(
+            (Camera.camera_id == cam_id) | (Camera.camera_id.ilike(cam_id))
+        ).first()
     else:
         cam_id = getattr(db_camera, "camera_id", None)
+        if cam_id:
+            cam_id = str(cam_id).strip()
 
-    if not cam_id or not db_camera:
+    if not cam_id:
         return
 
     # 1. Stop streamer and AI worker
-    stream_manager.stop_camera(cam_id)
+    try:
+        stream_manager.stop_camera(cam_id)
+    except Exception as se:
+        logger.debug(f"Streamer stop note for {cam_id}: {se}")
+
     try:
         from app.services.ai.pipeline import ai_pipeline_manager
         ai_pipeline_manager.unregister_camera(cam_id)
     except Exception as e:
         logger.debug(f"AI pipeline unregister notice for {cam_id}: {e}")
 
-    # 2. Cascade delete dependent configurations & models
+    # 2. Cascade delete dependent configurations & models across all modules
     models_with_camera_id = [
         ("app.models.ai_config", "CameraAIConfig", "camera_id"),
         ("app.models.multimodal_models", "CameraAIProfile", "camera_id"),
@@ -272,9 +289,12 @@ def delete_camera(db: Session, db_camera: Any):
         ("app.models.multimodal_models", "AIOperatorFeedback", "camera_id"),
         ("app.models.zone", "SecurityZone", "camera_id"),
         ("app.models.health_log", "CameraHealthLog", "camera_id"),
+        ("app.models.health_models", "CameraHealthState", "camera_id"),
         ("app.models.health_event", "HealthEvent", "source_id"),
         ("app.models.incident", "Incident", "camera_id"),
         ("app.models.gis_models", "CameraFOV", "camera_id"),
+        ("app.models.gis_models", "CalibrationProfile", "camera_id"),
+        ("app.models.gis_models", "GeoReference", "camera_id"),
         ("app.models.ptz_models", "PTZDevice", "camera_id"),
         ("app.models.ptz_models", "PTZPreset", "camera_id"),
         ("app.models.ptz_models", "PTZAuditLog", "camera_id"),
@@ -285,6 +305,18 @@ def delete_camera(db: Session, db_camera: Any):
         ("app.models.anpr_event", "ANPREvent", "camera_id"),
         ("app.models.face_event", "FaceEvent", "camera_id"),
         ("app.models.notification", "Notification", "camera_id"),
+        ("app.models.ai_event", "AIAnalyticsEvent", "camera_id"),
+        ("app.models.behavior_anomaly_models", "BehaviourEvent", "camera_id"),
+        ("app.models.behavior_anomaly_models", "ActivityBaseline", "camera_id"),
+        ("app.models.behavior_anomaly_models", "ActivitySnapshot", "camera_id"),
+        ("app.models.behavior_anomaly_models", "BaselineShift", "camera_id"),
+        ("app.models.behavior_anomaly_models", "EarlyWarning", "camera_id"),
+        ("app.models.edge_buffer_models", "EdgeEventBuffer", "camera_id"),
+        ("app.models.sensor_fusion_models", "SensorDevice", "camera_id"),
+        ("app.models.sensor_fusion_models", "SensorObservation", "camera_id"),
+        ("app.models.sensor_fusion_models", "TrackAssociation", "camera_id"),
+        ("app.models.sensor_fusion_models", "MovementAnomaly", "camera_id"),
+        ("app.models.sensor_fusion_models", "ThermalSensorReading", "camera_id"),
     ]
 
     for mod_name, cls_name, col_name in models_with_camera_id:
@@ -295,8 +327,12 @@ def delete_camera(db: Session, db_camera: Any):
             if cls_obj is not None:
                 col = getattr(cls_obj, col_name, None)
                 if col is not None:
-                    db.query(cls_obj).filter(col == cam_id).delete(synchronize_session=False)
+                    db.query(cls_obj).filter(
+                        (col == cam_id) | (col == cam_id.upper())
+                    ).delete(synchronize_session=False)
+                    db.commit()
         except Exception as err:
+            db.rollback()
             logger.debug(f"Could not cascade delete from {cls_name}: {err}")
 
     # Also clean any notifications mentioning this camera by name or ID in title or message
@@ -307,8 +343,9 @@ def delete_camera(db: Session, db_camera: Any):
             (Notification.title.like(f"%{cam_id}%")) |
             (Notification.message.like(f"%{cam_id}%"))
         ).delete(synchronize_session=False)
+        db.commit()
     except Exception:
-        pass
+        db.rollback()
 
     # Clean camera pairs (thermal + RGB)
     try:
@@ -316,8 +353,9 @@ def delete_camera(db: Session, db_camera: Any):
         db.query(CameraPair).filter(
             (CameraPair.rgb_camera_id == cam_id) | (CameraPair.thermal_camera_id == cam_id)
         ).delete(synchronize_session=False)
+        db.commit()
     except Exception:
-        pass
+        db.rollback()
 
     # Clean transitions
     try:
@@ -325,13 +363,32 @@ def delete_camera(db: Session, db_camera: Any):
         db.query(CameraTransition).filter(
             (CameraTransition.from_camera_id == cam_id) | (CameraTransition.to_camera_id == cam_id)
         ).delete(synchronize_session=False)
+        db.commit()
     except Exception:
-        pass
+        db.rollback()
 
-    # 3. Delete camera
-    db.delete(db_camera)
-    db.commit()
-    logger.info(f"Camera {cam_id} and all related configurations deleted successfully.")
+    # 3. Delete camera record with ORM and raw SQL safety fallback
+    try:
+        if db_camera:
+            db.delete(db_camera)
+            db.commit()
+            logger.info(f"Camera {cam_id} and all related configurations deleted successfully via ORM.")
+            return
+    except Exception as orm_err:
+        db.rollback()
+        logger.warning(f"ORM delete failed for {cam_id}, attempting raw SQL delete: {orm_err}")
+
+    try:
+        db.execute(
+            text("DELETE FROM cameras WHERE camera_id = :cid OR camera_id ILIKE :cid"),
+            {"cid": cam_id}
+        )
+        db.commit()
+        logger.info(f"Camera {cam_id} deleted via direct SQL fallback.")
+    except Exception as sql_err:
+        db.rollback()
+        logger.error(f"Failed to delete camera {cam_id} via direct SQL: {sql_err}")
+        raise sql_err
 
 def get_overview_summary(db: Session) -> Dict[str, Any]:
     """Aggregates high-level camera statistics grouped by BOP and health status.

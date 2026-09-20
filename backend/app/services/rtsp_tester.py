@@ -153,10 +153,10 @@ def test_rtsp_connection(
         try:
             import ipaddress
             ip_obj = ipaddress.ip_address(host)
-            if ip_obj.is_private or ip_obj.is_loopback:
-                is_private_subnet = True
+            # Strictly match RFC 1918 private local LAN subnets
+            is_private_subnet = any(ip_obj in ipaddress.ip_network(n) for n in ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
         except Exception:
-            if host.startswith("192.168.") or host.startswith("10.") or host.startswith("172."):
+            if host.startswith("192.168.") or host.startswith("10."):
                 is_private_subnet = True
 
     if host and not clean_url.startswith("udp://"):
