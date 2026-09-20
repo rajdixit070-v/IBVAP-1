@@ -8,7 +8,6 @@ import { CameraDetailsModal } from '../components/cameras/CameraDetailsModal';
 import { RTSPTestModal } from '../components/cameras/RTSPTestModal';
 import { DeleteConfirmModal } from '../components/cameras/DeleteConfirmModal';
 import { AIControlModal } from '../components/ai/AIControlModal';
-import { WebcamBroadcasterModal } from '../components/cameras/WebcamBroadcasterModal';
 import { useAuth } from '../context/AuthContext';
 import {
   Plus,
@@ -16,8 +15,7 @@ import {
   LayoutGrid,
   List,
   RefreshCw,
-  Cctv,
-  Laptop
+  Cctv
 } from 'lucide-react';
 
 interface CameraManagementPageProps {
@@ -68,9 +66,6 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
 
   // AI Detection Tuning state
   const [selectedCameraForAI, setSelectedCameraForAI] = useState<Camera | null>(null);
-
-  // Laptop Webcam Broadcaster state
-  const [broadcasterCamera, setBroadcasterCamera] = useState<Camera | null>(null);
 
   // RTSP Quick Test state
   const [testModalOpen, setTestModalOpen] = useState(false);
@@ -163,24 +158,6 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-sky-400' : ''}`} />
             Refresh
           </button>
-
-          {!isSuperAdmin && (
-            <button
-              onClick={() => {
-                const webcamCam = scopedCameras.find(c => c.stream_type === 'webcam' || (c.rtsp_url && (c.rtsp_url.startsWith('webcam://') || c.rtsp_url.startsWith('edge://')))) || scopedCameras[0];
-                if (webcamCam) {
-                  setBroadcasterCamera(webcamCam);
-                } else {
-                  handleOpenAddModal();
-                }
-              }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-cyan-950/70 hover:bg-cyan-900/70 text-cyan-300 rounded-lg text-xs font-semibold border border-cyan-500/40 transition cursor-pointer"
-              title="Stream your Laptop Camera live into IBVAP"
-            >
-              <Laptop className="w-4 h-4 text-cyan-400" />
-              BROADCAST WEBCAM
-            </button>
-          )}
 
           {!isSuperAdmin && (
             <button
@@ -290,7 +267,6 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
               onTest={handleQuickTest}
               onLocate={onLocateOnMap}
               onConfigureAI={(cam) => setSelectedCameraForAI(cam)}
-              onBroadcastWebcam={(cam) => setBroadcasterCamera(cam)}
             />
           ))}
         </div>
@@ -302,13 +278,6 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
         onClose={() => setCameraModalOpen(false)}
         onSuccess={refreshCameras}
         cameraToEdit={selectedCameraForEdit}
-      />
-
-      {/* Laptop / Device Webcam Live Broadcaster Modal */}
-      <WebcamBroadcasterModal
-        isOpen={!!broadcasterCamera}
-        onClose={() => setBroadcasterCamera(null)}
-        camera={broadcasterCamera}
       />
 
       {/* Camera Full Details & Live Inspection Modal */}

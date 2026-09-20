@@ -13,12 +13,14 @@ import {
   Cpu,
   Eye,
   EyeOff,
-  Sliders
+  Sliders,
+  Laptop
 } from 'lucide-react';
 import { cameraService } from '../../services/cameraService';
 import { zoneService } from '../../services/zoneService';
 import { LiveFeedWebSocket } from '../../services/websocket';
 import { AIFeedWebSocket } from '../../services/aiService';
+import { webcamStreamService } from '../../services/webcamStreamService';
 
 interface LiveVideoPlayerProps {
   camera: Camera;
@@ -59,6 +61,17 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const wsVideoRef = useRef<LiveFeedWebSocket | null>(null);
   const wsAiRef = useRef<AIFeedWebSocket | null>(null);
+
+  const isWebcam = camera.stream_type === 'webcam' || (camera.rtsp_url && camera.rtsp_url.startsWith('webcam://'));
+  const [isWebcamActive, setIsWebcamActive] = useState(false);
+
+  useEffect(() => {
+    if (!isWebcam) return;
+    const unsubscribe = webcamStreamService.subscribe((active, activeId) => {
+      setIsWebcamActive(active && activeId === camera.camera_id);
+    });
+    return unsubscribe;
+  }, [isWebcam, camera.camera_id]);
 
   // Measure local render FPS
   const frameCountRef = useRef(0);
@@ -185,6 +198,20 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 pointer-events-auto">
+            {/* Webcam Live Indicator */}
+            {isWebcam && (
+              <span
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                  isWebcamActive
+                    ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/40 animate-pulse'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-700'
+                }`}
+              >
+                <Laptop className="w-3 h-3" />
+                <span>{isWebcamActive ? 'WEBCAM LIVE' : 'WEBCAM'}</span>
+              </span>
+            )}
+
             {/* AI Engine Status Pill */}
             <div
               className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
@@ -267,6 +294,29 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                   showZones={true}
                 />
               )}
+
+              {/* Laptop Webcam Standby Overlay */}
+              {isWebcam && !isWebcamActive && !frameSrc && (
+                <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center z-10">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-2">
+                    <Laptop className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div className="text-xs font-mono font-bold text-slate-200 uppercase tracking-wide">
+                    Laptop Camera Standby
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 max-w-xs leading-relaxed">
+                    Click below to stream your laptop's camera directly to the cloud AI engine.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => webcamStreamService.startStream(camera.camera_id)}
+                    className="mt-3 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold rounded-lg shadow-lg shadow-emerald-900/30 flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Laptop className="w-3.5 h-3.5" />
+                    <span>START LIVE WEBCAM</span>
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             /* Offline or Disabled State */
@@ -305,6 +355,28 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
 
           {showControls && (
             <div className="flex items-center gap-1.5">
+              {/* Laptop Webcam Stream Toggle */}
+              {isWebcam && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isWebcamActive) {
+                      webcamStreamService.stopStream();
+                    } else {
+                      webcamStreamService.startStream(camera.camera_id);
+                    }
+                  }}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold border transition cursor-pointer ${
+                    isWebcamActive
+                      ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500/50 hover:bg-emerald-600/40'
+                      : 'bg-amber-600/30 text-amber-300 border-amber-500/50 hover:bg-amber-600/40'
+                  }`}
+                  title={isWebcamActive ? "Stop Streaming Laptop Webcam" : "Start Streaming Laptop Webcam"}
+                >
+                  <Laptop className="w-3.5 h-3.5" />
+                  <span>{isWebcamActive ? 'WEBCAM ON' : 'START WEBCAM'}</span>
+                </button>
+              )}
               {/* Toggle AI Overlay Button */}
               <button
                 type="button"
