@@ -47,6 +47,9 @@ const MainLayout: React.FC = () => {
     if (!isSuperAdmin && ADMIN_ONLY_TABS.includes(hash)) {
       return 'dashboard';
     }
+    if (isSuperAdmin && hash === 'cameras') {
+      return 'live';
+    }
     return hash || 'dashboard';
   };
   const [activeTab, setActiveTabState] = useState(getInitialTab);
@@ -56,6 +59,13 @@ const MainLayout: React.FC = () => {
       setActiveTabState('dashboard');
       if (window.location.hash !== '#dashboard') {
         window.location.hash = '#dashboard';
+      }
+      return;
+    }
+    if (isSuperAdmin && tab === 'cameras') {
+      setActiveTabState('live');
+      if (window.location.hash !== '#live') {
+        window.location.hash = '#live';
       }
       return;
     }
@@ -69,6 +79,9 @@ const MainLayout: React.FC = () => {
     if (user && !isSuperAdmin && ADMIN_ONLY_TABS.includes(activeTab)) {
       setActiveTab('dashboard');
     }
+    if (user && isSuperAdmin && activeTab === 'cameras') {
+      setActiveTab('live');
+    }
   }, [user, isSuperAdmin, activeTab]);
 
   useEffect(() => {
@@ -76,6 +89,10 @@ const MainLayout: React.FC = () => {
       const hash = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
       if (!isSuperAdmin && ADMIN_ONLY_TABS.includes(hash)) {
         setActiveTabState('dashboard');
+        return;
+      }
+      if (isSuperAdmin && hash === 'cameras') {
+        setActiveTabState('live');
         return;
       }
       setActiveTabState(hash);

@@ -161,13 +161,15 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
             Refresh
           </button>
 
-          <button
-            onClick={handleOpenAddModal}
-            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold tracking-wider transition shadow-lg shadow-sky-600/20 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            REGISTER NEW CAMERA
-          </button>
+          {!isSuperAdmin && (
+            <button
+              onClick={handleOpenAddModal}
+              className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold tracking-wider transition shadow-lg shadow-sky-600/20 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              REGISTER NEW CAMERA
+            </button>
+          )}
         </div>
       </div>
 
