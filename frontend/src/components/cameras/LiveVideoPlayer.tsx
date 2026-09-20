@@ -82,7 +82,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   const wsAiRef = useRef<AIFeedWebSocket | null>(null);
 
   const [isBroadcastingLocalCam, setIsBroadcastingLocalCam] = useState(false);
-  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>(camera.stream_type === 'webcam' ? 'user' : 'environment');
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const broadcastIntervalRef = useRef<any>(null);
@@ -98,10 +98,20 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
       }
 
       const targetFacing = requestedFacing || facingMode;
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: targetFacing },
-        audio: false
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: targetFacing },
+          audio: false
+        });
+      } catch (constraintErr) {
+        // Fallback: request default video camera without facingMode constraint (vital for PCs/laptops/USB webcams)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+      }
+
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
