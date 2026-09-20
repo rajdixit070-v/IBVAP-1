@@ -43,12 +43,21 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   const [fps, setFps] = useState<number>(camera.fps || 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [useFallbackMjpeg, setUseFallbackMjpeg] = useState(false);
+  const [streamError, setStreamError] = useState(false);
+  const [snapshotSrc, setSnapshotSrc] = useState<string | null>(null);
 
   useEffect(() => {
     if (globalProfile) {
       setStreamProfile(globalProfile);
     }
   }, [globalProfile]);
+
+  useEffect(() => {
+    setStreamError(false);
+    setUseFallbackMjpeg(false);
+    setFrameSrc(null);
+    setSnapshotSrc(null);
+  }, [camera.camera_id]);
   
   // AI Telemetry State
   const [showAiOverlay, setShowAiOverlay] = useState(true);
@@ -152,6 +161,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     let isSubscribed = true;
     let ws: LiveFeedWebSocket | null = null;
 
+    let retryTimer: any = null;
     if (!useFallbackMjpeg) {
       try {
         ws = new LiveFeedWebSocket(
@@ -159,6 +169,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           (blobUrl) => {
             if (!isSubscribed) return;
             setFrameSrc(blobUrl);
+            setStreamError(false);
 
             frameCountRef.current += 1;
             const now = Date.now();
@@ -183,15 +194,43 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           setFrameSrc(null);
         }
       }
+    } else {
+      // Gracefully retry reconnecting WebSocket stream after 12s
+      retryTimer = setTimeout(() => {
+        if (isSubscribed) {
+          setUseFallbackMjpeg(false);
+        }
+      }, 12000);
     }
 
     return () => {
       isSubscribed = false;
+      if (retryTimer) clearTimeout(retryTimer);
       if (ws) {
         ws.close();
       }
     };
   }, [camera.camera_id, camera.enabled, autoPlay, useFallbackMjpeg]);
+
+  // Layer 3: Automated Rapid Snapshot Polling Fallback
+  useEffect(() => {
+    if (!autoPlay || !camera.enabled) return;
+
+    let timer: any = null;
+    if (streamError && !frameSrc) {
+      const pollSnapshot = () => {
+        setSnapshotSrc(cameraService.getSnapshotUrl(camera.camera_id));
+      };
+      pollSnapshot();
+      timer = setInterval(pollSnapshot, 350);
+    } else {
+      setSnapshotSrc(null);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [streamError, frameSrc, camera.camera_id, camera.enabled, autoPlay]);
 
   // AI Telemetry WebSocket
   useEffect(() => {
@@ -325,19 +364,26 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
         <div className="relative flex-1 flex items-center justify-center min-h-[160px] sm:min-h-[220px] bg-slate-950 overflow-hidden">
           {camera.enabled ? (
             <>
-              {frameSrc && streamProfile === 'main' ? (
+              {frameSrc && !useFallbackMjpeg ? (
                 <img
                   src={frameSrc}
                   alt={camera.camera_name}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain select-none"
+                />
+              ) : streamError ? (
+                <img
+                  src={snapshotSrc || cameraService.getSnapshotUrl(camera.camera_id)}
+                  alt={camera.camera_name}
+                  className="w-full h-full object-contain select-none"
+                  onError={() => {}}
                 />
               ) : (
                 <img
                   src={cameraService.getLiveStreamUrl(camera.camera_id, streamProfile === 'sub' ? 15 : 25, streamProfile)}
                   alt={camera.camera_name}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain select-none"
                   onError={() => {
-                    // Fallback to retrying or showing connection spinner
+                    setStreamError(true);
                   }}
                 />
               )}

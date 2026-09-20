@@ -259,8 +259,7 @@ class StreamManager:
                     offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
                     yield (
                         b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n"
-                        b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
+                        b"Content-Type: image/jpeg\r\n\r\n" +
                         offline_jpeg + b"\r\n"
                     )
                     await asyncio.sleep(0.08)
@@ -285,16 +284,14 @@ class StreamManager:
                 if jpeg_bytes:
                     yield (
                         b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n"
-                        b"Content-Length: " + str(len(jpeg_bytes)).encode('utf-8') + b"\r\n\r\n" +
+                        b"Content-Type: image/jpeg\r\n\r\n" +
                         jpeg_bytes + b"\r\n"
                     )
                 else:
                     offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
                     yield (
                         b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n"
-                        b"Content-Length: " + str(len(offline_jpeg)).encode('utf-8') + b"\r\n\r\n" +
+                        b"Content-Type: image/jpeg\r\n\r\n" +
                         offline_jpeg + b"\r\n"
                     )
                     await asyncio.sleep(0.05)

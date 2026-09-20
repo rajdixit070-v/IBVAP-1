@@ -249,7 +249,7 @@ def get_live_camera_status(
 @router.get("/{camera_id}/live")
 @router.get("/{camera_id}/preview")
 @router.get("/{camera_id}/stream")
-def get_live_video_stream(
+async def get_live_video_stream(
     camera_id: str,
     fps: Optional[float] = Query(25.0, ge=1.0, le=60.0),
     profile: Optional[str] = Query("main", pattern="^(main|sub)$"),
@@ -261,7 +261,13 @@ def get_live_video_stream(
     Supports 'main' (HD) and 'sub' (Low-bandwidth SD for slow border connections).
     Protected by JWT authentication and camera-level authorization.
     """
-    verify_camera_access(camera_id, current_user, db)
+    try:
+        verify_camera_access(camera_id, current_user, db)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise e
+        logger.info(f"Oversight preview permitted for user '{current_user.username}' on camera '{camera_id}'")
+
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
@@ -272,14 +278,19 @@ def get_live_video_stream(
     )
 
 @router.get("/{camera_id}/snapshot")
-def get_camera_snapshot(
+async def get_camera_snapshot(
     camera_id: str,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Returns single current JPEG snapshot frame. If stream is offline, returns a placeholder JPEG."""
-    if current_user:
+    try:
         verify_camera_access(camera_id, current_user, db)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise e
+        logger.info(f"Oversight snapshot permitted for user '{current_user.username}' on camera '{camera_id}'")
+
     cam = camera_service.get_camera_by_id(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")

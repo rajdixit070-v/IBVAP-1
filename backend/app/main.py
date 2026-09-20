@@ -752,8 +752,6 @@ async def background_post_startup():
         db = SessionLocal()
         try:
             cameras = db.query(Camera).filter(Camera.enabled == True).all()
-            if not settings.DEMO_MODE:
-                cameras = [c for c in cameras if not (c.rtsp_url.startswith(("synthetic://", "webcam://")))]
             for cam in cameras:
                 try:
                     decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None

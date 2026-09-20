@@ -6,7 +6,7 @@ export class LiveFeedWebSocket {
   private cameraId: string;
   private onFrame: (blobUrl: string) => void;
   private onError?: (err: any) => void;
-  private currentBlobUrl: string | null = null;
+  private recentBlobUrls: string[] = [];
   private isDestroyed = false;
 
   constructor(cameraId: string, onFrame: (blobUrl: string) => void, onError?: (err: any) => void) {
@@ -27,12 +27,27 @@ export class LiveFeedWebSocket {
     this.ws.binaryType = 'blob';
 
     this.ws.onmessage = (event) => {
+      let blob: Blob;
       if (event.data instanceof Blob) {
-        if (this.currentBlobUrl) {
-          URL.revokeObjectURL(this.currentBlobUrl);
+        blob = event.data;
+      } else if (event.data instanceof ArrayBuffer) {
+        blob = new Blob([event.data], { type: 'image/jpeg' });
+      } else {
+        return;
+      }
+
+      const newUrl = URL.createObjectURL(blob);
+      this.onFrame(newUrl);
+
+      // Keep recent URLs alive long enough for React and browser paint cycles
+      this.recentBlobUrls.push(newUrl);
+      if (this.recentBlobUrls.length > 8) {
+        const oldUrl = this.recentBlobUrls.shift();
+        if (oldUrl) {
+          setTimeout(() => {
+            URL.revokeObjectURL(oldUrl);
+          }, 2000);
         }
-        this.currentBlobUrl = URL.createObjectURL(event.data);
-        this.onFrame(this.currentBlobUrl);
       }
     };
 
@@ -54,10 +69,10 @@ export class LiveFeedWebSocket {
       this.ws.close();
       this.ws = null;
     }
-    if (this.currentBlobUrl) {
-      URL.revokeObjectURL(this.currentBlobUrl);
-      this.currentBlobUrl = null;
+    for (const url of this.recentBlobUrls) {
+      URL.revokeObjectURL(url);
     }
+    this.recentBlobUrls = [];
   }
 }
 
