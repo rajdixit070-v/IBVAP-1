@@ -149,19 +149,24 @@ def delete_camera(
     from urllib.parse import unquote
     clean_id = unquote(str(camera_id)).strip()
 
-    try:
-        verify_camera_access(clean_id, admin_user, db)
-    except HTTPException as e:
-        if e.status_code == 404:
-            raise e
-        logger.info(f"Oversight camera deletion override for user '{admin_user.username}' on camera '{clean_id}'")
-
     cam = camera_service.get_camera_by_id(db, clean_id)
     if not cam:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Camera '{clean_id}' not found."
         )
+
+    try:
+        verify_camera_access(cam.camera_id, admin_user, db)
+    except HTTPException as e:
+        if e.status_code == 404:
+            pass
+        elif e.status_code == 403:
+            role_lower = (getattr(admin_user, "role", "") or "").lower()
+            if role_lower not in ["admin", "super_admin", "superadmin", "commander", "bop_commander", "site_admin", "officer"]:
+                raise e
+        logger.info(f"Oversight camera deletion override for user '{admin_user.username}' on camera '{clean_id}'")
+
     camera_service.delete_camera(db, cam)
     return {"success": True, "message": f"Camera '{clean_id}' successfully removed."}
 

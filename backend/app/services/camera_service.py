@@ -286,10 +286,10 @@ def delete_camera(db: Session, db_camera: Any):
         ("app.models.multimodal_models", "CameraAIProfile", "camera_id"),
         ("app.models.multimodal_models", "AIObservation", "camera_id"),
         ("app.models.multimodal_models", "AIOperatorFeedback", "camera_id"),
+        ("app.models.multimodal_models", "MultimodalSecurityEvent", "primary_camera_id"),
         ("app.models.zone", "SecurityZone", "camera_id"),
         ("app.models.health_log", "CameraHealthLog", "camera_id"),
         ("app.models.health_models", "CameraHealthState", "camera_id"),
-        ("app.models.health_event", "HealthEvent", "source_id"),
         ("app.models.incident", "Incident", "camera_id"),
         ("app.models.gis_models", "CameraFOV", "camera_id"),
         ("app.models.gis_models", "CalibrationProfile", "camera_id"),
@@ -305,22 +305,20 @@ def delete_camera(db: Session, db_camera: Any):
         ("app.models.face_event", "FaceEvent", "camera_id"),
         ("app.models.notification", "Notification", "camera_id"),
         ("app.models.ai_event", "AIAnalyticsEvent", "camera_id"),
-        ("app.models.behavior_anomaly_models", "BehaviourEvent", "camera_id"),
-        ("app.models.behavior_anomaly_models", "ActivityBaseline", "camera_id"),
-        ("app.models.behavior_anomaly_models", "ActivitySnapshot", "camera_id"),
-        ("app.models.behavior_anomaly_models", "BaselineShift", "camera_id"),
-        ("app.models.behavior_anomaly_models", "EarlyWarning", "camera_id"),
-        ("app.models.edge_buffer_models", "EdgeEventBuffer", "camera_id"),
-        ("app.models.sensor_fusion_models", "SensorDevice", "camera_id"),
-        ("app.models.sensor_fusion_models", "SensorObservation", "camera_id"),
-        ("app.models.sensor_fusion_models", "TrackAssociation", "camera_id"),
-        ("app.models.sensor_fusion_models", "MovementAnomaly", "camera_id"),
-        ("app.models.sensor_fusion_models", "ThermalSensorReading", "camera_id"),
+        ("app.models.behaviour_event", "BehaviourEvent", "camera_id"),
+        ("app.models.activity_baseline", "ActivityBaseline", "camera_id"),
+        ("app.models.activity_snapshot", "ActivitySnapshot", "camera_id"),
+        ("app.models.baseline_shift", "BaselineShift", "camera_id"),
+        ("app.models.early_warning", "EarlyWarning", "camera_id"),
+        ("app.models.edge_event_buffer", "EdgeEventBuffer", "camera_id"),
+        ("app.models.movement_anomaly", "MovementAnomaly", "camera_id"),
+        ("app.models.track_association", "TrackAssociation", "camera_id"),
+        ("app.models.drone_models", "Drone", "camera_id"),
     ]
 
+    import importlib
     for mod_name, cls_name, col_name in models_with_camera_id:
         try:
-            import importlib
             mod = importlib.import_module(mod_name)
             cls_obj = getattr(mod, cls_name, None)
             if cls_obj is not None:
@@ -331,7 +329,10 @@ def delete_camera(db: Session, db_camera: Any):
                     ).delete(synchronize_session=False)
                     db.commit()
         except Exception as err:
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.debug(f"Could not cascade delete from {cls_name}: {err}")
 
     # Also clean any notifications mentioning this camera by name or ID in title or message
@@ -344,7 +345,10 @@ def delete_camera(db: Session, db_camera: Any):
         ).delete(synchronize_session=False)
         db.commit()
     except Exception:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # Clean camera pairs (thermal + RGB)
     try:
@@ -354,7 +358,10 @@ def delete_camera(db: Session, db_camera: Any):
         ).delete(synchronize_session=False)
         db.commit()
     except Exception:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # Clean transitions
     try:
@@ -364,28 +371,46 @@ def delete_camera(db: Session, db_camera: Any):
         ).delete(synchronize_session=False)
         db.commit()
     except Exception:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # 3. Delete camera record with ORM and raw SQL safety fallback
     try:
-        if db_camera:
-            db.delete(db_camera)
+        fresh_cam = db.query(Camera).filter(
+            (Camera.camera_id == cam_id) | (Camera.camera_id == cam_id.upper())
+        ).first()
+        if not fresh_cam and str(cam_id).isdigit():
+            fresh_cam = db.query(Camera).filter(Camera.id == int(cam_id)).first()
+        if not fresh_cam and db_camera and hasattr(db_camera, "id"):
+            fresh_cam = db.query(Camera).filter(Camera.id == db_camera.id).first()
+
+        if fresh_cam:
+            db.delete(fresh_cam)
             db.commit()
             logger.info(f"Camera {cam_id} and all related configurations deleted successfully via ORM.")
             return
     except Exception as orm_err:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
         logger.warning(f"ORM delete failed for {cam_id}, attempting raw SQL delete: {orm_err}")
 
     try:
+        int_id = int(cam_id) if str(cam_id).isdigit() else -1
         db.execute(
-            text("DELETE FROM cameras WHERE camera_id = :cid OR camera_id ILIKE :cid"),
-            {"cid": cam_id}
+            text("DELETE FROM cameras WHERE camera_id = :cid OR UPPER(camera_id) = UPPER(:cid) OR id = :iid"),
+            {"cid": cam_id, "iid": int_id}
         )
         db.commit()
         logger.info(f"Camera {cam_id} deleted via direct SQL fallback.")
     except Exception as sql_err:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
         logger.error(f"Failed to delete camera {cam_id} via direct SQL: {sql_err}")
         raise sql_err
 

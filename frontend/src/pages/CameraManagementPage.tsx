@@ -101,11 +101,12 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteCamera(cameraToDelete.camera_id);
+      const targetId = cameraToDelete.camera_id || String(cameraToDelete.id);
+      await deleteCamera(targetId);
       setDeleteModalOpen(false);
       setCameraToDelete(null);
     } catch (e: any) {
-      const errMsg = e.response?.data?.detail || e.message || 'Failed to delete camera. Admin privileges required.';
+      const errMsg = e.response?.data?.detail || e.message || 'Failed to delete camera.';
       setDeleteError(errMsg);
       console.error('Failed to delete camera', e);
     } finally {

@@ -1462,281 +1462,284 @@ export const TacticalLeafletMap: React.FC<TacticalLeafletMapProps> = ({
       {/* 2D HUD Controls & Interactive Layers */}
       {activeDimension === '2d' && (
         <>
-      {/* Top Left: Map Style & Interactive Layer Filters */}
-      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
-        {/* Dimension & Style Switchers */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* 2D vs 3D Dimension Switcher */}
-          <div className="flex items-center bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
-            <button
-              type="button"
-              onClick={() => handleSetDimension('2d')}
-              className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 bg-cyan-600 text-white shadow"
-            >
-              <span>🗺️</span>
-              <span>2D</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSetDimension('3d')}
-              className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 text-slate-400 hover:text-white hover:bg-slate-800"
-            >
-              <span>⛰️</span>
-              <span>3D Terrain</span>
-            </button>
+          {/* GPS Notice Toast */}
+          {gpsNotice && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 bg-slate-900/95 border border-emerald-500 text-emerald-300 text-xs font-mono rounded-full shadow-2xl flex items-center gap-2 animate-bounce pointer-events-auto">
+              <Locate className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{gpsNotice}</span>
+            </div>
+          )}
+
+          {/* Top Integrated Tactical HUD Deck */}
+          <div className="absolute top-2.5 left-2.5 right-2.5 z-10 flex flex-col gap-2 pointer-events-none">
+            {/* Top Row: View & Dimension Switchers (Left) + Zoom & Pan Controls (Right) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+              {/* Left Group: 2D/3D Mode & Base Map Tiles */}
+              <div className="flex items-center gap-1.5 flex-wrap pointer-events-auto">
+                {/* 2D vs 3D Dimension Switcher */}
+                <div className="flex items-center bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
+                  <button
+                    type="button"
+                    onClick={() => handleSetDimension('2d')}
+                    className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 bg-cyan-600 text-white shadow"
+                  >
+                    <span>🗺️</span>
+                    <span>2D</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetDimension('3d')}
+                    className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 text-slate-400 hover:text-white hover:bg-slate-800"
+                  >
+                    <span>⛰️</span>
+                    <span>3D Terrain</span>
+                  </button>
+                </div>
+
+                {/* Map Base Tile Style Switcher */}
+                <div className="flex items-center gap-1 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
+                  <button
+                    type="button"
+                    onClick={() => switchTileLayer('dark')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
+                      activeLayer === 'dark' ? 'bg-cyan-600 text-white shadow font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Dark
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchTileLayer('satellite')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
+                      activeLayer === 'satellite' ? 'bg-cyan-600 text-white shadow font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Satellite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchTileLayer('topo')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
+                      activeLayer === 'topo' ? 'bg-cyan-600 text-white shadow font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Topography & Elevation Relief"
+                  >
+                    Topo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchTileLayer('streets')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
+                      activeLayer === 'streets' ? 'bg-cyan-600 text-white shadow font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Roads & Border Infrastructure"
+                  >
+                    Streets
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Group: Live Sentry Locate, Pan & Precision Zoom Bar */}
+              <div className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-1.5 rounded-xl shadow-2xl pointer-events-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleLiveLocate}
+                  disabled={isLocating}
+                  title="Detect Live GPS Location & Pin Post"
+                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/40 cursor-pointer shadow-md"
+                >
+                  <Locate className={`w-3.5 h-3.5 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{isLocating ? 'Locating...' : 'My Post'}</span>
+                </button>
+
+                {/* Directional Pan Buttons (Left, Up, Down, Right) */}
+                <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-lg border border-slate-700/80 shadow-md">
+                  <button
+                    type="button"
+                    onClick={() => handlePan('left')}
+                    title="Pan West ⬅️ (Left)"
+                    className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="hidden md:inline">Left</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePan('up')}
+                    title="Pan North ⬆️ (Up)"
+                    className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="hidden md:inline">Up</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePan('down')}
+                    title="Pan South ⬇️ (Down)"
+                    className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="hidden md:inline">Down</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePan('right')}
+                    title="Pan East ➡️ (Right)"
+                    className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="hidden md:inline">Right</span>
+                  </button>
+                </div>
+
+                {/* Quick Zoom Buttons */}
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  title="Zoom In (+)"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
+                >
+                  <ZoomIn className="w-4 h-4 text-sky-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  title="Zoom Out (-)"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
+                >
+                  <ZoomOut className="w-4 h-4 text-sky-400" />
+                </button>
+
+                {/* Interactive Zoom Slider */}
+                <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-slate-950/80 border border-slate-800 rounded-lg">
+                  <span className="text-[10px] font-mono text-slate-400">🔍</span>
+                  <input
+                    type="range"
+                    min="5"
+                    max="22"
+                    step="0.5"
+                    value={currentZoomLevel}
+                    onChange={(e) => handleSetExactZoom(parseFloat(e.target.value))}
+                    className="w-20 h-1.5 accent-cyan-400 bg-slate-800 rounded-lg cursor-pointer"
+                    title={`Drag to zoom: ${currentZoomLevel.toFixed(1)}x`}
+                  />
+                </div>
+
+                <span className="px-2 py-0.5 text-[11px] font-mono font-bold text-cyan-400 bg-slate-950/90 border border-slate-800 rounded-lg shadow-inner min-w-[55px] text-center">
+                  {currentZoomLevel.toFixed(1)}x
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleFitAll}
+                  title="Fit All Perimeter Nodes"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
+                >
+                  <Maximize2 className="w-4 h-4 text-indigo-400" />
+                </button>
+              </div>
+            </div>
+
+            {/* Second Row: Tactical Layer Visibility Toggles (Left) + Tactical Zoom Presets (Right) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+              {/* Tactical Layer Visibility Toggles (Left) */}
+              <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md border border-slate-800 p-1 rounded-xl shadow-xl flex-wrap pointer-events-auto max-w-full">
+                <button
+                  type="button"
+                  onClick={() => setShowBorderLayer(!showBorderLayer)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    showBorderLayer ? 'bg-amber-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                  }`}
+                  title="Toggle International Border Zero-Line Fence & Pillars"
+                >
+                  <span>🛡️</span>
+                  <span>Border Fence</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBopsLayer(!showBopsLayer)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    showBopsLayer ? 'bg-emerald-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                  }`}
+                >
+                  <span>🛡️</span>
+                  <span>BOPs ({bops.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCamerasLayer(!showCamerasLayer)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    showCamerasLayer ? 'bg-cyan-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                  }`}
+                >
+                  <span>📹</span>
+                  <span>Cameras ({cameras.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCoverageLayer(!showCoverageLayer)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    showCoverageLayer ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                  }`}
+                >
+                  <span>📡</span>
+                  <span>FOV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowThreatsLayer(!showThreatsLayer)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    showThreatsLayer ? 'bg-rose-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                  }`}
+                >
+                  <span>🚨</span>
+                  <span>Radar Alerts</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowNodesGridLayer(!showNodesGridLayer)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    showNodesGridLayer ? 'bg-cyan-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                  }`}
+                  title="Toggle Surveillance Nodes Grid & MGRS Telemetry Mesh"
+                >
+                  <Grid className="w-3.5 h-3.5" />
+                  <span>Nodes Grid</span>
+                </button>
+              </div>
+
+              {/* Tactical Quick-Zoom Presets (Right) */}
+              <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md border border-slate-800/90 px-2 py-1 rounded-xl shadow-xl pointer-events-auto flex-wrap">
+                <span className="text-[9px] font-mono text-slate-400 font-bold pr-1">ZOOM:</span>
+                {[
+                  { label: 'Sector (11x)', level: 11 },
+                  { label: 'Post (14x)', level: 14 },
+                  { label: 'Fence (17x)', level: 17 },
+                  { label: 'Close-Up (19x)', level: 19 },
+                  { label: 'Ultra (21.5x)', level: 21.5 }
+                ].map((preset) => (
+                  <button
+                    key={preset.level}
+                    type="button"
+                    onClick={() => handleSetExactZoom(preset.level)}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition cursor-pointer ${
+                      Math.abs(currentZoomLevel - preset.level) < 0.8
+                        ? 'bg-cyan-600 text-white shadow font-bold'
+                        : 'bg-slate-900 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 border border-slate-800'
+                    }`}
+                    title={`Jump to ${preset.label}`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-
-          {/* Style Switcher */}
-          <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-1 rounded-xl shadow-xl">
-          <button
-            type="button"
-            onClick={() => switchTileLayer('dark')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
-              activeLayer === 'dark' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Dark
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTileLayer('satellite')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
-              activeLayer === 'satellite' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Satellite
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTileLayer('topo')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
-              activeLayer === 'topo' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Topography & Elevation Relief"
-          >
-            Topo
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTileLayer('streets')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
-              activeLayer === 'streets' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Roads & Border Infrastructure"
-          >
-            Streets
-          </button>
-        </div>
-      </div>
-
-        {/* Tactical Layer Visibility Toggles */}
-        <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md border border-slate-800 p-1 rounded-xl shadow-xl flex-wrap">
-          <button
-            type="button"
-            onClick={() => setShowBorderLayer(!showBorderLayer)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
-              showBorderLayer ? 'bg-amber-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
-            }`}
-            title="Toggle International Border Zero-Line Fence & Pillars"
-          >
-            <span>🛡️</span>
-            <span>Border Fence</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowBopsLayer(!showBopsLayer)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
-              showBopsLayer ? 'bg-emerald-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
-            }`}
-          >
-            <span>🛡️</span>
-            <span>BOPs ({bops.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowCamerasLayer(!showCamerasLayer)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
-              showCamerasLayer ? 'bg-cyan-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
-            }`}
-          >
-            <span>📹</span>
-            <span>Cameras ({cameras.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowCoverageLayer(!showCoverageLayer)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
-              showCoverageLayer ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
-            }`}
-          >
-            <span>📡</span>
-            <span>FOV</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowThreatsLayer(!showThreatsLayer)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
-              showThreatsLayer ? 'bg-rose-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
-            }`}
-          >
-            <span>🚨</span>
-            <span>Radar Alerts</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowNodesGridLayer(!showNodesGridLayer)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
-              showNodesGridLayer ? 'bg-cyan-600 text-white shadow' : 'bg-slate-900 text-slate-500 border border-slate-800'
-            }`}
-            title="Toggle Surveillance Nodes Grid & MGRS Telemetry Mesh"
-          >
-            <Grid className="w-3.5 h-3.5" />
-            <span>Nodes Grid</span>
-          </button>
-        </div>
-      </div>
-
-      {/* GPS Notice Toast */}
-      {gpsNotice && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 bg-slate-900/95 border border-emerald-500 text-emerald-300 text-xs font-mono rounded-full shadow-2xl flex items-center gap-2 animate-bounce">
-          <Locate className="w-3.5 h-3.5 text-emerald-400" />
-          <span>{gpsNotice}</span>
-        </div>
-      )}
-
-      {/* Top Right Zoom Controls, Slider & Tactical Presets */}
-      <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-1.5">
-        {/* Main Control Bar */}
-        <div className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-1.5 rounded-xl shadow-2xl">
-          <button
-            type="button"
-            onClick={handleLiveLocate}
-            disabled={isLocating}
-            title="Detect Live GPS Location & Pin Post"
-            className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/40 cursor-pointer shadow-md"
-          >
-            <Locate className={`w-3.5 h-3.5 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isLocating ? 'Locating...' : 'My Post'}</span>
-          </button>
-
-          {/* Directional Pan Buttons (Left, Up, Down, Right) */}
-          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-lg border border-slate-700/80 shadow-md">
-            <button
-              type="button"
-              onClick={() => handlePan('left')}
-              title="Pan West ⬅️ (Left)"
-              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden md:inline">Left</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePan('up')}
-              title="Pan North ⬆️ (Up)"
-              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
-            >
-              <ArrowUp className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden md:inline">Up</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePan('down')}
-              title="Pan South ⬇️ (Down)"
-              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
-            >
-              <ArrowDown className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden md:inline">Down</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePan('right')}
-              title="Pan East ➡️ (Right)"
-              className="px-2 py-1 rounded text-slate-300 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
-            >
-              <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden md:inline">Right</span>
-            </button>
-          </div>
-
-          {/* Quick Zoom Buttons */}
-          <button
-            type="button"
-            onClick={handleZoomIn}
-            title="Zoom In (+)"
-            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
-          >
-            <ZoomIn className="w-4 h-4 text-sky-400" />
-          </button>
-          <button
-            type="button"
-            onClick={handleZoomOut}
-            title="Zoom Out (-)"
-            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
-          >
-            <ZoomOut className="w-4 h-4 text-sky-400" />
-          </button>
-
-          {/* Interactive Zoom Slider */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-slate-950/80 border border-slate-800 rounded-lg">
-            <span className="text-[10px] font-mono text-slate-400">🔍</span>
-            <input
-              type="range"
-              min="5"
-              max="22"
-              step="0.5"
-              value={currentZoomLevel}
-              onChange={(e) => handleSetExactZoom(parseFloat(e.target.value))}
-              className="w-20 h-1.5 accent-cyan-400 bg-slate-800 rounded-lg cursor-pointer"
-              title={`Drag to zoom: ${currentZoomLevel.toFixed(1)}x`}
-            />
-          </div>
-
-          <span className="px-2 py-0.5 text-[11px] font-mono font-bold text-cyan-400 bg-slate-950/90 border border-slate-800 rounded-lg shadow-inner min-w-[55px] text-center">
-            {currentZoomLevel.toFixed(1)}x
-          </span>
-
-          <button
-            type="button"
-            onClick={handleFitAll}
-            title="Fit All Perimeter Nodes"
-            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer border border-slate-700/50"
-          >
-            <Maximize2 className="w-4 h-4 text-indigo-400" />
-          </button>
-        </div>
-
-        {/* Tactical Quick-Zoom Presets */}
-        <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md border border-slate-800/90 px-2 py-1 rounded-lg shadow-xl">
-          <span className="text-[9px] font-mono text-slate-400 font-bold pr-1">ZOOM:</span>
-          {[
-            { label: 'Sector (11x)', level: 11 },
-            { label: 'Post (14x)', level: 14 },
-            { label: 'Fence (17x)', level: 17 },
-            { label: 'Close-Up (19x)', level: 19 },
-            { label: 'Ultra (21.5x)', level: 21.5 }
-          ].map((preset) => (
-            <button
-              key={preset.level}
-              type="button"
-              onClick={() => handleSetExactZoom(preset.level)}
-              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition cursor-pointer ${
-                Math.abs(currentZoomLevel - preset.level) < 0.8
-                  ? 'bg-cyan-600 text-white shadow'
-                  : 'bg-slate-900 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 border border-slate-800'
-              }`}
-              title={`Jump to ${preset.label}`}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Tactical D-Pad Pan Navigation Pad - Always Visible On-Screen */}
       <div className="absolute bottom-3 left-3 z-10 flex flex-col items-center p-2 bg-slate-950/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl shadow-2xl">

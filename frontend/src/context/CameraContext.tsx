@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Camera, CameraSummaryStats, CameraTestResponse } from '../types/camera';
 import { cameraService } from '../services/cameraService';
 import { HealthWebSocket } from '../services/websocket';
+import { webcamStreamService } from '../services/webcamStreamService';
 
 interface CameraContextType {
   cameras: Camera[];
@@ -129,10 +130,15 @@ export const CameraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const deleteCamera = async (cameraId: string): Promise<void> => {
     const targetId = String(cameraId).trim();
+    if (webcamStreamService.isActive() && webcamStreamService.getActiveCameraId() === targetId) {
+      webcamStreamService.stopStream();
+    }
     await cameraService.deleteCamera(targetId);
     setCameras(prev => prev.filter(c => c.camera_id !== targetId && String(c.id) !== targetId));
     await refreshCameras();
     await refreshSummary();
+    window.dispatchEvent(new CustomEvent('ibvap:refresh-all'));
+    window.dispatchEvent(new CustomEvent('ibvap:refresh-cameras'));
   };
 
   return (

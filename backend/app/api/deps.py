@@ -133,11 +133,18 @@ def verify_camera_access(camera_id: str, user: User, db: Session) -> Camera:
     Supports both database integer ID and camera_id string (e.g. CAM-001).
     """
     camera = None
-    if str(camera_id).isdigit():
-        camera = db.query(Camera).filter(Camera.id == int(camera_id)).first()
+    from urllib.parse import unquote
+    clean_id = unquote(str(camera_id)).strip()
+    if clean_id.isdigit():
+        camera = db.query(Camera).filter(Camera.id == int(clean_id)).first()
     if not camera:
         camera = db.query(Camera).filter(
-            or_(Camera.camera_id == str(camera_id).strip(), Camera.camera_id == str(camera_id).strip().upper())
+            or_(
+                Camera.camera_id == clean_id,
+                Camera.camera_id == clean_id.upper(),
+                Camera.camera_id == clean_id.lower(),
+                Camera.camera_id.ilike(clean_id)
+            )
         ).first()
 
     if not camera:
