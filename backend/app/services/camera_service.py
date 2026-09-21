@@ -6,6 +6,7 @@ from sqlalchemy import or_
 
 logger = logging.getLogger("ibvap.camera_service")
 
+from app.config import settings
 from app.models.camera import Camera
 from app.models.health_log import CameraHealthLog
 from app.schemas.camera import CameraCreate, CameraUpdate, CameraResponse
@@ -67,6 +68,65 @@ def format_camera_response(cam: Camera) -> CameraResponse:
         updated_at=cam.updated_at
     )
 
+def is_fake_camera(cam: Any) -> bool:
+    """Detects whether a camera is synthetic/fake/demo seeded data."""
+    if not cam:
+        return False
+    url = (getattr(cam, "rtsp_url", "") or "").lower().strip()
+    cid = (getattr(cam, "camera_id", "") or "").upper().strip()
+    cname = (getattr(cam, "camera_name", "") or "").lower().strip()
+
+    # Check RTSP URL protocols and dummy streams
+    if url.startswith(("synthetic://", "demo://", "mock://")):
+        return True
+    if "synthetic" in url or "demo-stream" in url:
+        return True
+
+    # Check known demo/synthetic IDs
+    demo_cids = {
+        "CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-LOCAL", "CAM-DEMO-01",
+        "CAM-PUNJAB-WAGAH-01", "CAM-PUNJAB-WAGAH-02", "CAM-PUNJAB-HUSSAINI-01",
+        "CAM-RAJ-LONG-01", "CAM-RAJ-TANOT-01", "CAM-RAJ-MUNABAO-01", "CAM-RAJ-SADQI-01",
+        "CAM-JAMMU-SUCHET-01", "CAM-JAM-RS-PURA-01", "CAM-JAM-SAMBA-01",
+        "CAM-LAD-PANGONG-01", "CAM-LADAKH-DBO-01", "CAM-LAD-CHUSHUL-01",
+        "CAM-GUJ-CREEK-01", "CAM-GUJ-LAKHPAT-01", "CAM-GUJ-VIGOKOT-01",
+        "CAM-EAST-PETRA-01", "CAM-EAST-DAWKI-01", "CAM-EAST-MOREH-01"
+    }
+    if cid in demo_cids:
+        return True
+
+    # Check seeded demo prefixes
+    if any(cid.startswith(pfx) for pfx in [
+        "CAM-PUNJAB-", "CAM-RAJ-", "CAM-JAMMU-", "CAM-JAM-",
+        "CAM-LADAKH-", "CAM-LAD-", "CAM-GUJ-", "CAM-EAST-"
+    ]):
+        return True
+
+    # Check known demo names
+    demo_keywords = [
+        "perimeter gate north", "sector 4 river crossing", "east boundary fencing",
+        "south approach road", "hq tactical ops webcam", "demo tower",
+        "wagah zero-line", "wagah grand trunk", "hussainiwala riverbank",
+        "longewala desert", "tanot sand dune", "munabao railway",
+        "suchetgarh ib", "sir creek tidal", "lakhpat salt", "petrapole icp",
+        "vigokot ancient", "friendship gate"
+    ]
+    if any(kw in cname for kw in demo_keywords):
+        return True
+
+    return False
+
+def purge_fake_cameras(db: Session) -> int:
+    """Finds and permanently deletes all synthetic/demo/fake cameras from the database."""
+    all_cams = db.query(Camera).all()
+    purged_count = 0
+    for cam in all_cams:
+        if is_fake_camera(cam):
+            logger.info(f"Purging fake camera: {cam.camera_id} ({cam.camera_name})")
+            delete_camera(db, cam)
+            purged_count += 1
+    return purged_count
+
 def list_cameras(
     db: Session,
     search: Optional[str] = None,
@@ -79,6 +139,31 @@ def list_cameras(
 ) -> Tuple[List[CameraResponse], int]:
     """Retrieves paginated and filtered camera list."""
     query = db.query(Camera)
+
+    # Exclude fake/demo cameras in production so user only sees real cameras
+    if not settings.DEMO_MODE:
+        query = query.filter(
+            ~Camera.rtsp_url.like("synthetic://%"),
+            ~Camera.rtsp_url.like("demo://%"),
+            ~Camera.rtsp_url.like("mock://%"),
+            ~Camera.camera_id.in_([
+                "CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-LOCAL", "CAM-DEMO-01",
+                "CAM-PUNJAB-WAGAH-01", "CAM-PUNJAB-WAGAH-02", "CAM-PUNJAB-HUSSAINI-01",
+                "CAM-RAJ-LONG-01", "CAM-RAJ-TANOT-01", "CAM-RAJ-MUNABAO-01", "CAM-RAJ-SADQI-01",
+                "CAM-JAMMU-SUCHET-01", "CAM-JAM-RS-PURA-01", "CAM-JAM-SAMBA-01",
+                "CAM-LAD-PANGONG-01", "CAM-LADAKH-DBO-01", "CAM-LAD-CHUSHUL-01",
+                "CAM-GUJ-CREEK-01", "CAM-GUJ-LAKHPAT-01", "CAM-GUJ-VIGOKOT-01",
+                "CAM-EAST-PETRA-01", "CAM-EAST-DAWKI-01", "CAM-EAST-MOREH-01"
+            ]),
+            ~Camera.camera_id.like("CAM-PUNJAB-%"),
+            ~Camera.camera_id.like("CAM-RAJ-%"),
+            ~Camera.camera_id.like("CAM-JAMMU-%"),
+            ~Camera.camera_id.like("CAM-JAM-%"),
+            ~Camera.camera_id.like("CAM-LADAKH-%"),
+            ~Camera.camera_id.like("CAM-LAD-%"),
+            ~Camera.camera_id.like("CAM-GUJ-%"),
+            ~Camera.camera_id.like("CAM-EAST-%")
+        )
     
     if search:
         search_pattern = f"%{search}%"
@@ -417,7 +502,31 @@ def delete_camera(db: Session, db_camera: Any):
 def get_overview_summary(db: Session) -> Dict[str, Any]:
     """Aggregates high-level camera statistics grouped by BOP and health status.
     Uses live streamer status overlay for real-time accuracy."""
-    cameras = db.query(Camera).all()
+    cam_query = db.query(Camera)
+    if not settings.DEMO_MODE:
+        cam_query = cam_query.filter(
+            ~Camera.rtsp_url.like("synthetic://%"),
+            ~Camera.rtsp_url.like("demo://%"),
+            ~Camera.rtsp_url.like("mock://%"),
+            ~Camera.camera_id.in_([
+                "CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-LOCAL", "CAM-DEMO-01",
+                "CAM-PUNJAB-WAGAH-01", "CAM-PUNJAB-WAGAH-02", "CAM-PUNJAB-HUSSAINI-01",
+                "CAM-RAJ-LONG-01", "CAM-RAJ-TANOT-01", "CAM-RAJ-MUNABAO-01", "CAM-RAJ-SADQI-01",
+                "CAM-JAMMU-SUCHET-01", "CAM-JAM-RS-PURA-01", "CAM-JAM-SAMBA-01",
+                "CAM-LAD-PANGONG-01", "CAM-LADAKH-DBO-01", "CAM-LAD-CHUSHUL-01",
+                "CAM-GUJ-CREEK-01", "CAM-GUJ-LAKHPAT-01", "CAM-GUJ-VIGOKOT-01",
+                "CAM-EAST-PETRA-01", "CAM-EAST-DAWKI-01", "CAM-EAST-MOREH-01"
+            ]),
+            ~Camera.camera_id.like("CAM-PUNJAB-%"),
+            ~Camera.camera_id.like("CAM-RAJ-%"),
+            ~Camera.camera_id.like("CAM-JAMMU-%"),
+            ~Camera.camera_id.like("CAM-JAM-%"),
+            ~Camera.camera_id.like("CAM-LADAKH-%"),
+            ~Camera.camera_id.like("CAM-LAD-%"),
+            ~Camera.camera_id.like("CAM-GUJ-%"),
+            ~Camera.camera_id.like("CAM-EAST-%")
+        )
+    cameras = cam_query.all()
     total = len(cameras)
 
     def get_live_status(cam: Camera) -> str:

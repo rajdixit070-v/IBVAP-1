@@ -19,6 +19,7 @@ interface CameraContextType {
   refreshSummary: () => Promise<void>;
   testConnection: (cameraId: string) => Promise<CameraTestResponse>;
   deleteCamera: (cameraId: string) => Promise<void>;
+  purgeFakeCameras: () => Promise<number>;
 }
 
 const CameraContext = createContext<CameraContextType | undefined>(undefined);
@@ -141,6 +142,20 @@ export const CameraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     window.dispatchEvent(new CustomEvent('ibvap:refresh-cameras'));
   };
 
+  const purgeFakeCameras = async (): Promise<number> => {
+    try {
+      const res = await cameraService.purgeFakeCameras();
+      await refreshCameras();
+      await refreshSummary();
+      window.dispatchEvent(new CustomEvent('ibvap:refresh-all'));
+      window.dispatchEvent(new CustomEvent('ibvap:refresh-cameras'));
+      return res.purged_count || 0;
+    } catch (e: any) {
+      console.error('Failed to purge fake cameras:', e);
+      throw e;
+    }
+  };
+
   return (
     <CameraContext.Provider
       value={{
@@ -157,7 +172,8 @@ export const CameraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         refreshCameras,
         refreshSummary,
         testConnection,
-        deleteCamera
+        deleteCamera,
+        purgeFakeCameras
       }}
     >
       {children}

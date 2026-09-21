@@ -414,11 +414,15 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
 
         # Clean up any legacy synthetic/fake cameras so user's system only contains real cameras
         try:
-            db.query(Camera).filter(Camera.rtsp_url.like("synthetic://%")).delete(synchronize_session=False)
-            db.commit()
-            logger.info("Purged legacy synthetic demo cameras from database.")
+            from app.services.camera_service import purge_fake_cameras
+            purged = purge_fake_cameras(db)
+            if purged > 0:
+                logger.info(f"Purged {purged} legacy synthetic/fake demo cameras from database.")
         except Exception as e_clean:
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.warning(f"Notice purging synthetic cameras: {e_clean}")
 
         # Seed operational/demo data only if explicitly requested

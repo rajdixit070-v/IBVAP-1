@@ -233,8 +233,9 @@ class AlertEngine:
             if not cam or not cam.enabled or cam.is_maintenance:
                 return None
 
-            # Suppress health alerts for synthetic/webcam dummy cameras in production
-            if not settings.DEMO_MODE and (cam.rtsp_url.startswith(("synthetic://", "webcam://")) or cam.camera_id in ["CAM-LOCAL", "CAM-WAGAH-01", "CAM-WAGAH-02", "CAM-MUNABAO-01", "CAM-HUSSAINI-01", "CAM-SADQI-01", "CAM-LONGEWALA-01"]):
+            # Suppress health alerts for synthetic/fake dummy cameras in production
+            from app.services.camera_service import is_fake_camera
+            if not settings.DEMO_MODE and is_fake_camera(cam):
                 return None
 
             dedup_key = f"{camera_id}:HEALTH:OFFLINE"

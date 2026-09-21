@@ -51,6 +51,11 @@ export const cameraService = {
     return response.data;
   },
 
+  async purgeFakeCameras(): Promise<{ success: boolean; purged_count: number; message: string }> {
+    const response = await api.delete<{ success: boolean; purged_count: number; message: string }>('/cameras/purge-fake');
+    return response.data;
+  },
+
   async testRawStream(data: CameraTestRequest): Promise<CameraTestResponse> {
     const response = await api.post<CameraTestResponse>('/cameras/test-raw', data);
     return response.data;

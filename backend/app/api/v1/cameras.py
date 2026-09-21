@@ -139,6 +139,20 @@ def update_camera_details(
         )
     return camera_service.update_camera(db, cam, camera_in)
 
+@router.delete("/purge-fake", status_code=status.HTTP_200_OK)
+@router.post("/purge-fake", status_code=status.HTTP_200_OK)
+def purge_fake_cameras_endpoint(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_camera_admin)
+):
+    """Permanently deletes all synthetic, mock, and demo cameras from the database and stops their streams."""
+    purged_count = camera_service.purge_fake_cameras(db)
+    return {
+        "success": True,
+        "purged_count": purged_count,
+        "message": f"Successfully purged {purged_count} fake/demo cameras."
+    }
+
 @router.delete("/{camera_id}", status_code=status.HTTP_200_OK)
 def delete_camera(
     camera_id: str,

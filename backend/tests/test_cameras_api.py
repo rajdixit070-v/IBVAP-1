@@ -18,7 +18,14 @@ def test_list_cameras(client, auth_header):
     assert response.status_code == 200
     cameras = response.json()
     assert isinstance(cameras, list)
-    assert len(cameras) >= 1
+
+def test_purge_fake_cameras_endpoint(client, auth_header):
+    # Purge fake cameras endpoint works
+    resp = client.delete("/api/v1/cameras/purge-fake", headers=auth_header)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert "purged_count" in data
 
 def test_create_and_delete_camera(client, auth_header):
     # Pre-clean

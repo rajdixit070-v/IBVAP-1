@@ -15,7 +15,10 @@ import {
   LayoutGrid,
   List,
   RefreshCw,
-  Cctv
+  Cctv,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 
 interface CameraManagementPageProps {
@@ -34,8 +37,12 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
     setSearchQuery,
     refreshCameras,
     testConnection,
-    deleteCamera
+    deleteCamera,
+    purgeFakeCameras
   } = useCameras();
+
+  const [purging, setPurging] = useState(false);
+  const [purgeNotice, setPurgeNotice] = useState<string | null>(null);
 
   const { user } = useAuth();
   const isSuperAdmin = 
@@ -135,6 +142,40 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
     }
   };
 
+  const hasFakeCameras = useMemo(() => {
+    return scopedCameras.some(
+      (c) =>
+        (c.rtsp_url && (c.rtsp_url.startsWith('synthetic://') || c.rtsp_url.startsWith('demo://') || c.rtsp_url.startsWith('mock://') || c.rtsp_url.includes('synthetic'))) ||
+        ['CAM-001', 'CAM-002', 'CAM-003', 'CAM-004', 'CAM-LOCAL', 'CAM-DEMO-01'].includes(c.camera_id) ||
+        c.camera_id?.startsWith('CAM-PUNJAB-') ||
+        c.camera_id?.startsWith('CAM-RAJ-') ||
+        c.camera_id?.startsWith('CAM-JAMMU-') ||
+        c.camera_id?.startsWith('CAM-JAM-') ||
+        c.camera_id?.startsWith('CAM-LADAKH-') ||
+        c.camera_id?.startsWith('CAM-LAD-') ||
+        c.camera_id?.startsWith('CAM-GUJ-') ||
+        c.camera_id?.startsWith('CAM-EAST-')
+    );
+  }, [scopedCameras]);
+
+  const handlePurgeFake = async () => {
+    if (!window.confirm('Are you sure you want to permanently remove all fake, synthetic, and demo cameras? Only real cameras will remain.')) {
+      return;
+    }
+    setPurging(true);
+    setPurgeNotice(null);
+    try {
+      const count = await purgeFakeCameras();
+      setPurgeNotice(`Successfully purged ${count} fake/demo cameras.`);
+      setTimeout(() => setPurgeNotice(null), 6000);
+    } catch (e: any) {
+      console.error('Failed to purge fake cameras', e);
+      alert(e.response?.data?.detail || e.message || 'Failed to purge fake cameras.');
+    } finally {
+      setPurging(false);
+    }
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* Top Action Header */}
@@ -152,6 +193,16 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            onClick={handlePurgeFake}
+            disabled={purging}
+            className="flex items-center gap-1.5 px-3 py-2 bg-rose-950/70 hover:bg-rose-900 text-rose-200 rounded-lg text-xs font-semibold border border-rose-800/80 transition cursor-pointer"
+            title="Purge all synthetic, mock, and demo cameras"
+          >
+            <Trash2 className={`w-3.5 h-3.5 text-rose-400 ${purging ? 'animate-spin' : ''}`} />
+            {purging ? 'Purging...' : 'Purge Fake Cameras'}
+          </button>
+
           <button
             onClick={() => refreshCameras()}
             className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition cursor-pointer"
@@ -171,6 +222,31 @@ export const CameraManagementPage: React.FC<CameraManagementPageProps> = ({ onLo
           )}
         </div>
       </div>
+
+      {/* Purge Notification */}
+      {purgeNotice && (
+        <div className="bg-emerald-950/50 border border-emerald-800/70 rounded-xl p-3 flex items-center gap-2 text-emerald-200 text-xs font-mono">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{purgeNotice}</span>
+        </div>
+      )}
+
+      {/* Fake Cameras Detected Alert Banner */}
+      {hasFakeCameras && (
+        <div className="bg-amber-950/40 border border-amber-800/70 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 text-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Synthetic / demo cameras detected in the system. Click to remove them completely so only your real cameras are active.</span>
+          </div>
+          <button
+            onClick={handlePurgeFake}
+            disabled={purging}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-xs transition cursor-pointer shrink-0"
+          >
+            {purging ? 'Removing...' : 'Remove Fake Cameras Now'}
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-[#111a2e] border border-[#1e293b] rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
