@@ -3,7 +3,7 @@ import { Modal } from '../common/Modal';
 import { Camera, CameraCreateInput, CameraUpdateInput, CameraTestResponse } from '../../types/camera';
 import { cameraService } from '../../services/cameraService';
 import { RTSPTestModal } from './RTSPTestModal';
-import { Activity, Cctv, Radio, Eye, EyeOff, Save, MapPin, Navigation, Laptop } from 'lucide-react';
+import { Activity, Cctv, Radio, Eye, EyeOff, Save, MapPin, Navigation, Laptop, Server } from 'lucide-react';
 import { webcamStreamService } from '../../services/webcamStreamService';
 import { useAuth } from '../../context/AuthContext';
 
@@ -79,6 +79,121 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [testResult, setTestResult] = useState<CameraTestResponse | null>(null);
   const [testModalOpen, setTestModalOpen] = useState(false);
 
+  // NVR / DVR Multi-Channel State & Helpers
+  const [dvrBrand, setDvrBrand] = useState<'hikvision' | 'cpplus' | 'generic' | 'uniview'>('hikvision');
+  const [dvrHost, setDvrHost] = useState('192.168.1.5');
+  const [dvrPort, setDvrPort] = useState('554');
+  const [dvrChannel, setDvrChannel] = useState(1);
+  const [dvrSubtype, setDvrSubtype] = useState<'main' | 'sub'>('main');
+
+  const buildDvrUrl = (
+    brand: 'hikvision' | 'cpplus' | 'generic' | 'uniview',
+    host: string,
+    port: string,
+    channel: number,
+    subtype: 'main' | 'sub'
+  ) => {
+    const cleanHost = (host || '192.168.1.5').trim().replace(/^https?:\/\//, '').replace(/^rtsp:\/\//, '');
+    const cleanPort = (port || '554').trim();
+    if (brand === 'hikvision') {
+      const code = subtype === 'main' ? '01' : '02';
+      return `rtsp://${cleanHost}:${cleanPort}/Streaming/Channels/${channel}${code}`;
+    } else if (brand === 'cpplus') {
+      const sub = subtype === 'main' ? '0' : '1';
+      return `rtsp://${cleanHost}:${cleanPort}/cam/realmonitor?channel=${channel}&subtype=${sub}`;
+    } else if (brand === 'uniview') {
+      const sub = subtype === 'main' ? 's0' : 's1';
+      return `rtsp://${cleanHost}:${cleanPort}/unicast/c${channel}/${sub}/live`;
+    } else {
+      return `rtsp://${cleanHost}:${cleanPort}/ch${channel}/${subtype}`;
+    }
+  };
+
+  const parseDvrUrl = (url: string) => {
+    if (!url) return null;
+    let detectedBrand: 'hikvision' | 'cpplus' | 'generic' | 'uniview' = 'hikvision';
+    let detectedChannel = 1;
+    let detectedSubtype: 'main' | 'sub' = 'main';
+    let detectedHost = '192.168.1.5';
+    let detectedPort = '554';
+
+    const hostMatch = url.match(/rtsp:\/\/(?:[^:@]+:[^:@]+@)?([^:/]+)(?::(\d+))?/i);
+    if (hostMatch) {
+      if (hostMatch[1]) detectedHost = hostMatch[1];
+      if (hostMatch[2]) detectedPort = hostMatch[2];
+    }
+
+    const hikMatch = url.match(/\/Streaming\/Channels\/(\d+)(0[12])/i);
+    if (hikMatch) {
+      detectedBrand = 'hikvision';
+      detectedChannel = parseInt(hikMatch[1], 10);
+      detectedSubtype = hikMatch[2] === '01' ? 'main' : 'sub';
+      return { brand: detectedBrand, host: detectedHost, port: detectedPort, channel: detectedChannel, subtype: detectedSubtype };
+    }
+
+    const cpMatch = url.match(/[?&]channel=(\d+)&subtype=([01])/i);
+    if (cpMatch) {
+      detectedBrand = 'cpplus';
+      detectedChannel = parseInt(cpMatch[1], 10);
+      detectedSubtype = cpMatch[2] === '0' ? 'main' : 'sub';
+      return { brand: detectedBrand, host: detectedHost, port: detectedPort, channel: detectedChannel, subtype: detectedSubtype };
+    }
+
+    const genMatch = url.match(/\/ch(\d+)\/(main|sub)/i);
+    if (genMatch) {
+      detectedBrand = 'generic';
+      detectedChannel = parseInt(genMatch[1], 10);
+      detectedSubtype = genMatch[2].toLowerCase() === 'main' ? 'main' : 'sub';
+      return { brand: detectedBrand, host: detectedHost, port: detectedPort, channel: detectedChannel, subtype: detectedSubtype };
+    }
+
+    const unvMatch = url.match(/\/unicast\/c(\d+)\/(s[01])\/live/i);
+    if (unvMatch) {
+      detectedBrand = 'uniview';
+      detectedChannel = parseInt(unvMatch[1], 10);
+      detectedSubtype = unvMatch[2] === 's0' ? 'main' : 'sub';
+      return { brand: detectedBrand, host: detectedHost, port: detectedPort, channel: detectedChannel, subtype: detectedSubtype };
+    }
+
+    return null;
+  };
+
+  const updateDvrConfig = (updates: {
+    brand?: 'hikvision' | 'cpplus' | 'generic' | 'uniview';
+    host?: string;
+    port?: string;
+    channel?: number;
+    subtype?: 'main' | 'sub';
+  }) => {
+    const newBrand = updates.brand ?? dvrBrand;
+    const newHost = updates.host ?? dvrHost;
+    const newPort = updates.port ?? dvrPort;
+    const newChannel = updates.channel ?? dvrChannel;
+    const newSubtype = updates.subtype ?? dvrSubtype;
+
+    if (updates.brand !== undefined) setDvrBrand(newBrand);
+    if (updates.host !== undefined) setDvrHost(newHost);
+    if (updates.port !== undefined) setDvrPort(newPort);
+    if (updates.channel !== undefined) setDvrChannel(newChannel);
+    if (updates.subtype !== undefined) setDvrSubtype(newSubtype);
+
+    const newUrl = buildDvrUrl(newBrand, newHost, newPort, newChannel, newSubtype);
+    setFormData(prev => {
+      const prevName = prev.camera_name || '';
+      let updatedName = prevName;
+      if (!isEditing) {
+        if (!prevName || prevName === 'Perimeter Sentry Camera' || prevName.startsWith('DVR Camera (Channel')) {
+          updatedName = `DVR Camera (Channel ${newChannel})`;
+        }
+      }
+      return {
+        ...prev,
+        rtsp_url: newUrl,
+        camera_name: updatedName
+      };
+    });
+  };
+
   useEffect(() => {
     if (cameraToEdit) {
       setFormData({
@@ -96,6 +211,16 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         stream_type: cameraToEdit.stream_type || 'main',
         enabled: cameraToEdit.enabled
       });
+      if (cameraToEdit.rtsp_url) {
+        const parsed = parseDvrUrl(cameraToEdit.rtsp_url);
+        if (parsed) {
+          setDvrBrand(parsed.brand);
+          setDvrHost(parsed.host);
+          setDvrPort(parsed.port);
+          setDvrChannel(parsed.channel);
+          setDvrSubtype(parsed.subtype);
+        }
+      }
     } else {
       const randomSuffix = Math.floor(100 + Math.random() * 900);
       const bopKey = (defaultBop || '').trim().toLowerCase();
@@ -115,6 +240,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         stream_type: 'main',
         enabled: true
       });
+      setDvrBrand('hikvision');
+      setDvrHost('192.168.1.5');
+      setDvrPort('554');
+      setDvrChannel(1);
+      setDvrSubtype('main');
     }
     setError(null);
     setGpsMessage(null);
@@ -158,13 +288,29 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   };
 
   const handleStreamTypeChange = (newType: string) => {
+    if (newType === 'nvr') {
+      const generatedUrl = buildDvrUrl(dvrBrand, dvrHost, dvrPort, dvrChannel, dvrSubtype);
+      setFormData(prev => ({
+        ...prev,
+        stream_type: newType,
+        rtsp_url: generatedUrl,
+        camera_name: (!prev.camera_name || prev.camera_name === 'Perimeter Sentry Camera')
+          ? `DVR Camera (Channel ${dvrChannel})`
+          : prev.camera_name
+      }));
+      return;
+    }
+
     let suggestedUrl = formData.rtsp_url;
     const isDefaultUrl = !formData.rtsp_url || 
       formData.rtsp_url.startsWith('rtsp://192.168.1.100') ||
       formData.rtsp_url.startsWith('http://192.168.1.50') ||
       formData.rtsp_url.startsWith('webcam://') ||
       formData.rtsp_url.startsWith('rtsp://192.168.1.200') ||
-      formData.rtsp_url.startsWith('rtsp://192.168.1.120');
+      formData.rtsp_url.startsWith('rtsp://192.168.1.120') ||
+      formData.rtsp_url.includes('/Streaming/Channels/') ||
+      formData.rtsp_url.includes('channel=') ||
+      formData.rtsp_url.includes('/ch');
 
     if (isDefaultUrl && !isEditing) {
       if (newType === 'ip_camera') {
@@ -329,8 +475,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     streamPlaceholder = 'rtsp://192.168.1.105:554/ptz_main';
     streamHelpText = '🎯 PTZ Speed Dome: 360° Pan/Tilt/Zoom optical turret with remote directional control & auto-tracking.';
   } else if (formData.stream_type === 'nvr') {
-    streamPlaceholder = 'rtsp://192.168.1.110:554/ch1/main';
-    streamHelpText = '📼 NVR / DVR Multi-Channel: Network Video Recorder channel stream (e.g. /ch1/main, /ch2/main).';
+    streamPlaceholder = 'rtsp://192.168.1.5:554/Streaming/Channels/101';
+    streamHelpText = '📼 NVR / DVR Multi-Channel: Select your DVR brand and Channel number in the configurator above to auto-generate the RTSP stream URL.';
   } else if (formData.stream_type === 'sub') {
     streamPlaceholder = 'rtsp://192.168.1.100:554/sub';
     streamHelpText = '📡 Sub Stream (Low Bitrate SD): Secondary 640x360 bandwidth-saving stream for remote border posts.';
@@ -551,6 +697,109 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 {testing ? 'TESTING...' : 'TEST STREAM CONNECTION'}
               </button>
             </div>
+
+            {/* NVR / DVR Multi-Channel Configurator */}
+            {formData.stream_type === 'nvr' && (
+              <div className="bg-[#0b1426] border border-indigo-500/40 rounded-xl p-4 space-y-3.5 shadow-xl">
+                <div className="flex items-center justify-between border-b border-indigo-900/50 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-indigo-500/20 text-indigo-400">
+                      <Server className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono font-bold text-indigo-300 uppercase tracking-wider block">
+                        DVR / NVR Multi-Channel Configurator
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Brand aur Channel number chunein — RTSP URL apne aap auto-generate ho jayega
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-indigo-950 text-indigo-300 border border-indigo-600/60 font-bold flex items-center gap-1.5 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    CHANNEL {dvrChannel}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  {/* 1. DVR Brand */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      DVR / NVR Brand
+                    </label>
+                    <select
+                      value={dvrBrand}
+                      onChange={(e) => updateDvrConfig({ brand: e.target.value as any })}
+                      className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                    >
+                      <option value="hikvision">Hikvision / HiLook</option>
+                      <option value="cpplus">CP Plus / Dahua</option>
+                      <option value="generic">Generic / XMeye (/ch1/main)</option>
+                      <option value="uniview">Uniview (UNV)</option>
+                    </select>
+                  </div>
+
+                  {/* 2. Channel Selector */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-amber-300 mb-1 flex items-center justify-between">
+                      <span>Channel (Port) ⭐</span>
+                      <span className="text-[10px] font-mono text-amber-400">Ch {dvrChannel}</span>
+                    </label>
+                    <select
+                      value={dvrChannel}
+                      onChange={(e) => updateDvrConfig({ channel: parseInt(e.target.value, 10) })}
+                      className="w-full bg-[#17223b] border-2 border-amber-500/60 rounded-lg px-2.5 py-2 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400 cursor-pointer shadow-inner"
+                    >
+                      {Array.from({ length: 32 }, (_, i) => i + 1).map((ch) => (
+                        <option key={ch} value={ch} className="bg-[#111a2e] text-slate-200">
+                          Channel {ch} {ch <= 4 ? `(Camera ${ch} - Port ${ch})` : `(Camera ${ch})`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 3. Stream Quality */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      Stream Quality
+                    </label>
+                    <select
+                      value={dvrSubtype}
+                      onChange={(e) => updateDvrConfig({ subtype: e.target.value as any })}
+                      className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                    >
+                      <option value="main">Main Stream (HD 1080p)</option>
+                      <option value="sub">Sub Stream (SD Smooth)</option>
+                    </select>
+                  </div>
+
+                  {/* 4. DVR Host / IP */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      DVR IP Address
+                    </label>
+                    <input
+                      type="text"
+                      value={dvrHost}
+                      onChange={(e) => updateDvrConfig({ host: e.target.value })}
+                      placeholder="192.168.1.5"
+                      className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-2.5 py-2 text-xs font-mono text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Helper quick preview bar */}
+                <div className="text-[11px] font-mono bg-indigo-950/40 border border-indigo-800/40 p-2.5 rounded-lg text-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="text-amber-400 font-bold shrink-0">Channel {dvrChannel} Route:</span>
+                    <span className="text-slate-300 truncate font-mono text-[10px] sm:text-[11px]">{formData.rtsp_url}</span>
+                  </div>
+                  <span className="text-[10px] text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-700/50 shrink-0">
+                    Port {dvrPort} • {dvrBrand.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">

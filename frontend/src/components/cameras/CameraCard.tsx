@@ -34,9 +34,19 @@ export const CameraCard: React.FC<CameraCardProps> = ({
     sourceBadge = 'IP CAMERA';
     sourceClass = 'bg-sky-950/60 border-sky-500/30 text-sky-300';
     iconColor = 'text-sky-400';
-  } else if (st === 'nvr' || st === 'dvr' || url.includes('/Streaming/Channels/') || url.includes('channel=') || url.includes('/cam/realmonitor')) {
+  } else if (st === 'nvr' || st === 'dvr' || url.includes('/Streaming/Channels/') || url.includes('channel=') || url.includes('/cam/realmonitor') || url.includes('/ch')) {
     SourceIcon = Server;
-    sourceBadge = st === 'dvr' ? 'DVR' : 'NVR';
+    let chNum = '';
+    const hikM = url.match(/\/Streaming\/Channels\/(\d+)0[12]/i);
+    const cpM = url.match(/[?&]channel=(\d+)/i);
+    const genM = url.match(/\/ch(\d+)\//i);
+    const unvM = url.match(/\/unicast\/c(\d+)\//i);
+    if (hikM) chNum = ` CH-${hikM[1]}`;
+    else if (cpM) chNum = ` CH-${cpM[1]}`;
+    else if (genM) chNum = ` CH-${genM[1]}`;
+    else if (unvM) chNum = ` CH-${unvM[1]}`;
+
+    sourceBadge = `${st === 'dvr' ? 'DVR' : 'NVR'}${chNum}`;
     sourceClass = 'bg-indigo-950/60 border-indigo-500/30 text-indigo-300';
     iconColor = 'text-indigo-400';
   } else if (st === 'webcam' || url.startsWith('webcam://')) {
