@@ -1,5 +1,5 @@
 export type CameraStatus = 'HEALTHY' | 'ONLINE' | 'DEGRADED' | 'OFFLINE' | 'ERROR' | 'CONNECTING' | 'MAINTENANCE';
-export type CameraSourceType = 'rtsp' | 'nvr' | 'dvr' | 'webcam' | 'drone' | 'android' | 'thermal' | 'ptz';
+export type CameraSourceType = 'rtsp' | 'nvr' | 'dvr' | 'webcam' | 'drone' | 'android' | 'thermal' | 'ptz' | 'ip_camera';
 
 export interface Camera {
   id: number;
