@@ -20,7 +20,8 @@ def _parse_host_port(url: str) -> Tuple[Optional[str], int]:
         if "://" in url:
             parsed = urllib.parse.urlparse(url)
             host = parsed.hostname
-            port = parsed.port or (554 if parsed.scheme == "rtsp" else 80)
+            default_port = 443 if parsed.scheme == "https" else (554 if parsed.scheme == "rtsp" else 80)
+            port = parsed.port or default_port
             return host, port
     except Exception:
         pass
@@ -213,23 +214,73 @@ def test_rtsp_connection(
             cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)
         elif clean_url.startswith(("http://", "https://")):
             clean_base = auth_url.rstrip("/")
+            u_low = clean_url.lower()
+            is_hls = ".m3u8" in u_low or "go2rtc" in u_low or "trycloudflare.com" in u_low or "hls" in u_low
+
+            # 1. First Priority: Direct HLS / Manifest / API probe
+            from app.services.rtsp_streamer import RTSPStreamer
+            if is_hls or ".m3u8" in clean_base or "?" in clean_base:
+                try:
+                    req = RTSPStreamer._build_http_request(clean_base, username, password)
+                    with urllib.request.urlopen(req, timeout=3.5) as stream:
+                        ctype = stream.headers.get("Content-Type", "").lower()
+                        peek_data = stream.read(4096)
+                        if (
+                            b"#EXTM3U" in peek_data or 
+                            b"#EXT-X" in peek_data or 
+                            "mpegurl" in ctype or 
+                            "video" in ctype or
+                            "octet-stream" in ctype or
+                            b"\xff\xd8" in peek_data
+                        ):
+                            latency = (time.time() - start_time) * 1000.0
+                            codec_label = "H.264 / HLS (Tunnel Stream)"
+                            res_str = "1920x1080"
+                            if b"\xff\xd8" in peek_data:
+                                f = cv2.imdecode(np.frombuffer(peek_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+                                if f is not None:
+                                    res_str = f"{f.shape[1]}x{f.shape[0]}"
+                                    codec_label = "MJPEG / go2rtc Stream"
+                            return CameraTestResponse(
+                                success=True,
+                                connected=True,
+                                resolution=res_str,
+                                fps=25.0,
+                                codec=codec_label,
+                                latency_ms=round(latency, 2),
+                                details={
+                                    "source_type": "TUNNEL_HLS",
+                                    "stream_url": clean_base,
+                                    "mode": "Cloudflare / go2rtc Stream Relay",
+                                    "status": "Ready to Stream"
+                                }
+                            )
+                except Exception:
+                    pass
+
             candidate_urls = []
-            if any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
+            if is_hls:
+                if "stream.m3u8" in clean_base:
+                    candidate_urls.append(clean_base.replace("stream.m3u8", "stream.mjpeg"))
+                    candidate_urls.append(clean_base.replace("stream.m3u8", "frame.jpeg"))
+                candidate_urls.append(clean_base)
+            elif "?" in clean_base:
+                candidate_urls.append(clean_base)
+            elif any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg"]):
                 candidate_urls.append(clean_base)
                 if not clean_base.endswith("/shot.jpg"):
                     base_root = clean_base.rsplit("/", 1)[0]
                     candidate_urls.append(f"{base_root}/shot.jpg")
             else:
                 candidate_urls.extend([
+                    clean_base,
                     f"{clean_base}/shot.jpg",
                     f"{clean_base}/video",
                     f"{clean_base}/mjpegfeed",
-                    f"{clean_base}/videofeed",
-                    clean_base
+                    f"{clean_base}/videofeed"
                 ])
 
-            # 1. Fast probe via direct HTTP request (handles shot.jpg and multipart /video)
-            from app.services.rtsp_streamer import RTSPStreamer
+            # 2. Fast probe via direct HTTP request (handles shot.jpg and multipart /video)
             for cu in candidate_urls:
                 try:
                     req = RTSPStreamer._build_http_request(cu, username, password)
@@ -262,8 +313,8 @@ def test_rtsp_connection(
                 except Exception:
                     pass
 
-            # 2. Fallback to OpenCV FFMPEG
-            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;3000000|max_delay;500000"
+            # 3. Fallback to OpenCV FFMPEG
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "stimeout;3000000|max_delay;500000"
             for cu in candidate_urls:
                 try:
                     cap = cv2.VideoCapture(cu, cv2.CAP_FFMPEG)
@@ -278,8 +329,9 @@ def test_rtsp_connection(
                         if r and f is not None:
                             break
                     cap.release()
+                    cap = None
                 except Exception:
-                    pass
+                    cap = None
         else:
 
             cap = cv2.VideoCapture(auth_url, cv2.CAP_FFMPEG)

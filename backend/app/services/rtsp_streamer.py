@@ -274,15 +274,27 @@ class RTSPStreamer:
                         raise ConnectionError("Unable to open Drone UDP video stream.")
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 elif url_str.startswith(("http://", "https://")):
-                    self._update_status("CONNECTING", "Connecting to Mobile / HTTP video stream...")
+                    self._update_status("CONNECTING", "Connecting to Mobile / Tunnel / HTTP video stream...")
                     clean_base = url_str.rstrip("/")
-                    test_urls = [clean_base]
-                    if any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg", "/photo.jpg"]):
+                    u_low = url_str.lower()
+                    is_hls = ".m3u8" in u_low or "go2rtc" in u_low or "trycloudflare.com" in u_low or "hls" in u_low
+
+                    test_urls = []
+                    if is_hls:
+                        if "stream.m3u8" in clean_base:
+                            test_urls.append(clean_base.replace("stream.m3u8", "stream.mjpeg"))
+                            test_urls.append(clean_base.replace("stream.m3u8", "frame.jpeg"))
+                        test_urls.append(clean_base)
+                    elif "?" in clean_base:
+                        test_urls.append(clean_base)
+                    elif any(clean_base.endswith(s) for s in ["/video", "/mjpegfeed", "/videofeed", "/shot.jpg", "/photo.jpg"]):
+                        test_urls.append(clean_base)
                         if not clean_base.endswith(("/shot.jpg", "/photo.jpg")):
                             base_root = clean_base.rsplit("/", 1)[0]
                             test_urls.append(f"{base_root}/shot.jpg")
                     else:
                         test_urls.extend([
+                            clean_base,
                             f"{clean_base}/video",
                             f"{clean_base}/shot.jpg",
                             f"{clean_base}/mjpegfeed",
@@ -302,7 +314,7 @@ class RTSPStreamer:
                         continue
 
                     # Fallback: OpenCV VideoCapture
-                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;2000000|max_delay;100000|buffer_size;65536"
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "stimeout;3000000|max_delay;500000"
                     cap = None
                     for u in test_urls:
                         cap = cv2.VideoCapture(u, cv2.CAP_FFMPEG)
@@ -314,7 +326,7 @@ class RTSPStreamer:
                         cap = None
 
                     if not cap or not cap.isOpened():
-                        raise ConnectionError(f"Unable to open Mobile / HTTP video stream at '{url_str}'. Ensure phone camera app is running on the same network.")
+                        raise ConnectionError(f"Unable to open Mobile / Tunnel video stream at '{url_str}'. Ensure camera or tunnel is running.")
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 else:
                     self._update_status("CONNECTING", "Connecting to RTSP camera stream...")
@@ -397,6 +409,8 @@ class RTSPStreamer:
             with urllib.request.urlopen(req, timeout=1.2) as stream:
                 content_type = stream.headers.get("Content-Type", "").lower()
                 if "html" in content_type:
+                    return False
+                if "mpegurl" in content_type or url.endswith(".m3u8") or ".m3u8?" in url:
                     return False
 
                 # Case A: Snapshot polling loop (e.g. /shot.jpg or single image/jpeg)

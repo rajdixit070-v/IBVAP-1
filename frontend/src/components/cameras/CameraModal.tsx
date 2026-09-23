@@ -3,7 +3,7 @@ import { Modal } from '../common/Modal';
 import { Camera, CameraCreateInput, CameraUpdateInput, CameraTestResponse } from '../../types/camera';
 import { cameraService } from '../../services/cameraService';
 import { RTSPTestModal } from './RTSPTestModal';
-import { Activity, Cctv, Radio, Eye, EyeOff, Save, MapPin, Navigation, Laptop } from 'lucide-react';
+import { Activity, Cctv, Radio, Eye, EyeOff, Save, MapPin, Navigation, Laptop, Globe } from 'lucide-react';
 import { webcamStreamService } from '../../services/webcamStreamService';
 import { useAuth } from '../../context/AuthContext';
 
@@ -167,7 +167,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       formData.rtsp_url.startsWith('rtsp://192.168.1.120');
 
     if (isDefaultUrl && !isEditing) {
-      if (newType === 'phone') {
+      if (newType === 'tunnel') {
+        suggestedUrl = 'https://xxxx.trycloudflare.com/api/stream.m3u8?src=mycamera';
+      } else if (newType === 'ip_camera') {
+        suggestedUrl = 'rtsp://192.168.1.100:554/live';
+      } else if (newType === 'phone') {
         suggestedUrl = 'http://192.168.1.50:8080/video';
       } else if (newType === 'webcam') {
         suggestedUrl = 'webcam://0';
@@ -308,7 +312,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   let streamPlaceholder = 'rtsp://192.168.1.100:554/live';
   let streamHelpText = 'Enter RTSP stream address. Hikvision, CP Plus, Dahua, PTZ, FLIR Thermal, and Drone feeds are fully supported.';
 
-  if (formData.stream_type === 'phone') {
+  if (formData.stream_type === 'tunnel') {
+    streamPlaceholder = 'https://xxxx.trycloudflare.com/api/stream.m3u8?src=mycamera  (or http://localhost:1984/api/stream.m3u8?src=mycamera)';
+    streamHelpText = '🌐 go2rtc + Cloudflare Tunnel: Connects your local DVR/NVR/IP camera to IBVAP securely across the internet without router port forwarding or credit cards. Supports HLS (.m3u8) & MJPEG (.mjpeg).';
+  } else if (formData.stream_type === 'ip_camera') {
+    streamPlaceholder = 'rtsp://192.168.1.100:554/live';
+    streamHelpText = '📡 Standalone IP Camera (RTSP / ONVIF): Supports Hikvision, CP Plus, Dahua, Uniview, and all standard ONVIF/RTSP IP cameras.';
+  } else if (formData.stream_type === 'phone') {
     streamPlaceholder = 'https://xxxx.ngrok-free.app/video  (or http://192.168.1.50:8080/video)';
     streamHelpText = '📱 Mobile / Phone IP Camera: Run "IP Webcam" app. If backend is on Render cloud, expose your local phone port with ngrok ("ngrok http 8080") to get a public HTTPS video URL.';
   } else if (formData.stream_type === 'webcam') {
@@ -502,13 +512,15 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
                 >
                   <option value="main">Main Stream (HD Optical RTSP)</option>
+                  <option value="tunnel">🌐 Cloudflare Tunnel / go2rtc (HLS .m3u8 / HTTP)</option>
+                  <option value="ip_camera">📡 IP Camera (Standard RTSP / HTTP / ONVIF)</option>
+                  <option value="nvr">📼 NVR / DVR Multi-Channel (Local / Port-Forwarded)</option>
                   <option value="sub">Sub Stream (Low Bitrate SD)</option>
                   <option value="thermal">Thermal Sensor Feed (FLIR IR)</option>
                   <option value="ptz">PTZ Surveillance Turret</option>
                   <option value="drone">Drone / UAV Aerial Feed</option>
                   <option value="phone">Phone / Mobile IP Camera (HTTP / RTSP)</option>
                   <option value="webcam">Web / USB Webcam (webcam://0)</option>
-                  <option value="nvr">NVR / DVR Multi-Channel</option>
                 </select>
               </div>
 
@@ -562,6 +574,18 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 {streamHelpText}
               </p>
             </div>
+
+            {formData.stream_type === 'tunnel' && (
+              <div className="bg-teal-950/40 border border-teal-500/40 rounded-lg p-3 space-y-1.5 text-xs font-mono">
+                <div className="flex items-center gap-2 text-teal-300 font-bold">
+                  <Globe className="w-4 h-4 text-teal-400" />
+                  <span>CLOUDFLARE TUNNEL + go2rtc STREAM ACTIVE</span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                  Aapka local DVR/NVR stream go2rtc aur Cloudflare Tunnel ke zariye Render cloud par bina kisi router port forwarding ya credit card ke 100% free &amp; secure connect hoga. Public tunnel URL paste karein aur "TEST STREAM CONNECTION" par click karein.
+                </p>
+              </div>
+            )}
 
             {formData.stream_type === 'webcam' && (
               <div className="bg-cyan-950/40 border border-cyan-500/40 rounded-lg p-3 space-y-1.5 text-xs font-mono">

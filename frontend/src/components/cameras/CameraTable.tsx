@@ -1,7 +1,7 @@
 import React from 'react';
 import { Camera } from '../../types/camera';
 import { StatusBadge } from '../common/StatusBadge';
-import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin, Sliders, Flame, Server } from 'lucide-react';
+import { Activity, Eye, Edit2, Trash2, Video, Laptop, Plane, Smartphone, MapPin, Sliders, Flame, Server, Globe, Cctv } from 'lucide-react';
 
 interface CameraTableProps {
   cameras: Camera[];
@@ -54,7 +54,17 @@ export const CameraTable: React.FC<CameraTableProps> = ({
                 let sourceClass = 'bg-sky-950/60 border-sky-500/30 text-sky-300';
                 let iconColor = 'text-sky-400';
 
-                if (st === 'nvr' || st === 'dvr' || url.includes('/Streaming/Channels/') || url.includes('channel=') || url.includes('/cam/realmonitor')) {
+                if (st === 'tunnel' || st === 'hls' || url.includes('.m3u8') || url.includes('trycloudflare') || url.includes('go2rtc')) {
+                  SourceIcon = Globe;
+                  sourceBadge = 'TUNNEL / HLS';
+                  sourceClass = 'bg-teal-950/60 border-teal-500/30 text-teal-300';
+                  iconColor = 'text-teal-400';
+                } else if (st === 'ip_camera' || st === 'ip') {
+                  SourceIcon = Cctv;
+                  sourceBadge = 'IP CAMERA';
+                  sourceClass = 'bg-sky-950/60 border-sky-500/30 text-sky-300';
+                  iconColor = 'text-sky-400';
+                } else if (st === 'nvr' || st === 'dvr' || url.includes('/Streaming/Channels/') || url.includes('channel=') || url.includes('/cam/realmonitor')) {
                   SourceIcon = Server;
                   sourceBadge = st === 'dvr' ? 'DVR' : 'NVR';
                   sourceClass = 'bg-indigo-950/60 border-indigo-500/30 text-indigo-300';

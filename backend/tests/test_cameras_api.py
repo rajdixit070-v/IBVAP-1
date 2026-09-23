@@ -116,3 +116,50 @@ def test_summary_endpoint(client, auth_header):
     assert "total_cameras" in data
     assert "healthy" in data
     assert "bop_summary" in data
+
+def test_create_tunnel_and_ip_camera(client, auth_header):
+    # Pre-clean
+    client.delete("/api/v1/cameras/TUNNEL-CAM-01", headers=auth_header)
+    client.delete("/api/v1/cameras/IP-CAM-01", headers=auth_header)
+
+    # 1. Register Tunnel camera
+    tunnel_payload = {
+        "camera_id": "TUNNEL-CAM-01",
+        "camera_name": "Cloudflare Tunnel Camera",
+        "bop_site": "BOP Wagah",
+        "sector": "Punjab Frontier",
+        "location": "Main Gate",
+        "latitude": 31.6048,
+        "longitude": 74.5721,
+        "rtsp_url": "https://example-tunnel.trycloudflare.com/api/stream.m3u8?src=mycamera",
+        "stream_type": "tunnel",
+        "enabled": True
+    }
+    resp1 = client.post("/api/v1/cameras", json=tunnel_payload, headers=auth_header)
+    assert resp1.status_code == 201
+    data1 = resp1.json()
+    assert data1["camera_id"] == "TUNNEL-CAM-01"
+    assert data1["stream_type"] == "tunnel"
+
+    # 2. Register IP Camera
+    ip_payload = {
+        "camera_id": "IP-CAM-01",
+        "camera_name": "Perimeter IP Camera",
+        "bop_site": "BOP Wagah",
+        "sector": "Punjab Frontier",
+        "location": "Watchtower 2",
+        "latitude": 31.6048,
+        "longitude": 74.5721,
+        "rtsp_url": "rtsp://192.168.1.150:554/live",
+        "stream_type": "ip_camera",
+        "enabled": True
+    }
+    resp2 = client.post("/api/v1/cameras", json=ip_payload, headers=auth_header)
+    assert resp2.status_code == 201
+    data2 = resp2.json()
+    assert data2["camera_id"] == "IP-CAM-01"
+    assert data2["stream_type"] == "ip_camera"
+
+    # Clean up
+    client.delete("/api/v1/cameras/TUNNEL-CAM-01", headers=auth_header)
+    client.delete("/api/v1/cameras/IP-CAM-01", headers=auth_header)
