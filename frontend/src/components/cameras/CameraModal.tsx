@@ -93,8 +93,16 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     channel: number,
     subtype: 'main' | 'sub'
   ) => {
-    const cleanHost = (host || '192.168.1.5').trim().replace(/^https?:\/\//, '').replace(/^rtsp:\/\//, '');
-    const cleanPort = (port || '554').trim();
+    let cleanHost = (host || '192.168.1.5').trim().replace(/^https?:\/\//i, '').replace(/^rtsp:\/\//i, '').replace(/^tcp:\/\//i, '');
+    let cleanPort = (port || '554').trim();
+
+    // If user pasted host:port (like free.pinggy.link:43210) into host field
+    if (cleanHost.includes(':')) {
+      const parts = cleanHost.split(':');
+      cleanHost = parts[0];
+      if (parts[1]) cleanPort = parts[1].split('/')[0];
+    }
+
     if (brand === 'hikvision') {
       const code = subtype === 'main' ? '01' : '02';
       return `rtsp://${cleanHost}:${cleanPort}/Streaming/Channels/${channel}${code}`;
@@ -721,7 +729,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                   {/* 1. DVR Brand */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1">
@@ -776,13 +784,27 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   {/* 4. DVR Host / IP */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                      DVR IP Address
+                      DVR IP / Pinggy Host
                     </label>
                     <input
                       type="text"
                       value={dvrHost}
                       onChange={(e) => updateDvrConfig({ host: e.target.value })}
-                      placeholder="192.168.1.5"
+                      placeholder="e.g. 192.168.1.100 or free.pinggy.link"
+                      className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-2.5 py-2 text-xs font-mono text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  {/* 5. RTSP / Pinggy Port */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      Port (554 / Pinggy)
+                    </label>
+                    <input
+                      type="text"
+                      value={dvrPort}
+                      onChange={(e) => updateDvrConfig({ port: e.target.value })}
+                      placeholder="554"
                       className="w-full bg-[#111a2e] border border-[#22324d] rounded-lg px-2.5 py-2 text-xs font-mono text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
