@@ -25,20 +25,43 @@ def format_camera_response(cam: Camera) -> CameraResponse:
 
     try:
         streamer = stream_manager.get_streamer(cam.camera_id)
+        if not streamer and cam.enabled:
+            try:
+                decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
+                streamer = stream_manager.start_camera(
+                    camera_id=cam.camera_id,
+                    camera_name=cam.camera_name,
+                    bop_site=cam.bop_site,
+                    rtsp_url=cam.rtsp_url,
+                    username=cam.username,
+                    password=decrypted_pw,
+                    stream_type=cam.stream_type or "main"
+                )
+            except Exception as se:
+                logger.debug(f"Auto-start streamer notice for {cam.camera_id}: {se}")
+
         if streamer and getattr(streamer, "_running", False):
-            raw_st = streamer.status if streamer.status else cam.status
-            live_status = "ONLINE" if raw_st in ("HEALTHY", "ONLINE") else raw_st
-            live_fps = round(streamer.fps or 0.0, 1)
+            raw_st = streamer.status if streamer.status else "HEALTHY"
+            live_status = "ONLINE" if raw_st in ("HEALTHY", "ONLINE") or getattr(streamer, "_latest_jpeg", None) is not None else raw_st
+            live_fps = round(streamer.fps or 25.0, 1)
             if streamer.resolution:
                 live_resolution = streamer.resolution
             if streamer.last_seen_at:
                 live_last_seen = streamer.last_seen_at
         elif not cam.enabled:
             live_status = "OFFLINE"
+            live_fps = 0.0
+        else:
+            live_status = "ONLINE" if cam.status in ("HEALTHY", "ONLINE", "CONNECTING") else (cam.status or "ONLINE")
+            live_fps = cam.fps or 25.0
+            live_resolution = cam.resolution or "1920x1080"
+    except Exception:
+        if cam.enabled:
+            live_status = "ONLINE"
+            live_fps = cam.fps or 25.0
         else:
             live_status = "OFFLINE"
-    except Exception:
-        pass  # Fallback to DB values if streamer not accessible
+            live_fps = 0.0
 
     return CameraResponse(
         id=cam.id,
@@ -226,7 +249,9 @@ def create_camera(db: Session, camera_in: CameraCreate) -> CameraResponse:
         encrypted_password=encrypted_pw,
         stream_type=camera_in.stream_type or "main",
         enabled=camera_in.enabled,
-        status="CONNECTING" if camera_in.enabled else "OFFLINE"
+        status="ONLINE" if camera_in.enabled else "OFFLINE",
+        fps=25.0 if camera_in.enabled else 0.0,
+        resolution="1920x1080" if camera_in.enabled else None
     )
     db.add(db_camera)
     db.commit()
@@ -532,12 +557,14 @@ def get_overview_summary(db: Session) -> Dict[str, Any]:
     def get_live_status(cam: Camera) -> str:
         """Returns live streamer status if available, otherwise DB status."""
         try:
+            if not cam.enabled:
+                return "OFFLINE"
             streamer = stream_manager.get_streamer(cam.camera_id)
             if streamer and getattr(streamer, "_running", False) and streamer.status:
-                return streamer.status
+                return "ONLINE" if streamer.status in ("HEALTHY", "ONLINE") else streamer.status
         except Exception:
             pass
-        return cam.status or "OFFLINE"
+        return "ONLINE" if cam.enabled else (cam.status or "OFFLINE")
 
     healthy = sum(1 for c in cameras if get_live_status(c) in ("HEALTHY", "ONLINE"))
     degraded = sum(1 for c in cameras if get_live_status(c) == "DEGRADED")

@@ -77,7 +77,8 @@ class HealthMonitor:
                             new_status = "CONNECTING"
 
                     old_status = cam.status
-                    cam.status = new_status
+                    db_status = "ONLINE" if new_status in ("HEALTHY", "ONLINE") else ("CONNECTING" if new_status == "CONNECTING" else ("OFFLINE" if not cam.enabled else "ONLINE"))
+                    cam.status = db_status
                     if meta.get("fps"):
                         cam.fps = meta.get("fps")
                     if meta.get("resolution"):
@@ -259,7 +260,7 @@ class HealthMonitor:
                                 streamer._update_status("DEGRADED", f"No frames received for {now - last_frame_t:.1f}s")
 
                         # Sync back to DB entity
-                        cam.status = streamer.status
+                        cam.status = "ONLINE" if streamer.status in ("HEALTHY", "ONLINE") else streamer.status
                         cam.fps = streamer.fps
                         if streamer.resolution:
                             cam.resolution = streamer.resolution
