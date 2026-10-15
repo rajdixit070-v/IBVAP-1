@@ -569,12 +569,38 @@ def init_db_defaults(seed_demo: Optional[bool] = None):
 
 
 async def background_post_startup():
-    """Starts health monitor after port bind. Camera streams start lazily on-demand when requested."""
+    """Starts health monitor and pre-warms camera streamers for instant live video playback."""
     await asyncio.sleep(1.0)
     try:
         await health_monitor.start()
     except Exception as e:
         logger.warning(f"Error starting health_monitor: {e}")
+
+    try:
+        from app.database import SessionLocal
+        from app.models.camera import Camera
+        from app.core.security import decrypt_credential
+        db = SessionLocal()
+        try:
+            enabled_cams = db.query(Camera).filter(Camera.enabled == True).all()
+            for cam in enabled_cams:
+                try:
+                    decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
+                    stream_manager.start_camera(
+                        camera_id=cam.camera_id,
+                        camera_name=cam.camera_name,
+                        bop_site=cam.bop_site,
+                        rtsp_url=cam.rtsp_url,
+                        username=cam.username,
+                        password=decrypted_pw,
+                        stream_type=cam.stream_type or "main"
+                    )
+                except Exception as ce:
+                    logger.debug(f"Warmup streamer error for {cam.camera_id}: {ce}")
+        finally:
+            db.close()
+    except Exception as err:
+        logger.warning(f"Error warming up camera streamers: {err}")
 
 
 @asynccontextmanager
@@ -633,7 +659,8 @@ app.add_middleware(
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Mount API Routers
@@ -664,6 +691,7 @@ app.include_router(multimodal_router, prefix=settings.API_V1_STR)
 app.include_router(security_router, prefix=settings.API_V1_STR)
 app.include_router(demo_router, prefix=settings.API_V1_STR)
 app.include_router(ws_router, prefix=settings.API_V1_STR)
+app.include_router(ws_router)
 
 # Next-Gen Intelligence Routers (Modules 1 - 5)
 app.include_router(sensors_router, prefix=settings.API_V1_STR)

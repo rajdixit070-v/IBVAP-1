@@ -255,14 +255,18 @@ def stop_camera_stream(
 def get_live_camera_status(
     camera_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Retrieves live streaming metrics (FPS, resolution, reconnect attempts) for a camera with IDOR check."""
-    verify_camera_access(camera_id, current_user, db)
-    cam = camera_service.get_camera_by_id(db, camera_id)
+    from urllib.parse import unquote
+    clean_id = unquote(str(camera_id)).strip()
+
+    verify_camera_access(clean_id, current_user, db)
+    cam = camera_service.get_camera_by_id(db, clean_id)
     if not cam:
-        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found.")
+        raise HTTPException(status_code=404, detail=f"Camera '{clean_id}' not found.")
     
+    stream_manager.ensure_camera_running(cam.camera_id)
     status_info = stream_manager.get_status(cam.camera_id)
     if not status_info:
         return CameraHealthStatus(
@@ -279,17 +283,17 @@ def get_live_camera_status(
 @router.get("/{camera_id}/live")
 @router.get("/{camera_id}/preview")
 @router.get("/{camera_id}/stream")
-def get_live_video_stream(
+async def get_live_video_stream(
     camera_id: str,
     fps: Optional[float] = Query(25.0, ge=1.0, le=60.0),
     profile: Optional[str] = Query("main", pattern="^(main|sub)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Authenticated HTTP MJPEG streaming endpoint for low-latency live camera preview.
     Supports 'main' (HD) and 'sub' (Low-bandwidth SD for slow border connections).
-    Protected by JWT authentication and camera-level authorization.
+    Runs directly on ASGI event loop with resilient query-token and optional auth.
     """
     from urllib.parse import unquote
     clean_id = unquote(str(camera_id)).strip()
@@ -300,6 +304,9 @@ def get_live_video_stream(
     if not cam:
         raise HTTPException(status_code=404, detail=f"Camera '{clean_id}' not found.")
     
+    # Ensure streamer is running in memory
+    stream_manager.ensure_camera_running(cam.camera_id)
+
     return StreamingResponse(
         stream_manager.generate_mjpeg_stream(cam.camera_id, fps_limit=fps, stream_profile=profile or "main"),
         media_type="multipart/x-mixed-replace; boundary=frame",
@@ -316,7 +323,7 @@ def get_live_video_stream(
 def get_camera_snapshot(
     camera_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Returns single current JPEG snapshot frame. If stream is offline, returns a placeholder JPEG."""
     from urllib.parse import unquote

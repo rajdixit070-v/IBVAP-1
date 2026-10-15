@@ -124,8 +124,12 @@ class StreamManager:
         """
         Ensures a camera streamer is actively running in memory.
         If not running and camera is enabled in database, starts it immediately.
+        Supports case-insensitive ID matching and numeric DB ID.
         """
-        streamer = self.get_streamer(camera_id)
+        if not camera_id:
+            return None
+        clean_id = str(camera_id).strip()
+        streamer = self.get_streamer(clean_id)
         if streamer and getattr(streamer, "_running", False):
             return streamer
 
@@ -133,10 +137,23 @@ class StreamManager:
             from app.database import SessionLocal
             from app.models.camera import Camera
             from app.core.security import decrypt_credential
+            from sqlalchemy import or_
 
             db = SessionLocal()
             try:
-                cam = db.query(Camera).filter(Camera.camera_id == camera_id).first()
+                cam = None
+                if clean_id.isdigit():
+                    cam = db.query(Camera).filter(Camera.id == int(clean_id)).first()
+                if not cam:
+                    cam = db.query(Camera).filter(
+                        or_(
+                            Camera.camera_id == clean_id,
+                            Camera.camera_id == clean_id.upper(),
+                            Camera.camera_id == clean_id.lower(),
+                            Camera.camera_id.ilike(clean_id)
+                        )
+                    ).first()
+
                 if cam and cam.enabled:
                     decrypted_pw = decrypt_credential(cam.encrypted_password) if cam.encrypted_password else None
                     return self.start_camera(
@@ -151,13 +168,24 @@ class StreamManager:
             finally:
                 db.close()
         except Exception as e:
-            logger.debug(f"Could not auto-start camera {camera_id}: {e}")
-        return streamer
+            logger.debug(f"Could not auto-start camera {clean_id}: {e}")
+        return self.get_streamer(clean_id)
 
     def get_streamer(self, camera_id: str) -> Optional[RTSPStreamer]:
-        """Retrieves active streamer instance for a camera."""
+        """Retrieves active streamer instance for a camera with case-insensitive resilience."""
+        if not camera_id:
+            return None
+        clean = str(camera_id).strip()
         with self._lock:
-            return self._streamers.get(camera_id)
+            if clean in self._streamers:
+                return self._streamers[clean]
+            if clean.upper() in self._streamers:
+                return self._streamers[clean.upper()]
+            clean_low = clean.lower()
+            for cid, s in self._streamers.items():
+                if cid.lower() == clean_low:
+                    return s
+            return None
 
     def get_latest_frame(self, camera_id: str) -> Optional[np.ndarray]:
         """Retrieves raw BGR frame from buffer."""
@@ -291,11 +319,12 @@ class StreamManager:
 
                 if not streamer or not getattr(streamer, "_running", False) or streamer.status == "OFFLINE":
                     offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
-                    yield (
+                    hdr = (
                         b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n\r\n" +
-                        offline_jpeg + b"\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        b"Content-Length: " + str(len(offline_jpeg)).encode("ascii") + b"\r\n\r\n"
                     )
+                    yield hdr + offline_jpeg + b"\r\n"
                     await asyncio.sleep(0.08)
                     continue
 
@@ -315,21 +344,15 @@ class StreamManager:
                 else:
                     jpeg_bytes = streamer.get_latest_jpeg()
 
-                if jpeg_bytes:
-                    yield (
-                        b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n\r\n" +
-                        jpeg_bytes + b"\r\n"
-                    )
-                else:
-                    offline_jpeg = self._get_offline_placeholder_jpeg(camera_id)
-                    yield (
-                        b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n\r\n" +
-                        offline_jpeg + b"\r\n"
-                    )
-                    await asyncio.sleep(0.05)
-                    continue
+                if not jpeg_bytes:
+                    jpeg_bytes = self._get_offline_placeholder_jpeg(camera_id)
+
+                hdr = (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(jpeg_bytes)).encode("ascii") + b"\r\n\r\n"
+                )
+                yield hdr + jpeg_bytes + b"\r\n"
                 await asyncio.sleep(frame_interval)
         except (asyncio.CancelledError, GeneratorExit):
             logger.debug(f"[{camera_id}] Client disconnected from stream.")

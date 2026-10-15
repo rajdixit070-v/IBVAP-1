@@ -35,12 +35,14 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   camera,
   autoPlay = true,
   className = '',
-  showControls = true
+  showControls = true,
+  globalProfile = 'main'
 }) => {
   const [frameSrc, setFrameSrc] = useState<string | null>(null);
   const [fps, setFps] = useState<number>(camera.fps || 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [useFallbackMjpeg, setUseFallbackMjpeg] = useState(false);
+  const [useSnapshotPolling, setUseSnapshotPolling] = useState(false);
 
   // AI Telemetry State
   const [showAiOverlay, setShowAiOverlay] = useState(true);
@@ -77,6 +79,14 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   const frameCountRef = useRef(0);
   const lastFpsCalcRef = useRef(Date.now());
 
+  // Reset state on camera ID switch
+  useEffect(() => {
+    setFrameSrc(null);
+    setUseFallbackMjpeg(false);
+    setUseSnapshotPolling(false);
+    frameCountRef.current = 0;
+  }, [camera.camera_id]);
+
   // Load Zones for this camera
   useEffect(() => {
     if (camera.camera_id) {
@@ -84,7 +94,24 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     }
   }, [camera.camera_id]);
 
-  // Video Streaming WebSocket
+  // 1. Instant Snapshot Prefetch on Mount (ensures player is never blank/black)
+  useEffect(() => {
+    if (!autoPlay || camera.enabled === false) return;
+    let isMounted = true;
+    const initialSnap = cameraService.getSnapshotUrl(camera.camera_id);
+    const img = new Image();
+    img.onload = () => {
+      if (isMounted) {
+        setFrameSrc((curr) => curr || initialSnap);
+      }
+    };
+    img.src = initialSnap;
+    return () => {
+      isMounted = false;
+    };
+  }, [camera.camera_id, camera.enabled, autoPlay]);
+
+  // 2. Video Streaming WebSocket (Primary Real-Time Feed)
   useEffect(() => {
     if (!autoPlay || camera.enabled === false) {
       return;
@@ -92,6 +119,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
 
     let isSubscribed = true;
     let ws: LiveFeedWebSocket | null = null;
+    let watchdogTimer: any = null;
     let retryTimer: any = null;
 
     if (!useFallbackMjpeg) {
@@ -118,28 +146,71 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           }
         );
         wsVideoRef.current = ws;
+
+        // Watchdog: If no WebSocket frames arrived within 2.5s, engage fallback
+        watchdogTimer = setTimeout(() => {
+          if (isSubscribed && frameCountRef.current === 0) {
+            setUseFallbackMjpeg(true);
+          }
+        }, 2500);
       } catch (e) {
         if (isSubscribed) {
           setUseFallbackMjpeg(true);
         }
       }
     } else {
-      // Reconnect WebSocket stream after 10 seconds
+      // Reconnect WebSocket stream after 15 seconds
       retryTimer = setTimeout(() => {
         if (isSubscribed) {
           setUseFallbackMjpeg(false);
         }
-      }, 10000);
+      }, 15000);
     }
 
     return () => {
       isSubscribed = false;
+      if (watchdogTimer) clearTimeout(watchdogTimer);
       if (retryTimer) clearTimeout(retryTimer);
       if (ws) {
         ws.close();
       }
     };
   }, [camera.camera_id, camera.enabled, autoPlay, useFallbackMjpeg]);
+
+  // 3. Resilient Snapshot Polling Fallback (Guaranteed to work across proxies, firewalls, and mobile)
+  useEffect(() => {
+    if (!autoPlay || camera.enabled === false || !useSnapshotPolling) return;
+    let isMounted = true;
+    let pollTimer: any = null;
+
+    const poll = () => {
+      if (!isMounted) return;
+      const snapUrl = cameraService.getSnapshotUrl(camera.camera_id);
+      const img = new Image();
+      img.onload = () => {
+        if (!isMounted) return;
+        setFrameSrc(snapUrl);
+        frameCountRef.current += 1;
+        const now = Date.now();
+        if (now - lastFpsCalcRef.current >= 1000) {
+          setFps(Math.round((frameCountRef.current * 1000) / (now - lastFpsCalcRef.current)));
+          frameCountRef.current = 0;
+          lastFpsCalcRef.current = now;
+        }
+      };
+      img.src = snapUrl;
+      if (isMounted) {
+        pollTimer = setTimeout(poll, 120); // ~8 FPS continuous smooth video
+      }
+    };
+
+    poll();
+
+    return () => {
+      isMounted = false;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
+  }, [useSnapshotPolling, camera.camera_id, camera.enabled, autoPlay]);
 
   // AI Telemetry WebSocket
   useEffect(() => {
@@ -268,20 +339,19 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                   src={frameSrc}
                   alt={camera.camera_name}
                   className="w-full h-full object-contain select-none"
-                />
-              ) : useFallbackMjpeg ? (
-                <img
-                  src={cameraService.getLiveStreamUrl(camera.camera_id)}
-                  alt={camera.camera_name}
-                  className="w-full h-full object-contain select-none"
-                  onError={() => {}}
+                  onError={() => {
+                    setUseSnapshotPolling(true);
+                  }}
                 />
               ) : (
                 <img
-                  src={cameraService.getLiveStreamUrl(camera.camera_id)}
+                  src={cameraService.getLiveStreamUrl(camera.camera_id, 25, globalProfile)}
                   alt={camera.camera_name}
                   className="w-full h-full object-contain select-none"
-                  onError={() => setUseFallbackMjpeg(true)}
+                  onError={() => {
+                    setUseFallbackMjpeg(true);
+                    setUseSnapshotPolling(true);
+                  }}
                 />
               )}
 
