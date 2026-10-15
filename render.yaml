@@ -17,3 +17,5 @@ services:
         value: b3B2YaaAYm9yZGVyLWVuY3J5cHVpaW9uLWkuLTI0MjY=
       - key: DEMO_MODE
         value: false
+      - key: PYTHONPATH
+        value: ./backend:backend:.
